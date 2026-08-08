@@ -1,0 +1,12 @@
+packages:
+  - '.'
+
+# .npmrc sets ignore-scripts=true, so pnpm blocks this package's install
+# script and then refuses to run any script until the choice is recorded.
+# unrs-resolver (the ESLint TypeScript import resolver) ships prebuilt
+# platform binaries as optional deps, so skipping its build is fine.
+allowBuilds:
+  unrs-resolver: false
+
+publicHoistPattern:
+  - '@inertiajs/core'
