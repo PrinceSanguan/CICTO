@@ -1,7 +1,6 @@
-import { Link } from '@inertiajs/react';
-import { BookOpen, FolderGit2, LayoutGrid } from 'lucide-react';
+import { Link, usePage } from '@inertiajs/react';
+import { LogOut } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
-import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import {
@@ -13,31 +12,19 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { dashboard } from '@/routes';
-import type { NavItem } from '@/types';
+import { navFor } from '@/lib/nav';
+import { dashboard, logout } from '@/routes';
 
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-];
-
-const footerNavItems: NavItem[] = [
-    {
-        title: 'Repository',
-        href: 'https://github.com/laravel/react-starter-kit',
-        icon: FolderGit2,
-    },
-    {
-        title: 'Documentation',
-        href: 'https://laravel.com/docs/starter-kits#react',
-        icon: BookOpen,
-    },
-];
-
+/**
+ * One sidebar component, three §4 panels.
+ *
+ * Three separate layout components would mean three places to fix every header
+ * bug. The role picks the item list; the server still decides access.
+ */
 export function AppSidebar() {
+    const { auth } = usePage().props;
+    const nav = navFor(auth?.role);
+
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>
@@ -53,11 +40,46 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={mainNavItems} />
+                {/*
+                    §4's main navigation (Home, Track Documents, Reports, Help)
+                    renders first, then the role's own panel. It was previously
+                    computed and never rendered, which left three of the four
+                    contractually named menu items with no way to reach them.
+                */}
+                <NavMain
+                    sections={[
+                        { label: null, items: nav.main },
+                        ...nav.sidebar,
+                    ]}
+                />
             </SidebarContent>
 
             <SidebarFooter>
-                <NavFooter items={footerNavItems} className="mt-auto" />
+                {/*
+                    §4's panel designs put Logout in the sidebar itself. It also
+                    lives in the account menu below, and that duplication is
+                    deliberate: signing out is the one action a shared
+                    counter terminal needs to be one obvious click away, not
+                    hidden behind an avatar.
+                */}
+                <SidebarMenu>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton
+                            asChild
+                            tooltip={{ children: 'Logout' }}
+                        >
+                            <Link
+                                href={logout()}
+                                as="button"
+                                className="w-full"
+                            >
+                                <LogOut />
+                                <span>Logout</span>
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                </SidebarMenu>
+
                 <NavUser />
             </SidebarFooter>
         </Sidebar>

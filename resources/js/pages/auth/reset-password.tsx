@@ -1,9 +1,11 @@
 import { Form, Head } from '@inertiajs/react';
+import {
+    AuthSubmit,
+    EmailField,
+    FieldLabel,
+    PasswordField,
+} from '@/components/auth/auth-field';
 import InputError from '@/components/input-error';
-import PasswordInput from '@/components/password-input';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { update } from '@/routes/password';
 
@@ -22,68 +24,68 @@ export default function ResetPassword({ token, email, passwordRules }: Props) {
                 {...update.form()}
                 transform={(data) => ({ ...data, token, email })}
                 resetOnSuccess={['password', 'password_confirmation']}
+                className="space-y-5"
             >
                 {({ processing, errors }) => (
-                    <div className="grid gap-6">
-                        <div className="grid gap-2">
-                            <Label htmlFor="email">Email</Label>
-                            <Input
+                    <>
+                        <div className="space-y-1.5">
+                            <FieldLabel htmlFor="email">Email</FieldLabel>
+                            {/*
+                                Read-only, not editable: the reset token is
+                                issued against this exact address. Letting it be
+                                changed would only produce a token mismatch and
+                                an error the user cannot act on.
+                            */}
+                            <EmailField
                                 id="email"
-                                type="email"
                                 name="email"
                                 autoComplete="email"
                                 value={email}
-                                className="mt-1 block w-full"
                                 readOnly
+                                placeholder="Enter your email address"
+                                className="bg-[#F6F8FB]"
                             />
-                            <InputError
-                                message={errors.email}
-                                className="mt-2"
-                            />
+                            <InputError message={errors.email} />
                         </div>
 
-                        <div className="grid gap-2">
-                            <Label htmlFor="password">Password</Label>
-                            <PasswordInput
+                        <div className="space-y-3">
+                            <FieldLabel htmlFor="password">Password</FieldLabel>
+                            <PasswordField
                                 id="password"
                                 name="password"
                                 autoComplete="new-password"
-                                className="mt-1 block w-full"
                                 autoFocus
                                 placeholder="Password"
                                 passwordrules={passwordRules}
                             />
                             <InputError message={errors.password} />
-                        </div>
 
-                        <div className="grid gap-2">
-                            <Label htmlFor="password_confirmation">
-                                Confirm password
-                            </Label>
-                            <PasswordInput
+                            <FieldLabel
+                                htmlFor="password_confirmation"
+                                className="sr-only"
+                            >
+                                Retype password
+                            </FieldLabel>
+                            <PasswordField
                                 id="password_confirmation"
                                 name="password_confirmation"
                                 autoComplete="new-password"
-                                className="mt-1 block w-full"
-                                placeholder="Confirm password"
+                                placeholder="Retype-Password"
                                 passwordrules={passwordRules}
                             />
                             <InputError
                                 message={errors.password_confirmation}
-                                className="mt-2"
                             />
                         </div>
 
-                        <Button
-                            type="submit"
-                            className="mt-4 w-full"
+                        <AuthSubmit
                             disabled={processing}
                             data-test="reset-password-button"
                         >
                             {processing && <Spinner />}
-                            Reset password
-                        </Button>
-                    </div>
+                            Reset Password
+                        </AuthSubmit>
+                    </>
                 )}
             </Form>
         </>
@@ -91,6 +93,5 @@ export default function ResetPassword({ token, email, passwordRules }: Props) {
 }
 
 ResetPassword.layout = {
-    title: 'Reset password',
-    description: 'Please enter your new password below',
+    title: 'Reset Password',
 };

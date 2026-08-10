@@ -1,0 +1,119 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # docs/DATABASE.md requires the schema and every query to work on both
+  # PostgreSQL and MySQL/MariaDB. Several things pass on exactly one driver:
+  # the lower() search scope, the Duration expressions, and index key lengths.
+  # Running one leg proves nothing, so both are required.
+  tests:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        driver: [pgsql, mysql]
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: cicto_test
+          POSTGRES_USER: cicto
+          POSTGRES_PASSWORD: secret
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: cicto_test
+          MYSQL_USER: cicto
+          MYSQL_PASSWORD: secret
+          MYSQL_ROOT_PASSWORD: secret
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, pdo_mysql, bcmath, intl
+          coverage: none
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress --no-scripts
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Build assets
+        run: npm run build
+
+      - name: Migrate (${{ matrix.driver }})
+        env:
+          DB_CONNECTION: ${{ matrix.driver }}
+          DB_HOST: 127.0.0.1
+          DB_PORT: ${{ matrix.driver == 'pgsql' && '5432' || '3306' }}
+          DB_DATABASE: cicto_test
+          DB_USERNAME: ${{ matrix.driver == 'pgsql' && 'cicto' || 'root' }}
+          DB_PASSWORD: secret
+        run: php artisan migrate:fresh --force
+
+      - name: Test (${{ matrix.driver }})
+        env:
+          DB_CONNECTION: ${{ matrix.driver }}
+          DB_HOST: 127.0.0.1
+          DB_PORT: ${{ matrix.driver == 'pgsql' && '5432' || '3306' }}
+          DB_DATABASE: cicto_test
+          DB_USERNAME: ${{ matrix.driver == 'pgsql' && 'cicto' || 'root' }}
+          DB_PASSWORD: secret
+        run: php artisan test
+
+  static-analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: composer install --no-interaction --prefer-dist --no-progress --no-scripts
+      - run: npm ci
+
+      - run: composer lint:check
+      - run: composer types:check
+      - run: npm run lint:check
+      - run: npm run format:check
+      - run: npm run types:check

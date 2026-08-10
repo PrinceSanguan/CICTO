@@ -1,22 +1,50 @@
+export type Role = 'user' | 'admin' | 'super_admin';
+
 export type User = {
     id: number;
     name: string;
     email: string;
     avatar?: string;
     email_verified_at: string | null;
-    /* @chisel-2fa */
     two_factor_enabled?: boolean;
-    /* @end-chisel-2fa */
+    role?: Role;
+    office_id?: number | null;
+    position?: string | null;
     created_at: string;
     updated_at: string;
     [key: string]: unknown;
 };
 
-export type Auth = {
-    user: User;
+export type AuthOffice = {
+    id: number;
+    code: string;
+    name: string;
 };
 
-/* @chisel-passkeys */
+/**
+ * Coarse UI hints from Role::capabilities(). These decide what renders; they
+ * never decide what is allowed. Every key has a named server-side twin in a
+ * Policy or in EnsureRole, so hiding a button is a courtesy, not a control.
+ */
+export type Capabilities = {
+    viewAnyOfficeDocuments: boolean;
+    viewAllDocuments: boolean;
+    approveDocuments: boolean;
+    manageOfficeUsers: boolean;
+    manageAllUsers: boolean;
+    manageSystemSettings: boolean;
+    archiveDocuments: boolean;
+    viewReports: boolean;
+};
+
+export type Auth = {
+    /** Null on guest pages -- the landing page and the public QR scan result. */
+    user: User | null;
+    role: Role | null;
+    office: AuthOffice | null;
+    can: Partial<Capabilities>;
+};
+
 export type Passkey = {
     id: number;
     name: string;
@@ -24,9 +52,7 @@ export type Passkey = {
     created_at_diff: string;
     last_used_at_diff: string | null;
 };
-/* @end-chisel-passkeys */
 
-/* @chisel-2fa */
 export type TwoFactorSetupData = {
     svg: string;
     url: string;
@@ -35,4 +61,3 @@ export type TwoFactorSetupData = {
 export type TwoFactorSecretKey = {
     secretKey: string;
 };
-/* @end-chisel-2fa */

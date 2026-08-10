@@ -84,7 +84,7 @@
 
     --color-brand: #2d6fcb; /* hero gradient top, window title bars */
     --color-brand-soft: #b2cbec; /* hero gradient bottom */
-    --color-link: #057cd0; /* card titles */
+    --color-link: #0a6cb4; /* card titles, links -- 5.1:1 on white */
     --color-link-active: #1079cf; /* current nav item */
     --color-surface: #eff6fe; /* page ground, hero overlap panel */
     --color-panel: #fefefe; /* feature cards */
@@ -123,14 +123,18 @@
     --chart-4: oklch(0.828 0.189 84.429);
     --chart-5: oklch(0.769 0.188 70.08);
     --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.87 0 0);
+    /* The client's panel sidebar: a blue field with white labels, not the
+       starter kit's near-white. Kept as tokens rather than utility classes on
+       the Sidebar component so the whole shell -- header, menu, footer, mobile
+       sheet -- moves together and cannot drift. */
+    --sidebar: #9dc4f2;
+    --sidebar-foreground: #14205a;
+    --sidebar-primary: #2d6fcb;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #cfe2fb;
+    --sidebar-accent-foreground: #14205a;
+    --sidebar-border: #b6d3f6;
+    --sidebar-ring: #2d6fcb;
 }
 
 .dark {
@@ -207,4 +211,78 @@ html.cicto-landing {
     html.cicto-landing {
         scroll-behavior: auto;
     }
+}
+
+/* ==========================================================================
+   Scan console
+   ========================================================================== */
+
+/* The laser line sweeping the viewfinder. It signals "actively looking", which
+   is the only feedback a user gets between pointing the camera and the page
+   navigating away. Respects prefers-reduced-motion below -- a repeating sweep
+   is exactly the kind of motion that triggers vestibular symptoms. */
+@keyframes cicto-scan-sweep {
+    0% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(calc(100% - 2px));
+    }
+    100% {
+        transform: translateY(0);
+    }
+}
+
+.animate-scan-sweep {
+    animation: cicto-scan-sweep 2.4s ease-in-out infinite;
+    will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .animate-scan-sweep {
+        animation: none;
+        /* Still visible, just parked in the middle, so the affordance survives. */
+        transform: translateY(50%);
+    }
+}
+
+/* ==========================================================================
+   Panel sidebar (spec §4)
+   ========================================================================== */
+
+/* The vertical gradient from the client's Admin Panel design. Applied to the
+   sidebar's own inner surface rather than to a wrapper, so it also covers the
+   mobile sheet, where the sidebar renders through a different container.
+
+   Dark mode deliberately opts out: the design has no dark variant, and a
+   light-blue gradient behind white text in a dark theme is unreadable. */
+[data-sidebar='sidebar'] {
+    background-image: linear-gradient(
+        to bottom,
+        #a8cbf5 0%,
+        #bcd8f8 45%,
+        #dceafc 100%
+    );
+}
+
+.dark [data-sidebar='sidebar'] {
+    background-image: none;
+}
+
+/* ==========================================================================
+   Auth screens
+   ========================================================================== */
+
+/* The gradient lives on a child of <body>, so rubber-band overscroll exposes
+   the html background above it -- a white flash over the blue on every
+   trackpad flick. Painting the root the same blue hides the seam.
+
+   Literal values, not var(--color-*): Tailwind tree-shakes theme variables no
+   utility references, so hand-written CSS cannot rely on them being emitted. */
+html[data-force-light]:has(.cicto-auth) {
+    background-color: #2d6fcb; /* --color-brand */
+}
+
+html[data-force-light]:has(.cicto-auth-danger) {
+    background-color: #e8544a;
 }

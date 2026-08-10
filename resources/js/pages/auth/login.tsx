@@ -1,125 +1,198 @@
 import { Form, Head } from '@inertiajs/react';
+import {
+    AuthSubmit,
+    EmailField,
+    FieldLabel,
+    PasswordField,
+} from '@/components/auth/auth-field';
+import { PortalChips } from '@/components/auth/portal-chips';
 import InputError from '@/components/input-error';
-import PasswordInput from '@/components/password-input';
+import PasskeyVerify from '@/components/passkey-verify';
 import TextLink from '@/components/text-link';
-import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
-/* @chisel-registration */
 import { register } from '@/routes';
-/* @end-chisel-registration */
 import { store } from '@/routes/login';
 import { request } from '@/routes/password';
-/* @chisel-passkeys */
-import PasskeyVerify from '@/components/passkey-verify';
-/* @end-chisel-passkeys */
+
+type Portal = 'user' | 'admin' | 'super-admin';
 
 type Props = {
     status?: string;
     canResetPassword: boolean;
+    portal?: Portal;
 };
 
-export default function Login({ status, canResetPassword }: Props) {
+/**
+ * Spec §3 asks for "separate login entry points for User, Admin, and Super
+ * Admin". They are three URLs rendering this one page against one guard and one
+ * POST target -- only the heading and the colour change.
+ *
+ * The portal is PRESENTATION ONLY. It is never posted, never reaches
+ * Auth::attempt, and never influences authorization: the role is read from the
+ * database row after the credentials check. Signing in at /login/admin with a
+ * clerk account simply lands you on the clerk dashboard, which is deliberate --
+ * rejecting the mismatch would leak which accounts are admins.
+ */
+const PORTALS: Record<Portal, { title: string }> = {
+    user: { title: 'Login to Your Account' },
+    admin: { title: 'Admin Login' },
+    'super-admin': { title: 'Super Admin Login' },
+};
+
+export default function Login({
+    status,
+    canResetPassword,
+    portal = 'user',
+}: Props) {
+    const copy = PORTALS[portal] ?? PORTALS.user;
+    const danger = portal === 'super-admin';
+
     return (
         <>
-            <Head title="Log in" />
+            <Head title={copy.title} />
 
-            {/* @chisel-passkeys */}
-            <PasskeyVerify />
-            {/* @end-chisel-passkeys */}
+            <h1 className="mb-6 text-center text-2xl font-bold text-navy">
+                {copy.title}
+            </h1>
+
+            {status && (
+                <div
+                    role="status"
+                    className="mb-4 rounded-md bg-[#E8F5EC] px-4 py-3 text-center text-sm font-medium text-[#1F5136]"
+                >
+                    {status}
+                </div>
+            )}
 
             <Form
                 {...store.form()}
                 resetOnSuccess={['password']}
-                className="flex flex-col gap-6"
+                className="space-y-5"
             >
                 {({ processing, errors }) => (
                     <>
-                        <div className="grid gap-6">
-                            <div className="grid gap-2">
-                                <Label htmlFor="email">Email address</Label>
-                                <Input
-                                    id="email"
-                                    type="email"
-                                    name="email"
-                                    required
-                                    autoFocus
-                                    tabIndex={1}
-                                    autoComplete="email"
-                                    placeholder="email@example.com"
-                                />
-                                <InputError message={errors.email} />
-                            </div>
+                        <div className="space-y-1.5">
+                            <FieldLabel htmlFor="email">Email</FieldLabel>
+                            <EmailField
+                                id="email"
+                                name="email"
+                                required
+                                autoFocus
+                                autoComplete="email"
+                                placeholder="Email"
+                                aria-invalid={errors.email ? true : undefined}
+                                aria-describedby={
+                                    errors.email ? 'email-error' : undefined
+                                }
+                            />
+                            <InputError
+                                id="email-error"
+                                message={errors.email}
+                            />
+                        </div>
 
-                            <div className="grid gap-2">
-                                <div className="flex items-center">
-                                    <Label htmlFor="password">Password</Label>
-                                    {canResetPassword && (
-                                        <TextLink
-                                            href={request()}
-                                            className="ml-auto text-sm"
-                                            tabIndex={5}
-                                        >
-                                            Forgot your password?
-                                        </TextLink>
-                                    )}
-                                </div>
-                                <PasswordInput
-                                    id="password"
-                                    name="password"
-                                    required
-                                    tabIndex={2}
-                                    autoComplete="current-password"
-                                    placeholder="Password"
-                                />
-                                <InputError message={errors.password} />
+                        <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                                <FieldLabel htmlFor="password">
+                                    Password
+                                </FieldLabel>
+                                {canResetPassword && (
+                                    <TextLink
+                                        href={request()}
+                                        className="text-sm font-medium text-link"
+                                    >
+                                        Forget Password?
+                                    </TextLink>
+                                )}
                             </div>
+                            <PasswordField
+                                id="password"
+                                name="password"
+                                required
+                                autoComplete="current-password"
+                                placeholder="Password"
+                                aria-invalid={
+                                    errors.password ? true : undefined
+                                }
+                                aria-describedby={
+                                    errors.password
+                                        ? 'password-error'
+                                        : undefined
+                                }
+                            />
+                            <InputError
+                                id="password-error"
+                                message={errors.password}
+                            />
+                        </div>
 
-                            <div className="flex items-center space-x-3">
-                                <Checkbox
-                                    id="remember"
-                                    name="remember"
-                                    tabIndex={3}
-                                />
-                                <Label htmlFor="remember">Remember me</Label>
-                            </div>
-
-                            <Button
-                                type="submit"
-                                className="mt-4 w-full"
-                                tabIndex={4}
-                                disabled={processing}
-                                data-test="login-button"
+                        <div className="flex items-center gap-3">
+                            <Checkbox
+                                id="remember"
+                                name="remember"
+                                className="size-5"
+                            />
+                            <label
+                                htmlFor="remember"
+                                className="text-[15px] font-bold text-navy"
                             >
-                                {processing && <Spinner />}
-                                Log in
-                            </Button>
+                                Remember me
+                            </label>
                         </div>
 
-                        {/* @chisel-registration */}
-                        <div className="text-center text-sm text-muted-foreground">
-                            Don't have an account?{' '}
-                            <TextLink href={register()} tabIndex={5}>
-                                Sign up
-                            </TextLink>
-                        </div>
-                        {/* @end-chisel-registration */}
+                        <AuthSubmit
+                            danger={danger}
+                            disabled={processing}
+                            data-test="login-button"
+                        >
+                            {processing && <Spinner />}
+                            Login
+                        </AuthSubmit>
                     </>
                 )}
             </Form>
 
-            {status && (
-                <div className="mb-4 text-center text-sm font-medium text-green-600">
-                    {status}
+            {/*
+                Kept, though the client's mockup omits it: passkeys are built,
+                tested and the only sign-in path here that cannot be phished.
+                Dropping the button would not remove the feature, only hide it.
+
+                Rendered WITHOUT the starter kit's "or continue with email"
+                divider, which belonged to a layout where the passkey button
+                came first. Here it is a secondary action under the primary one,
+                so a rule above it would be announcing a choice that has already
+                been made.
+            */}
+            <div className="mt-3">
+                <PasskeyVerify separator={null} />
+            </div>
+
+            {/* §3's three entry points, offered only from the public portal. */}
+            {portal === 'user' && (
+                <div className="mt-6">
+                    <PortalChips current={portal} />
                 </div>
             )}
+
+            <p className="mt-6 text-center text-sm font-medium text-navy">
+                Don&rsquo;t have an account?{' '}
+                <TextLink href={register()} className="font-bold text-link">
+                    Register
+                </TextLink>
+            </p>
         </>
     );
 }
 
-Login.layout = {
-    title: 'Log in to your account',
-    description: 'Enter your email and password below to log in',
-};
+/*
+ * Deliberately NO `Login.layout` property.
+ *
+ * The heading is rendered by the page, because it depends on which of §3's
+ * three portals was opened and a static layout object cannot vary per request.
+ *
+ * It must be OMITTED rather than set to `{}`. Inertia reads an empty object as
+ * "named layouts, none of them" -- Object.values({}).every(...) is vacuously
+ * true -- so the layout list comes back empty and the entire auth shell
+ * silently disappears, leaving the bare form on the page background.
+ */

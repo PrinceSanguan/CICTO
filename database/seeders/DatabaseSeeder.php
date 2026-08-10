@@ -2,6 +2,8 @@
 
 namespace Database\Seeders;
 
+use App\Enums\Role;
+use App\Models\Office;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -15,11 +17,51 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+        // Reference data -- safe to run in production.
+        $this->call([
+            OfficeSeeder::class,
+            DocumentTypeSeeder::class,
         ]);
+
+        if (app()->isProduction()) {
+            return;
+        }
+
+        $this->seedDemoAccounts();
+    }
+
+    /**
+     * Local demo accounts, one per role.
+     *
+     * Created email_verified: MAIL_MAILER is `log`, so no verification message
+     * can actually be delivered, and the `verified` middleware would otherwise
+     * lock every one of these accounts out of the app on first login.
+     */
+    private function seedDemoAccounts(): void
+    {
+        $mpdo = Office::query()->where('code', 'MPDO')->first();
+        $mto = Office::query()->where('code', 'MTO')->first();
+
+        $accounts = [
+            ['Super Admin', 'super@cicto.test', Role::SuperAdmin, null, 'System Administrator'],
+            ['MPDO Admin', 'admin@cicto.test', Role::Admin, $mpdo, 'Department Head'],
+            ['MTO Admin', 'mto@cicto.test', Role::Admin, $mto, 'Treasurer'],
+            ['MPDO Clerk', 'clerk@cicto.test', Role::User, $mpdo, 'Administrative Aide'],
+        ];
+
+        foreach ($accounts as [$name, $email, $role, $office, $position]) {
+            $user = User::query()->firstOrNew(['email' => $email]);
+
+            $user->forceFill([
+                'name' => $name,
+                'email' => $email,
+                'password' => 'password',
+                'email_verified_at' => now(),
+                'role' => $role,
+                'office_id' => $office?->id,
+                'position' => $position,
+                'is_active' => true,
+            ])->save();
+        }
     }
 }

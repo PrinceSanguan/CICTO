@@ -1,8 +1,8 @@
 import { Form, Head, setLayoutProps } from '@inertiajs/react';
 import { REGEXP_ONLY_DIGITS } from 'input-otp';
 import { useMemo, useState } from 'react';
+import { AuthSubmit } from '@/components/auth/auth-field';
 import InputError from '@/components/input-error';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
     InputOTP,
@@ -104,19 +104,15 @@ export default function TwoFactorChallenge() {
                                 </div>
                             )}
 
-                            <Button
-                                type="submit"
-                                className="w-full"
-                                disabled={processing}
-                            >
+                            <AuthSubmit disabled={processing}>
                                 Continue
-                            </Button>
+                            </AuthSubmit>
 
                             <div className="text-center text-sm text-muted-foreground">
                                 <span>or you can </span>
                                 <button
                                     type="button"
-                                    className="cursor-pointer text-foreground underline decoration-neutral-300 underline-offset-4 transition-colors duration-300 ease-out hover:decoration-current! dark:decoration-neutral-500"
+                                    className="cursor-pointer font-bold text-link underline-offset-4 hover:underline"
                                     onClick={() =>
                                         toggleRecoveryMode(clearErrors)
                                     }

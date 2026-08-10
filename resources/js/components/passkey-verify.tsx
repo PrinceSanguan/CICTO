@@ -6,6 +6,7 @@ import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
+import { cn } from '@/lib/utils';
 
 type Props = {
     routes?: {
@@ -14,7 +15,13 @@ type Props = {
     };
     label?: string;
     loadingLabel?: string;
-    separator?: string;
+    /**
+     * The "or continue with email" rule. Pass null to suppress it: it only
+     * makes sense when the passkey button comes FIRST, and the CICTO auth
+     * screens place it under the primary Login button instead.
+     */
+    separator?: string | null;
+    className?: string;
 };
 
 export default function PasskeyVerify({
@@ -22,6 +29,7 @@ export default function PasskeyVerify({
     label,
     loadingLabel,
     separator,
+    className,
 }: Props = {}) {
     const { verify, isLoading, error, isSupported } = usePasskeyVerify({
         ...(routes && {
@@ -41,7 +49,7 @@ export default function PasskeyVerify({
 
     return (
         <>
-            <div className="grid gap-2">
+            <div className={cn('grid gap-2', className)}>
                 <Button
                     type="button"
                     variant="outline"
@@ -59,16 +67,18 @@ export default function PasskeyVerify({
                 )}
             </div>
 
-            <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center">
-                    <Separator className="w-full" />
+            {separator !== null && (
+                <div className="relative my-6">
+                    <div className="absolute inset-0 flex items-center">
+                        <Separator className="w-full" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-background px-2 text-muted-foreground">
+                            {separator ?? 'Or continue with email'}
+                        </span>
+                    </div>
                 </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-background px-2 text-muted-foreground">
-                        {separator ?? 'Or continue with email'}
-                    </span>
-                </div>
-            </div>
+            )}
         </>
     );
 }

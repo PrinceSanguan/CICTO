@@ -8,19 +8,36 @@ import SettingsLayout from '@/layouts/settings/layout';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
+const STANDALONE_PAGES = new Set([
+    'welcome',
+    'documents/scan-public',
+    'documents/scan-not-found',
+    'privacy',
+    'signatures/verify',
+]);
+
 createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
     layout: (name) => {
-        switch (true) {
-            case name === 'welcome':
-                return null;
-            case name.startsWith('auth/'):
-                return AuthLayout;
-            case name.startsWith('settings/'):
-                return [AppLayout, SettingsLayout];
-            default:
-                return AppLayout;
+        // Pages reachable with no session, which therefore must not mount the
+        // authenticated app shell:
+        //   - the landing page
+        //   - §7 QR scan results, opened by couriers and citizens
+        //   - the RA 10173 privacy notice, linked from those scan results
+        //   - §15 signature verification, reached from a printed certificate
+        if (STANDALONE_PAGES.has(name)) {
+            return null;
         }
+
+        if (name.startsWith('auth/')) {
+            return AuthLayout;
+        }
+
+        if (name.startsWith('settings/')) {
+            return [AppLayout, SettingsLayout];
+        }
+
+        return AppLayout;
     },
     strictMode: true,
     withApp(app) {

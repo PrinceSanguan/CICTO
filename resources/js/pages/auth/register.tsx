@@ -1,10 +1,13 @@
 import { Form, Head } from '@inertiajs/react';
+import {
+    AuthSubmit,
+    EmailField,
+    FieldLabel,
+    PasswordField,
+    TextField,
+} from '@/components/auth/auth-field';
 import InputError from '@/components/input-error';
-import PasswordInput from '@/components/password-input';
 import TextLink from '@/components/text-link';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { login } from '@/routes';
 import { store } from '@/routes/register';
@@ -17,104 +20,99 @@ export default function Register({ passwordRules }: Props) {
     return (
         <>
             <Head title="Register" />
+
             <Form
                 {...store.form()}
                 resetOnSuccess={['password', 'password_confirmation']}
                 disableWhileProcessing
-                className="flex flex-col gap-6"
+                className="space-y-5"
             >
                 {({ processing, errors }) => (
                     <>
-                        <div className="grid gap-6">
-                            <div className="grid gap-2">
-                                <Label htmlFor="name">Name</Label>
-                                <Input
-                                    id="name"
-                                    type="text"
-                                    required
-                                    autoFocus
-                                    tabIndex={1}
-                                    autoComplete="name"
-                                    name="name"
-                                    placeholder="Full name"
-                                />
-                                <InputError
-                                    message={errors.name}
-                                    className="mt-2"
-                                />
-                            </div>
+                        {/*
+                            Kept, though the client's mockup shows only email and
+                            password: `name` is NOT NULL on users, it is what the
+                            audit trail and every Signature Certificate print,
+                            and a register full of "user@example.com" instead of
+                            a person's name is not a municipal record.
+                        */}
+                        <div className="space-y-1.5">
+                            <FieldLabel htmlFor="name">Full name</FieldLabel>
+                            <TextField
+                                id="name"
+                                required
+                                autoFocus
+                                autoComplete="name"
+                                name="name"
+                                placeholder="Juana dela Cruz"
+                            />
+                            <InputError message={errors.name} />
+                        </div>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="email">Email address</Label>
-                                <Input
-                                    id="email"
-                                    type="email"
-                                    required
-                                    tabIndex={2}
-                                    autoComplete="email"
-                                    name="email"
-                                    placeholder="email@example.com"
-                                />
-                                <InputError message={errors.email} />
-                            </div>
+                        <div className="space-y-1.5">
+                            <FieldLabel htmlFor="email">Email</FieldLabel>
+                            <EmailField
+                                id="email"
+                                name="email"
+                                required
+                                autoComplete="email"
+                                placeholder="Email"
+                            />
+                            <InputError message={errors.email} />
+                        </div>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="password">Password</Label>
-                                <PasswordInput
-                                    id="password"
-                                    required
-                                    tabIndex={3}
-                                    autoComplete="new-password"
-                                    name="password"
-                                    placeholder="Password"
-                                    passwordrules={passwordRules}
-                                />
-                                <InputError message={errors.password} />
-                            </div>
+                        <div className="space-y-3">
+                            <FieldLabel htmlFor="password">Password</FieldLabel>
+                            <PasswordField
+                                id="password"
+                                name="password"
+                                required
+                                autoComplete="new-password"
+                                placeholder="Password"
+                                passwordrules={passwordRules}
+                            />
+                            <InputError message={errors.password} />
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="password_confirmation">
-                                    Confirm password
-                                </Label>
-                                <PasswordInput
-                                    id="password_confirmation"
-                                    required
-                                    tabIndex={4}
-                                    autoComplete="new-password"
-                                    name="password_confirmation"
-                                    placeholder="Confirm password"
-                                    passwordrules={passwordRules}
-                                />
-                                <InputError
-                                    message={errors.password_confirmation}
-                                />
-                            </div>
-
-                            <Button
-                                type="submit"
-                                className="mt-2 w-full"
-                                tabIndex={5}
-                                data-test="register-user-button"
+                            <FieldLabel
+                                htmlFor="password_confirmation"
+                                className="sr-only"
                             >
-                                {processing && <Spinner />}
-                                Create account
-                            </Button>
+                                Retype password
+                            </FieldLabel>
+                            <PasswordField
+                                id="password_confirmation"
+                                name="password_confirmation"
+                                required
+                                autoComplete="new-password"
+                                placeholder="Retype-Password"
+                                passwordrules={passwordRules}
+                            />
+                            <InputError
+                                message={errors.password_confirmation}
+                            />
                         </div>
 
-                        <div className="text-center text-sm text-muted-foreground">
-                            Already have an account?{' '}
-                            <TextLink href={login()} tabIndex={6}>
-                                Log in
-                            </TextLink>
-                        </div>
+                        <AuthSubmit
+                            disabled={processing}
+                            data-test="register-user-button"
+                        >
+                            {processing && <Spinner />}
+                            Register
+                        </AuthSubmit>
                     </>
                 )}
             </Form>
+
+            <p className="mt-6 text-center text-sm font-medium text-navy">
+                Already have an account?{' '}
+                <TextLink href={login()} className="font-bold text-link">
+                    Login
+                </TextLink>
+            </p>
         </>
     );
 }
 
 Register.layout = {
-    title: 'Create an account',
-    description: 'Enter your details below to create your account',
+    title: 'Register',
 };

@@ -33,8 +33,32 @@ return [
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),
-            'serve' => true,
+            // serve => true registers a live GET /storage/{path} route that bypasses
+            // DocumentPolicy and writes no audit row. Downloads go through
+            // DocumentFileController instead. See docs/implementation/00-architecture.md §8.
+            'serve' => false,
             'throw' => false,
+            'report' => false,
+        ],
+
+        // Registered documents and their versions. Private, policy-gated, never served
+        // directly. `throw` is on so a missing file surfaces instead of returning null.
+        'documents' => [
+            'driver' => 'local',
+            'root' => storage_path('app/documents'),
+            'serve' => false,
+            'throw' => true,
+            'report' => false,
+        ],
+
+        // §22 backup archives. Private, never served, and ideally pointed at
+        // off-site storage -- an archive sitting on the same disk as the
+        // documents is not a backup, it is a second copy that dies with them.
+        'backups' => [
+            'driver' => 'local',
+            'root' => storage_path('app/backups'),
+            'serve' => false,
+            'throw' => true,
             'report' => false,
         ],
 

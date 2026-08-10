@@ -52,6 +52,17 @@ return [
 
     'channels' => [
 
+        // CSP violation reports. Kept out of the main log so a noisy policy
+        // does not bury real errors, and capped at a fortnight -- these are
+        // diagnostics for a rollout, not records.
+        'csp' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/csp.log'),
+            'level' => 'debug',
+            'days' => 14,
+            'replace_placeholders' => true,
+        ],
+
         'stack' => [
             'driver' => 'stack',
             'channels' => explode(',', (string) env('LOG_STACK', 'single')),

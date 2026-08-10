@@ -65,7 +65,11 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    // Asia/Manila, not UTC. Timestamps are stored in the app timezone so month
+    // bucketing in reports needs no AT TIME ZONE (pgsql-only) or CONVERT_TZ
+    // (mysql-only). Decided before any production data exists — changing it later
+    // retroactively shifts every historical report.
+    'timezone' => env('APP_TIMEZONE', 'Asia/Manila'),
 
     /*
     |--------------------------------------------------------------------------

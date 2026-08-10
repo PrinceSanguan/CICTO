@@ -1,11 +1,11 @@
 import { Head, Link, usePage } from '@inertiajs/react';
 import { useEffect } from 'react';
-import { login, logout } from '@/routes';
 import { ORG } from '@/components/landing/content';
 import { Hero } from '@/components/landing/hero';
 import { navActionClass } from '@/components/landing/site-nav';
 import { Skyline } from '@/components/landing/skyline';
 import { WhyChoose } from '@/components/landing/why-choose';
+import { login, logout } from '@/routes';
 
 /**
  * CICTO landing page, built to the client's Figma.

@@ -1,5 +1,5 @@
-import womanSrc from '@/assets/hero-woman-laptop.png';
 import manSrc from '@/assets/hero-man-document.png';
+import womanSrc from '@/assets/hero-woman-laptop.png';
 
 /**
  * The hero illustration, rebuilt from the client's Figma.

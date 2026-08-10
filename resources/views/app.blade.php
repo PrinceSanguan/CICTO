@@ -1,15 +1,37 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" @class([
-    'dark' => ($appearance ?? 'system') == 'dark',
-    'cicto-landing' => ($page['component'] ?? '') === 'welcome',
-])>
+@php
+    // The landing page and the six Fortify auth screens carry the client's own
+    // artwork, which has no dark variant: a light-blue gradient behind white
+    // text is unreadable inverted. They opt out of the theme entirely.
+    $component = $page['component'] ?? '';
+    $lightOnly = $component === 'welcome' || str_starts_with($component, 'auth/');
+@endphp
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}"
+    @class([
+        'dark' => ! $lightOnly && ($appearance ?? 'system') == 'dark',
+        'cicto-landing' => $component === 'welcome',
+    ])
+    @if ($lightOnly) data-force-light @endif
+    style="color-scheme: {{ $lightOnly ? 'light' : 'normal' }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        {{-- Inline script to detect system dark mode preference and apply it immediately --}}
-        <script>
+        {{-- Inline script to detect system dark mode preference and apply it
+             immediately. Carries the CSP nonce set by SecurityHeaders: this has
+             to run before first paint, so it cannot be moved into the bundle,
+             and under an enforced policy an unnonced inline script is silently
+             dropped -- which looks like "dark mode randomly stopped working". --}}
+        <script nonce="{{ Illuminate\Support\Facades\Vite::cspNonce() }}">
             (function() {
+                // Suppressed on the light-only pages. The React layout also
+                // strips the class, but that only runs AFTER first paint --
+                // which is a visible flash of dark before the login card
+                // appears. Getting it right here means it never happens.
+                if ({{ $lightOnly ? 'true' : 'false' }}) {
+                    return;
+                }
+
                 const appearance = '{{ $appearance ?? "system" }}';
 
                 if (appearance === 'system') {

@@ -41,16 +41,41 @@ const isDarkMode = (appearance: Appearance): boolean => {
     return appearance === 'dark' || (appearance === 'system' && prefersDark());
 };
 
+/**
+ * Pages that must render light whatever the visitor prefers.
+ *
+ * The landing page and the six auth screens carry the client's own artwork --
+ * a pale blue gradient with white text on it -- which is unreadable inverted.
+ * The Blade shell stamps `data-force-light` on <html> before first paint;
+ * everything below honours it so no later code path can undo that.
+ */
+const forcesLight = (): boolean =>
+    typeof document !== 'undefined' &&
+    document.documentElement.hasAttribute('data-force-light');
+
 const applyTheme = (appearance: Appearance): void => {
     if (typeof document === 'undefined') {
         return;
     }
 
-    const isDark = isDarkMode(appearance);
+    // NOT just the class. `color-scheme` is an inherited property the browser
+    // uses to paint its OWN surfaces -- autofilled inputs, scrollbars, text
+    // selection. Leaving it dark puts black autofilled fields inside a white
+    // card, which no Tailwind class can override.
+    const isDark = forcesLight() ? false : isDarkMode(appearance);
 
     document.documentElement.classList.toggle('dark', isDark);
     document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
 };
+
+/**
+ * Re-evaluate the theme after `data-force-light` is added or removed by a
+ * client-side navigation. Exported for the auth layout, which is the only
+ * caller: a full page load already gets the right answer from Blade.
+ */
+export function refreshTheme(): void {
+    applyTheme(currentAppearance);
+}
 
 const subscribe = (callback: () => void) => {
     listeners.add(callback);
