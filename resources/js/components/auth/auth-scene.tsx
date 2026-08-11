@@ -19,15 +19,21 @@ type Motif = {
     y: number;
     size: number;
     kind: 'pencil' | 'lines' | 'page' | 'pin' | 'faded';
+    /**
+     * Hidden from `lg` up, where the card claims the left half of the screen
+     * and these would be sliced in half by its edge -- which reads as a
+     * rendering fault rather than as decoration.
+     */
+    leftOfCard?: boolean;
 };
 
 const MOTIFS: readonly Motif[] = [
-    { x: 4, y: 7, size: 46, kind: 'pencil' },
-    { x: 4, y: 40, size: 40, kind: 'faded' },
-    { x: 71, y: 13, size: 34, kind: 'pin' },
-    { x: 74, y: 21, size: 36, kind: 'lines' },
-    { x: 90, y: 15, size: 40, kind: 'page' },
-    { x: 94, y: 25, size: 30, kind: 'pin' },
+    { x: 4, y: 7, size: 46, kind: 'pencil', leftOfCard: true },
+    { x: 4, y: 40, size: 40, kind: 'faded', leftOfCard: true },
+    { x: 68, y: 8, size: 34, kind: 'pin' },
+    { x: 76, y: 16, size: 36, kind: 'lines' },
+    { x: 90, y: 11, size: 40, kind: 'page' },
+    { x: 95, y: 23, size: 30, kind: 'pin' },
 ];
 
 function Glyph({ kind }: { kind: Motif['kind'] }) {
@@ -133,7 +139,9 @@ export function AuthScene() {
                 {MOTIFS.map((motif, index) => (
                     <div
                         key={index}
-                        className="absolute -translate-x-1/2 -translate-y-1/2"
+                        className={`absolute -translate-x-1/2 -translate-y-1/2 ${
+                            motif.leftOfCard ? 'lg:hidden' : ''
+                        }`}
                         style={{
                             left: `${motif.x}%`,
                             top: `${motif.y}%`,

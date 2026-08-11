@@ -107,6 +107,10 @@ export default [
             'vendor',
             'node_modules',
             'public',
+            // A standalone Node QA script, not application source: it runs
+            // outside the browser and uses process/Buffer, which this config's
+            // globals deliberately exclude.
+            'docs/**',
             'bootstrap/ssr',
             'tailwind.config.js',
             'vite.config.ts',

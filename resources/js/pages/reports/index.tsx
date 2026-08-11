@@ -1,7 +1,14 @@
 import { Head, router } from '@inertiajs/react';
-import { Download, FileSpreadsheet, FileText } from 'lucide-react';
+import {
+    AlertTriangle,
+    BarChart3,
+    Download,
+    FileSpreadsheet,
+    Files,
+    FileText,
+    ShieldCheck,
+} from 'lucide-react';
 import { lazy, Suspense } from 'react';
-import Heading from '@/components/heading';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -19,6 +26,15 @@ import reports from '@/routes/reports';
 const Charts = lazy(() => import('@/components/reports/report-charts-bundle'));
 
 type MonthPoint = { month: string; label: string; count: number };
+type MonthByStatus = {
+    month: string;
+    label: string;
+    pending: number;
+    in_process: number;
+    for_approval: number;
+    completed: number;
+    rejected: number;
+};
 type TrendPoint = { month: string; label: string; days: number | null };
 type StatusSlice = { status: string; count: number };
 type ActivityRow = {
@@ -37,6 +53,7 @@ type Props = {
         approval_rate: number | null;
     };
     monthlyProcessed: MonthPoint[];
+    monthlyByStatus: MonthByStatus[];
     statusDistribution: StatusSlice[];
     processingTrend: TrendPoint[];
     userActivity: ActivityRow[];
@@ -60,6 +77,7 @@ function humanMinutes(minutes: number): string {
 export default function ReportsIndex({
     summary,
     monthlyProcessed,
+    monthlyByStatus,
     statusDistribution,
     processingTrend,
     userActivity,
@@ -68,16 +86,39 @@ export default function ReportsIndex({
     canExport,
     limits,
 }: Props) {
+    // Declared once and rendered in two places: the toolbar and, per the
+    // design, under the Status Distribution card.
+    const exportLinks = (
+        <>
+            <Button variant="outline" size="sm" asChild>
+                <a href={reports.export.url({ query: { format: 'pdf' } })}>
+                    <FileText className="size-4" />
+                    Download PDF
+                </a>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+                <a href={reports.export.url({ query: { format: 'xlsx' } })}>
+                    <FileSpreadsheet className="size-4" />
+                    Export Excel
+                </a>
+            </Button>
+        </>
+    );
+
     return (
         <>
             <Head title="Reports" />
 
-            <div className="flex h-full flex-1 flex-col gap-4 p-4">
+            <div className="flex flex-col gap-4">
                 <div className="flex flex-wrap items-end justify-between gap-3">
-                    <Heading
-                        title="Reports"
-                        description={`Document activity over the last ${months} months.`}
-                    />
+                    <div>
+                        <h1 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
+                            Reports &amp; Analytics
+                        </h1>
+                        <p className="mt-1 text-sm font-medium text-white/90">
+                            Document activity over the last {months} months.
+                        </p>
+                    </div>
 
                     <div className="flex flex-wrap items-center gap-2">
                         <select
@@ -137,21 +178,31 @@ export default function ReportsIndex({
                     </div>
                 </div>
 
-                {/* §18 headline numbers */}
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <Stat label="Total documents" value={summary.total} />
-                    <Stat
-                        label="Processed this month"
+                {/* §18 headline numbers, as the design's icon tiles. */}
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    <Tile
+                        icon={Files}
+                        tint="#E8B84B"
+                        label="Total Documents"
+                        value={summary.total}
+                    />
+                    <Tile
+                        icon={BarChart3}
+                        tint="#3B72C4"
+                        label="Monthly Processed"
                         value={summary.processed}
                     />
-                    <Stat
+                    <Tile
+                        icon={AlertTriangle}
+                        tint="#E07A3E"
                         label="Delayed"
                         value={summary.delayed}
-                        tone={summary.delayed > 0 ? 'danger' : undefined}
                     />
-                    <Stat
-                        label="Approval rate"
-                        // Never "0%" — nothing decided is not the same as
+                    <Tile
+                        icon={ShieldCheck}
+                        tint="#2F7BE0"
+                        label="Approved Rate"
+                        // Never "0%" -- nothing decided is not the same as
                         // everything rejected.
                         value={
                             summary.approval_rate === null
@@ -166,14 +217,16 @@ export default function ReportsIndex({
                 >
                     <Charts
                         monthlyProcessed={monthlyProcessed}
+                        monthlyByStatus={monthlyByStatus}
                         statusDistribution={statusDistribution}
                         processingTrend={processingTrend}
+                        exportButtons={canExport ? exportLinks : null}
                     />
                 </Suspense>
 
                 <div className="grid gap-4 lg:grid-cols-2">
                     {/* §19 artifact 4 — the one that is easy to forget */}
-                    <section className="rounded-xl border">
+                    <section className="overflow-hidden rounded-xl bg-white shadow-xl">
                         <h3 className="border-b p-4 text-sm font-semibold">
                             User activity
                         </h3>
@@ -219,7 +272,7 @@ export default function ReportsIndex({
                         </Table>
                     </section>
 
-                    <section className="rounded-xl border">
+                    <section className="overflow-hidden rounded-xl bg-white shadow-xl">
                         <h3 className="border-b p-4 text-sm font-semibold">
                             Average time at each office
                         </h3>
@@ -262,8 +315,10 @@ export default function ReportsIndex({
                     </section>
                 </div>
 
+                {/* In its own card: the page is tall enough that this note
+                    lands on the pale ground band, where white is unreadable. */}
                 {canExport && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="rounded-xl bg-white p-4 text-xs text-copy shadow-xl">
                         Exports run immediately rather than in the background,
                         so they are capped at {limits.pdf.toLocaleString()} rows
                         for PDF and {limits.xlsx.toLocaleString()} for Excel.
@@ -275,25 +330,37 @@ export default function ReportsIndex({
     );
 }
 
-function Stat({
+/**
+ * A headline figure from the design: tinted icon, label, value.
+ *
+ * The icon is decorative -- the label carries the meaning -- so it is hidden
+ * from screen readers rather than being announced as "image".
+ */
+function Tile({
+    icon: Icon,
+    tint,
     label,
     value,
-    tone,
 }: {
+    icon: typeof Files;
+    tint: string;
     label: string;
     value: number | string;
-    tone?: 'danger';
 }) {
     return (
-        <div className="rounded-xl border p-4">
-            <p className="text-xs text-muted-foreground">{label}</p>
-            <p
-                className={`mt-1 text-2xl font-semibold ${
-                    tone === 'danger' ? 'text-red-600 dark:text-red-400' : ''
-                }`}
-            >
-                {value}
-            </p>
+        <div className="flex items-center gap-3 rounded-xl bg-white p-5 shadow-xl">
+            <Icon
+                aria-hidden="true"
+                className="size-9 shrink-0"
+                style={{ color: tint }}
+                strokeWidth={1.75}
+            />
+            <div className="min-w-0">
+                <p className="text-[15px] font-bold text-navy">{label}</p>
+                <p className="text-2xl font-extrabold text-navy tabular-nums">
+                    {value}
+                </p>
+            </div>
         </div>
     );
 }

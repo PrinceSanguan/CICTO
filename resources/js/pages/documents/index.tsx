@@ -1,18 +1,8 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { Search } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ToneBadge } from '@/components/documents/status-badge';
-import Heading from '@/components/heading';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
+import { DocumentCards } from '@/components/documents/document-cards';
+import { StatusPill } from '@/components/documents/status-pill';
 import documents from '@/routes/documents';
 import type {
     DocumentFilters,
@@ -36,8 +26,6 @@ export default function DocumentsIndex({
     documents: page,
     filters,
     statuses,
-    priorities,
-    offices,
 }: Props) {
     const [q, setQ] = useState(filters.q ?? '');
 
@@ -94,173 +82,171 @@ export default function DocumentsIndex({
         <>
             <Head title="Track Documents" />
 
-            <div className="flex h-full flex-1 flex-col gap-4 p-4">
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                    <Heading
-                        title="Track Documents"
-                        description="Search by control number and filter by status."
-                    />
-                    <Button asChild>
-                        <Link href={documents.create()}>Submit Document</Link>
-                    </Button>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+                <h1 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
+                    Track Documents
+                </h1>
+
+                <Link
+                    href={documents.create()}
+                    className="flex items-center gap-2 rounded-lg bg-[#3B72C4] px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-[#31629F]"
+                >
+                    <Plus className="size-5" />
+                    Submit Document
+                </Link>
+            </div>
+
+            <section className="mt-6 overflow-hidden rounded-xl shadow-xl">
+                {/* Search bar, on the deeper blue band from the design. */}
+                <div className="bg-[#3F6FBE] p-4">
+                    <form
+                        role="search"
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            apply({ q: q || undefined });
+                        }}
+                        className="flex flex-col gap-3 sm:flex-row"
+                    >
+                        <div className="relative flex-1">
+                            <Search
+                                aria-hidden="true"
+                                className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-[#8A9AAE]"
+                            />
+                            <input
+                                type="search"
+                                value={q}
+                                onChange={(event) => setQ(event.target.value)}
+                                placeholder="Search by Control Number"
+                                aria-label="Search by control number or title"
+                                className="h-12 w-full rounded-lg border-0 bg-white pr-4 pl-12 text-[15px] text-navy placeholder:text-[#8A9AAE] focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+                            />
+                        </div>
+
+                        <button
+                            type="submit"
+                            className="h-12 rounded-lg bg-white px-8 text-lg font-bold text-link transition hover:bg-[#F2F6FC] sm:w-40"
+                        >
+                            Search
+                        </button>
+
+                        <label className="sr-only" htmlFor="status">
+                            Filter by status
+                        </label>
+                        <select
+                            id="status"
+                            value={filters.status ?? ''}
+                            onChange={(event) =>
+                                apply({
+                                    status: event.target.value || undefined,
+                                })
+                            }
+                            className="h-12 rounded-lg border-0 bg-white px-4 text-lg font-bold text-link focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none sm:w-56"
+                        >
+                            <option value="">Status:</option>
+                            {statuses.map((status) => (
+                                <option key={status.value} value={status.value}>
+                                    {status.label}
+                                </option>
+                            ))}
+                        </select>
+                    </form>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative min-w-64 flex-1">
-                        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            value={q}
-                            onChange={(event) => setQ(event.target.value)}
-                            placeholder="Control number or title…"
-                            className="pl-8"
-                            aria-label="Search documents"
-                        />
-                    </div>
-
-                    <select
-                        value={filters.status ?? ''}
-                        onChange={(event) =>
-                            apply({ status: event.target.value || undefined })
-                        }
-                        aria-label="Filter by status"
-                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                        <option value="">All statuses</option>
-                        {statuses.map((status) => (
-                            <option key={status.value} value={status.value}>
-                                {status.label}
-                            </option>
-                        ))}
-                    </select>
-
-                    <select
-                        value={filters.priority ?? ''}
-                        onChange={(event) =>
-                            apply({ priority: event.target.value || undefined })
-                        }
-                        aria-label="Filter by priority"
-                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                        <option value="">Any priority</option>
-                        {priorities.map((priority) => (
-                            <option key={priority.value} value={priority.value}>
-                                {priority.label}
-                            </option>
-                        ))}
-                    </select>
-
-                    <select
-                        value={String(filters.office_id ?? '')}
-                        onChange={(event) =>
-                            apply({
-                                office_id: event.target.value || undefined,
-                            })
-                        }
-                        aria-label="Filter by holding office"
-                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                        <option value="">Any office</option>
-                        {offices.map((office) => (
-                            <option key={office.id} value={office.id}>
-                                {office.name}
-                            </option>
-                        ))}
-                    </select>
-
-                    <select
-                        value={filters.due ?? ''}
-                        onChange={(event) =>
-                            apply({ due: event.target.value || undefined })
-                        }
-                        aria-label="Filter by deadline"
-                        className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                        <option value="">Any deadline</option>
-                        <option value="overdue">Overdue</option>
-                        <option value="approaching">Due soon</option>
-                    </select>
+                {/* Phone: cards, so Status and the View button are reachable. */}
+                <div className="bg-white md:hidden">
+                    <DocumentCards items={page.data} />
                 </div>
 
-                <div className="rounded-xl border">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Control number</TableHead>
-                                <TableHead>Title</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Currently at</TableHead>
-                                <TableHead>Priority</TableHead>
-                                <TableHead>Deadline</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
+                <div className="hidden overflow-x-auto bg-white md:block">
+                    <table className="w-full min-w-[720px] text-left">
+                        <thead className="bg-[#E8F0FB]">
+                            <tr>
+                                {[
+                                    'Control No.',
+                                    'Title',
+                                    'Department',
+                                    'Status',
+                                    'Date',
+                                    'Action',
+                                ].map((heading) => (
+                                    <th
+                                        key={heading}
+                                        scope="col"
+                                        className="px-5 py-4 text-center text-[15px] font-bold text-navy first:text-left"
+                                    >
+                                        {heading}
+                                    </th>
+                                ))}
+                            </tr>
+                        </thead>
+
+                        <tbody>
                             {page.data.length === 0 && (
-                                <TableRow>
-                                    <TableCell
+                                <tr>
+                                    <td
                                         colSpan={6}
-                                        className="py-10 text-center text-muted-foreground"
+                                        className="px-5 py-12 text-center text-sm text-copy"
                                     >
                                         No documents match these filters.
-                                    </TableCell>
-                                </TableRow>
+                                    </td>
+                                </tr>
                             )}
 
                             {page.data.map((document) => (
-                                <TableRow key={document.id}>
-                                    <TableCell className="font-mono text-xs font-medium">
+                                <tr
+                                    key={document.id}
+                                    className="border-t border-[#EEF2F7]"
+                                >
+                                    <td className="px-5 py-4 font-mono text-sm font-semibold text-navy">
                                         <Link
                                             href={documents.show(document.id)}
                                             className="hover:underline"
                                         >
                                             {document.control_number}
                                         </Link>
-                                    </TableCell>
-                                    <TableCell className="max-w-72 truncate">
+                                    </td>
+                                    <td className="max-w-64 truncate px-5 py-4 text-center text-[15px] font-bold text-navy">
                                         {document.title}
-                                    </TableCell>
-                                    <TableCell>
-                                        <ToneBadge tone={document.status_tone}>
-                                            {document.status_label}
-                                        </ToneBadge>
-                                    </TableCell>
-                                    <TableCell>
+                                    </td>
+                                    <td className="px-5 py-4 text-center text-[15px] font-bold text-navy">
                                         {document.current_office ?? '—'}
-                                    </TableCell>
-                                    <TableCell>
-                                        <ToneBadge
-                                            tone={document.priority_tone}
+                                    </td>
+                                    <td className="px-5 py-4 text-center">
+                                        <StatusPill
+                                            tone={document.status_tone}
+                                            label={document.status_label}
+                                        />
+                                    </td>
+                                    <td className="px-5 py-4 text-center text-sm whitespace-nowrap text-copy">
+                                        <FormattedDate
+                                            iso={document.created_at}
+                                        />
+                                    </td>
+                                    <td className="px-5 py-4 text-center">
+                                        <Link
+                                            href={documents.show(document.id)}
+                                            className="inline-block rounded-md bg-[#3B72C4] px-7 py-2.5 text-sm font-bold text-white transition hover:bg-[#31629F]"
                                         >
-                                            {document.priority_label}
-                                        </ToneBadge>
-                                    </TableCell>
-                                    <TableCell>
-                                        {document.due_state === 'none' ? (
-                                            '—'
-                                        ) : (
-                                            <ToneBadge
-                                                tone={document.due_state_tone}
-                                            >
-                                                {document.due_state_label}
-                                            </ToneBadge>
-                                        )}
-                                    </TableCell>
-                                </TableRow>
+                                            View
+                                        </Link>
+                                    </td>
+                                </tr>
                             ))}
-                        </TableBody>
-                    </Table>
+                        </tbody>
+                    </table>
                 </div>
 
                 {page.last_page > 1 && (
                     <nav
-                        className="flex flex-wrap items-center gap-1"
                         aria-label="Pagination"
+                        className="flex flex-wrap items-center justify-center gap-1 border-t border-[#EEF2F7] bg-white px-4 py-3"
                     >
                         {page.links.map((link, index) => (
-                            <Button
+                            <button
                                 key={index}
-                                size="sm"
-                                variant={link.active ? 'default' : 'outline'}
+                                type="button"
                                 disabled={!link.url}
+                                aria-current={link.active ? 'page' : undefined}
                                 onClick={() =>
                                     link.url &&
                                     router.get(
@@ -272,12 +258,34 @@ export default function DocumentsIndex({
                                         },
                                     )
                                 }
+                                className={`min-w-9 rounded-md px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                                    link.active
+                                        ? 'bg-[#3B72C4] text-white'
+                                        : 'text-navy hover:bg-[#E8F0FB]'
+                                }`}
                                 dangerouslySetInnerHTML={{ __html: link.label }}
                             />
                         ))}
                     </nav>
                 )}
-            </div>
+            </section>
+        </>
+    );
+}
+
+/** Rendered client-side so each reader sees their own locale. */
+function FormattedDate({ iso }: { iso: string | null | undefined }) {
+    if (!iso) {
+        return <>—</>;
+    }
+
+    return (
+        <>
+            {new Date(iso).toLocaleDateString(undefined, {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+            })}
         </>
     );
 }

@@ -1,10 +1,7 @@
 import { Head, router } from '@inertiajs/react';
 import { Flashlight, Keyboard, Loader2, ScanLine } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScanBackdrop } from '@/components/documents/scan-backdrop';
 import { ScanPhone } from '@/components/documents/scan-phone';
-import { Skyline } from '@/components/landing/skyline';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cameraIsPossible, useQrScanner } from '@/hooks/use-qr-scanner';
 import documents from '@/routes/documents';
@@ -85,60 +82,54 @@ export default function ScanConsole() {
         <>
             <Head title="Scan QR Code" />
 
-            <div className="relative flex min-h-full flex-1 flex-col overflow-hidden bg-linear-to-b/srgb from-brand to-brand-soft">
-                <ScanBackdrop />
+            <div className="flex flex-col items-center gap-10 lg:flex-row lg:items-start lg:justify-between lg:gap-16">
+                <div className="w-full max-w-md">
+                    <h1 className="text-4xl font-extrabold tracking-tight text-navy sm:text-5xl">
+                        Scan QR Code
+                    </h1>
+                    <p className="mt-2 text-sm text-navy-soft/70">
+                        Align the QR code within the frame to scan.
+                    </p>
 
-                <div className="relative mx-auto flex w-full max-w-6xl flex-1 flex-col items-center gap-10 px-4 py-10 lg:flex-row lg:items-start lg:justify-between lg:gap-16 lg:py-16">
-                    <div className="w-full max-w-md">
-                        <h1 className="text-4xl font-extrabold tracking-tight text-navy sm:text-5xl">
-                            Scan QR Code
-                        </h1>
-                        <p className="mt-2 text-sm text-navy-soft/70">
-                            Align the QR code within the frame to scan.
-                        </p>
+                    <ScanFrame
+                        videoRef={videoRef}
+                        canvasRef={canvasRef}
+                        active={cameraRequested && state === 'scanning'}
+                        starting={cameraRequested && state === 'starting'}
+                    />
 
-                        <ScanFrame
-                            videoRef={videoRef}
-                            canvasRef={canvasRef}
-                            active={cameraRequested && state === 'scanning'}
-                            starting={cameraRequested && state === 'starting'}
+                    {cameraPossible ? (
+                        <CameraControls
+                            requested={cameraRequested}
+                            state={state}
+                            torchOn={torchOn}
+                            torchAvailable={torchAvailable}
+                            onStart={startCamera}
+                            onStop={stopCamera}
+                            onToggleTorch={() => void toggleTorch()}
                         />
-
-                        {cameraPossible ? (
-                            <CameraControls
-                                requested={cameraRequested}
-                                state={state}
-                                torchOn={torchOn}
-                                torchAvailable={torchAvailable}
-                                onStart={startCamera}
-                                onStop={stopCamera}
-                                onToggleTorch={() => void toggleTorch()}
-                            />
-                        ) : (
-                            <p className="mt-5 rounded-xl bg-white/70 px-4 py-3 text-center text-xs leading-relaxed text-navy-soft/80">
-                                Camera scanning needs HTTPS — browsers block
-                                camera access on insecure origins. Use a USB
-                                scanner or type the code below.
-                            </p>
-                        )}
-
-                        <p className="mt-4 text-center text-sm leading-relaxed text-navy-soft/70">
-                            Position the QR code in the frame and it will be
-                            scanned automatically.
+                    ) : (
+                        <p className="mt-5 rounded-xl bg-white/70 px-4 py-3 text-center text-xs leading-relaxed text-navy-soft/80">
+                            Camera scanning needs HTTPS — browsers block camera
+                            access on insecure origins. Use a USB scanner or
+                            type the code below.
                         </p>
+                    )}
 
-                        <WedgeEntry
-                            inputRef={inputRef}
-                            token={token}
-                            onChange={setToken}
-                            onSubmit={() => resolve(token)}
-                        />
-                    </div>
+                    <p className="mt-4 text-center text-sm leading-relaxed text-navy-soft/70">
+                        Position the QR code in the frame and it will be scanned
+                        automatically.
+                    </p>
 
-                    <ScanPhone />
+                    <WedgeEntry
+                        inputRef={inputRef}
+                        token={token}
+                        onChange={setToken}
+                        onSubmit={() => resolve(token)}
+                    />
                 </div>
 
-                <Skyline />
+                <ScanPhone />
             </div>
         </>
     );
@@ -400,9 +391,12 @@ function WedgeEntry({
                 Keep the cursor here.
             </p>
 
-            <Button type="submit" className="mt-3 w-full">
+            <button
+                type="submit"
+                className="mt-3 h-12 w-full rounded-md bg-[#3B72C4] text-[15px] font-bold text-white transition hover:bg-[#31629F]"
+            >
                 Look up
-            </Button>
+            </button>
         </form>
     );
 }

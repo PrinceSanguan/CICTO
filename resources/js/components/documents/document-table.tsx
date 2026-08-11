@@ -20,62 +20,113 @@ export function DocumentTable({
     emptyMessage?: string;
 }) {
     return (
-        <div className="rounded-xl border">
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Control number</TableHead>
-                        <TableHead>Title</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Currently at</TableHead>
-                        <TableHead>Deadline</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {items.length === 0 && (
-                        <TableRow>
-                            <TableCell
-                                colSpan={5}
-                                className="py-8 text-center text-muted-foreground"
-                            >
-                                {emptyMessage}
-                            </TableCell>
-                        </TableRow>
-                    )}
-
-                    {items.map((item) => (
-                        <TableRow key={item.id}>
-                            <TableCell className="font-mono text-xs font-medium">
+        <>
+            {/*
+                Phone: cards. The five columns need ~640px, so below `md`
+                everything past "Title" is off-screen with no affordance --
+                including the status, which is the reason to look at the list.
+            */}
+            <div className="rounded-xl border md:hidden">
+                {items.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">
+                        {emptyMessage}
+                    </p>
+                ) : (
+                    <ul className="divide-y">
+                        {items.map((item) => (
+                            <li key={item.id} className="p-4">
                                 <Link
                                     href={documents.show(item.id)}
-                                    className="hover:underline"
+                                    className="block font-medium break-words hover:underline"
                                 >
-                                    {item.control_number}
+                                    {item.title}
                                 </Link>
-                            </TableCell>
-                            <TableCell className="max-w-64 truncate">
-                                {item.title}
-                            </TableCell>
-                            <TableCell>
-                                <ToneBadge tone={item.status_tone}>
-                                    {item.status_label}
-                                </ToneBadge>
-                            </TableCell>
-                            <TableCell>{item.current_office ?? '—'}</TableCell>
-                            <TableCell>
-                                {item.due_state === 'none' ? (
-                                    '—'
-                                ) : (
-                                    <ToneBadge tone={item.due_state_tone}>
-                                        {item.due_state_label}
+                                <span className="mt-0.5 block font-mono text-xs text-muted-foreground">
+                                    {item.control_number}
+                                </span>
+
+                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                    <ToneBadge tone={item.status_tone}>
+                                        {item.status_label}
                                     </ToneBadge>
-                                )}
-                            </TableCell>
+                                    {item.due_state !== 'none' && (
+                                        <ToneBadge tone={item.due_state_tone}>
+                                            {item.due_state_label}
+                                        </ToneBadge>
+                                    )}
+                                </div>
+
+                                <p className="mt-2 text-xs text-muted-foreground">
+                                    Currently at{' '}
+                                    <span className="font-medium text-foreground">
+                                        {item.current_office ?? '—'}
+                                    </span>
+                                </p>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+
+            <div className="hidden rounded-xl border md:block">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Control number</TableHead>
+                            <TableHead>Title</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Currently at</TableHead>
+                            <TableHead>Deadline</TableHead>
                         </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-        </div>
+                    </TableHeader>
+                    <TableBody>
+                        {items.length === 0 && (
+                            <TableRow>
+                                <TableCell
+                                    colSpan={5}
+                                    className="py-8 text-center text-muted-foreground"
+                                >
+                                    {emptyMessage}
+                                </TableCell>
+                            </TableRow>
+                        )}
+
+                        {items.map((item) => (
+                            <TableRow key={item.id}>
+                                <TableCell className="font-mono text-xs font-medium">
+                                    <Link
+                                        href={documents.show(item.id)}
+                                        className="hover:underline"
+                                    >
+                                        {item.control_number}
+                                    </Link>
+                                </TableCell>
+                                <TableCell className="max-w-64 truncate">
+                                    {item.title}
+                                </TableCell>
+                                <TableCell>
+                                    <ToneBadge tone={item.status_tone}>
+                                        {item.status_label}
+                                    </ToneBadge>
+                                </TableCell>
+                                <TableCell>
+                                    {item.current_office ?? '—'}
+                                </TableCell>
+                                <TableCell>
+                                    {item.due_state === 'none' ? (
+                                        '—'
+                                    ) : (
+                                        <ToneBadge tone={item.due_state_tone}>
+                                            {item.due_state_label}
+                                        </ToneBadge>
+                                    )}
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </div>
+        </>
     );
 }
 

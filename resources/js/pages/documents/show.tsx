@@ -1,13 +1,18 @@
-import { Head, Link, useForm } from '@inertiajs/react';
-import { Clock, Download, MapPin, QrCode } from 'lucide-react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
+import { ChevronLeft, Download, QrCode } from 'lucide-react';
 import { useState } from 'react';
 import DocumentCommentController from '@/actions/App/Http/Controllers/DocumentCommentController';
 import DocumentFileController from '@/actions/App/Http/Controllers/DocumentFileController';
 import DocumentSignatureController from '@/actions/App/Http/Controllers/DocumentSignatureController';
 import DocumentWorkflowController from '@/actions/App/Http/Controllers/DocumentWorkflowController';
+import {
+    DocumentFacts,
+    ProgressTimeline,
+    StageStepper,
+    TrackingMetrics,
+} from '@/components/documents/document-tracking';
 import { SignaturePad } from '@/components/documents/signature-pad';
 import { ToneBadge } from '@/components/documents/status-badge';
-import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,9 +27,16 @@ import type {
     TimelineEntry,
 } from '@/types';
 
+type LongestStage = {
+    office: string | null;
+    stage: string;
+    duration: string;
+} | null;
+
 type Props = {
     document: DocumentDetail;
     timeline: TimelineEntry[];
+    longestStage: LongestStage;
     officeRollup: OfficeDwell[];
     files: DocumentFileItem[];
     signatures: SignatureItem[];
@@ -35,6 +47,7 @@ type Props = {
 export default function ShowDocument({
     document,
     timeline,
+    longestStage,
     officeRollup,
     files,
     signatures,
@@ -42,6 +55,7 @@ export default function ShowDocument({
     offices,
 }: Props) {
     const [showQr, setShowQr] = useState(false);
+    const [archiveReason, setArchiveReason] = useState('');
 
     const action = useForm({
         action: '',
@@ -89,100 +103,155 @@ export default function ShowDocument({
 
     const isForward = action.data.action === 'forwarded';
 
+    // One plain sentence for the Processing Summary panel, derived from the
+    // ledger rather than stored, so it can never contradict the timeline.
+    const processingSummary = document.tracking.current_office
+        ? `The document is currently ${document.status_label.toLowerCase()} by ${document.tracking.current_office}.`
+        : `The document is ${document.status_label.toLowerCase()}.`;
+
     return (
         <>
             <Head title={document.control_number} />
 
-            <div className="flex h-full flex-1 flex-col gap-4 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                        <Heading
-                            title={document.title}
-                            description={`${document.control_number} · ${document.document_type ?? 'Document'}`}
-                        />
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <ToneBadge tone={document.status_tone}>
-                                {document.status_label}
-                            </ToneBadge>
-                            <ToneBadge tone={document.priority_tone}>
-                                {document.priority_label}
-                            </ToneBadge>
-                            {document.due_state !== 'none' && (
-                                <ToneBadge tone={document.due_state_tone}>
-                                    {document.due_state_label}
-                                </ToneBadge>
-                            )}
+            <Link
+                href={documents.index()}
+                className="inline-flex items-center gap-1 text-sm font-bold text-white/90 transition hover:text-white"
+            >
+                <ChevronLeft className="size-4" />
+                Back to Track Document
+            </Link>
+
+            <div className="mt-4 flex flex-col gap-6">
+                {/* §10 Status Tracking, in the client's "View Documents" shape. */}
+                <section className="rounded-xl bg-white p-6 shadow-xl sm:p-8">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                        <h1 className="text-2xl font-bold text-navy">
+                            View Documents
+                        </h1>
+
+                        <div className="flex flex-wrap gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setShowQr((value) => !value)}
+                            >
+                                <QrCode className="size-4" />
+                                {showQr ? 'Hide QR' : 'Show QR'}
+                            </Button>
+                            <Button variant="outline" size="sm" asChild>
+                                <a
+                                    href={documents.labels.print.url({
+                                        query: { ids: [document.id] },
+                                    })}
+                                    target="_blank"
+                                    rel="noopener"
+                                >
+                                    Print label
+                                </a>
+                            </Button>
                         </div>
                     </div>
 
-                    <div className="flex gap-2">
-                        <Button
-                            variant="outline"
-                            onClick={() => setShowQr((value) => !value)}
-                        >
-                            <QrCode className="size-4" />
-                            {showQr ? 'Hide QR' : 'Show QR'}
-                        </Button>
-                        <Button variant="outline" asChild>
-                            <a
-                                href={documents.labels.print.url({
-                                    query: { ids: [document.id] },
+                    <div className="mt-6 overflow-x-auto pb-2">
+                        <StageStepper status={document.status} />
+                    </div>
+
+                    {showQr && (
+                        <div className="mt-6 flex w-fit flex-col items-center gap-2 rounded-xl border p-4">
+                            <img
+                                src={documents.qr.url({
+                                    document: document.id,
                                 })}
-                                target="_blank"
-                                rel="noopener"
-                            >
-                                Print label
-                            </a>
-                        </Button>
-                    </div>
-                </div>
+                                alt={`QR code for ${document.control_number}`}
+                                className="size-40"
+                            />
+                            <p className="font-mono text-xs">
+                                {document.control_number}
+                            </p>
+                        </div>
+                    )}
 
-                {showQr && (
-                    <div className="flex w-fit flex-col items-center gap-2 rounded-xl border p-4">
-                        <img
-                            src={documents.qr.url({ document: document.id })}
-                            alt={`QR code for ${document.control_number}`}
-                            className="size-40"
+                    <div className="mt-8 grid gap-8 rounded-lg border border-[#E4EAF2] p-6 lg:grid-cols-2">
+                        <DocumentFacts document={document} />
+                        <TrackingMetrics
+                            document={document}
+                            longestStage={longestStage}
                         />
-                        <p className="font-mono text-xs">
-                            {document.control_number}
-                        </p>
-                    </div>
-                )}
-
-                {/* §10 Status Tracking */}
-                <section className="grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-xl border p-4">
-                        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <MapPin className="size-3.5" /> Currently at
-                        </p>
-                        <p className="mt-1 font-medium">
-                            {document.tracking.current_office ?? '—'}
-                        </p>
-                    </div>
-                    <div className="rounded-xl border p-4">
-                        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <Clock className="size-3.5" /> Time at this office
-                        </p>
-                        <p className="mt-1 font-medium">
-                            {document.tracking.time_at_current_office ?? '—'}
-                        </p>
-                    </div>
-                    <div className="rounded-xl border p-4">
-                        <p className="text-xs text-muted-foreground">
-                            Expected completion
-                        </p>
-                        <p className="mt-1 font-medium">
-                            {formatDate(
-                                document.tracking.expected_completion_at,
-                            )}
-                        </p>
                     </div>
                 </section>
 
                 {/* §9 Approval and routing */}
+                {/*
+                    §16. Archiving is not a workflow action -- it applies once a
+                    document is already finished -- so it sits apart from the
+                    routing buttons rather than inside them.
+                */}
+                {(document.can.archive || document.is_archived) && (
+                    <section className="rounded-xl bg-white p-6 shadow-xl">
+                        <h3 className="mb-3 text-sm font-semibold">Archive</h3>
+
+                        {document.is_archived ? (
+                            <div className="flex flex-wrap items-center gap-3">
+                                <p className="flex-1 text-sm text-copy">
+                                    This document is filed in the archive.
+                                    Nothing has been deleted.
+                                </p>
+                                {document.can.restore && (
+                                    <Button
+                                        variant="outline"
+                                        onClick={() =>
+                                            router.delete(
+                                                documents.restore.url({
+                                                    document: document.id,
+                                                }),
+                                                { preserveScroll: true },
+                                            )
+                                        }
+                                    >
+                                        Restore to active list
+                                    </Button>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="flex flex-wrap items-end gap-3">
+                                <div className="min-w-56 flex-1">
+                                    <label
+                                        htmlFor="archive_reason"
+                                        className="text-sm font-medium"
+                                    >
+                                        Reason (optional)
+                                    </label>
+                                    <Input
+                                        id="archive_reason"
+                                        value={archiveReason}
+                                        onChange={(event) =>
+                                            setArchiveReason(event.target.value)
+                                        }
+                                        maxLength={500}
+                                        placeholder="Why is this being filed away?"
+                                        className="mt-1"
+                                    />
+                                </div>
+                                <Button
+                                    onClick={() =>
+                                        router.post(
+                                            documents.archive.url({
+                                                document: document.id,
+                                            }),
+                                            { reason: archiveReason },
+                                            { preserveScroll: true },
+                                        )
+                                    }
+                                >
+                                    Archive document
+                                </Button>
+                            </div>
+                        )}
+                    </section>
+                )}
+
                 {document.available_actions.length > 0 && (
-                    <section className="rounded-xl border p-4">
+                    <section className="rounded-xl bg-white p-6 shadow-xl">
                         <h3 className="mb-3 text-sm font-semibold">Actions</h3>
 
                         <div className="mb-3 flex flex-wrap gap-2">
@@ -296,71 +365,47 @@ export default function ShowDocument({
 
                 <div className="grid gap-4 lg:grid-cols-2">
                     {/* §13 Audit trail */}
-                    <section className="rounded-xl border p-4">
-                        <h3 className="mb-3 text-sm font-semibold">
-                            History &amp; routing
-                        </h3>
+                    <section className="rounded-xl bg-white p-6 shadow-xl sm:p-8">
+                        <ProgressTimeline
+                            timeline={timeline}
+                            summary={processingSummary}
+                        />
 
-                        {/* §13: how long it stayed at each office. */}
+                        {/* §13: how long it stayed at each office. The design
+                            has no place for this, but it is what answers "which
+                            office is slow" -- the question §1 says the client
+                            actually has. */}
                         {officeRollup.length > 0 && (
-                            <dl className="mb-4 space-y-1 rounded-lg bg-muted/40 p-3 text-xs">
-                                {officeRollup.map((row) => (
-                                    <div
-                                        key={row.office}
-                                        className="flex justify-between gap-4"
-                                    >
-                                        <dt>
-                                            {row.office}
-                                            {row.visits > 1 &&
-                                                ` (${row.visits} visits)`}
-                                            {row.is_current && ' · here now'}
-                                        </dt>
-                                        <dd className="font-medium">
-                                            {row.duration ?? '—'}
-                                        </dd>
-                                    </div>
-                                ))}
-                            </dl>
+                            <details className="mt-6 rounded-lg bg-[#F4F7FC] p-4">
+                                <summary className="cursor-pointer text-sm font-bold text-navy">
+                                    Time spent per office
+                                </summary>
+                                <dl className="mt-3 space-y-1 text-sm">
+                                    {officeRollup.map((row) => (
+                                        <div
+                                            key={row.office}
+                                            className="flex justify-between gap-4"
+                                        >
+                                            <dt className="text-copy">
+                                                {row.office}
+                                                {row.visits > 1 &&
+                                                    ` (${row.visits} visits)`}
+                                                {row.is_current &&
+                                                    ' · here now'}
+                                            </dt>
+                                            <dd className="font-bold text-navy">
+                                                {row.duration ?? '—'}
+                                            </dd>
+                                        </div>
+                                    ))}
+                                </dl>
+                            </details>
                         )}
-                        <ol className="space-y-3">
-                            {timeline.map((entry) => (
-                                <li
-                                    key={entry.id}
-                                    className="border-l-2 border-muted pl-3"
-                                >
-                                    <p className="text-sm">
-                                        <span className="font-medium">
-                                            {entry.actor ?? 'System'}
-                                        </span>{' '}
-                                        {entry.verb} this document
-                                        {entry.to_office && (
-                                            <>
-                                                {' '}
-                                                {entry.from_office
-                                                    ? `from ${entry.from_office} to ${entry.to_office}`
-                                                    : `at ${entry.to_office}`}
-                                            </>
-                                        )}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground">
-                                        {formatDateTime(entry.arrived_at)}
-                                        {entry.dwell &&
-                                            ` · stayed ${entry.dwell}`}
-                                        {entry.is_open && ' · still here'}
-                                    </p>
-                                    {entry.remarks && (
-                                        <p className="mt-1 rounded bg-muted/50 p-2 text-xs">
-                                            {entry.remarks}
-                                        </p>
-                                    )}
-                                </li>
-                            ))}
-                        </ol>
                     </section>
 
                     <div className="space-y-4">
                         {/* §14 Version Control */}
-                        <section className="rounded-xl border p-4">
+                        <section className="rounded-xl bg-white p-6 shadow-xl">
                             <h3 className="mb-3 text-sm font-semibold">
                                 Attachments
                                 {files.length > 1 && (
@@ -499,7 +544,7 @@ export default function ShowDocument({
                         </section>
 
                         {/* §15 Digital Signatures */}
-                        <section className="rounded-xl border p-4">
+                        <section className="rounded-xl bg-white p-6 shadow-xl">
                             <h3 className="mb-3 text-sm font-semibold">
                                 Signatures
                             </h3>
@@ -619,7 +664,7 @@ export default function ShowDocument({
                         </section>
 
                         {/* §16 Comments */}
-                        <section className="rounded-xl border p-4">
+                        <section className="rounded-xl bg-white p-6 shadow-xl">
                             <h3 className="mb-3 text-sm font-semibold">
                                 Comments
                             </h3>
@@ -714,10 +759,6 @@ function requiresRemarks(document: DocumentDetail, value: string): boolean {
         document.available_actions.find((a) => a.value === value)
             ?.requires_remarks ?? false
     );
-}
-
-function formatDate(value: string | null): string {
-    return value ? new Date(value).toLocaleDateString() : '—';
 }
 
 function formatDateTime(value: string | null): string {

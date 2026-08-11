@@ -1,12 +1,13 @@
-import {
-    MonthlyProcessedChart,
-    ProcessingTrendChart,
-    StatusDistributionChart,
-} from '@/components/reports/report-charts';
 import type {
+    MonthByStatus,
     MonthPoint,
     StatusSlice,
     TrendPoint,
+} from '@/components/reports/report-charts';
+import {
+    MonthlyByStatusChart,
+    ProcessingTrendChart,
+    StatusPieChart,
 } from '@/components/reports/report-charts';
 
 /**
@@ -17,37 +18,46 @@ import type {
  * its own chunk instead of the main bundle.
  */
 export default function ReportCharts({
-    monthlyProcessed,
+    monthlyByStatus,
     statusDistribution,
     processingTrend,
+    exportButtons,
 }: {
     monthlyProcessed: MonthPoint[];
+    monthlyByStatus: MonthByStatus[];
     statusDistribution: StatusSlice[];
     processingTrend: TrendPoint[];
+    exportButtons?: React.ReactNode;
 }) {
     return (
         <div className="grid gap-4 lg:grid-cols-2">
-            <section className="rounded-xl border p-4">
-                <h3 className="mb-3 text-sm font-semibold">
-                    Documents processed per month
-                </h3>
-                <MonthlyProcessedChart data={monthlyProcessed} />
+            <section className="rounded-xl bg-white p-5 shadow-xl">
+                <h2 className="mb-4 text-xl font-bold text-navy">
+                    Monthly Documents Processed
+                </h2>
+                <MonthlyByStatusChart data={monthlyByStatus} />
             </section>
 
-            <section className="rounded-xl border p-4">
-                <h3 className="mb-3 text-sm font-semibold">
-                    Status distribution
-                </h3>
-                <StatusDistributionChart data={statusDistribution} />
+            <section className="rounded-xl bg-white p-5 shadow-xl">
+                <h2 className="mb-4 text-xl font-bold text-navy">
+                    Status Distribution
+                </h2>
+                <StatusPieChart data={statusDistribution} />
+
+                {exportButtons && (
+                    <div className="mt-4 flex flex-wrap justify-end gap-3">
+                        {exportButtons}
+                    </div>
+                )}
             </section>
 
-            <section className="rounded-xl border p-4 lg:col-span-2">
-                <h3 className="mb-3 text-sm font-semibold">
+            <section className="rounded-xl bg-white p-5 shadow-xl lg:col-span-2">
+                <h2 className="mb-1 text-xl font-bold text-navy">
                     Processing trend
-                    <span className="ml-2 font-normal text-muted-foreground">
-                        average days from registration to completion
-                    </span>
-                </h3>
+                </h2>
+                <p className="mb-4 text-sm text-copy">
+                    Average days from registration to completion.
+                </p>
                 <ProcessingTrendChart data={processingTrend} />
             </section>
         </div>

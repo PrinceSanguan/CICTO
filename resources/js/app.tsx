@@ -2,6 +2,7 @@ import { createInertiaApp } from '@inertiajs/react';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
+import AppTopLayout from '@/layouts/app/app-top-layout';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
@@ -35,6 +36,25 @@ createInertiaApp({
 
         if (name.startsWith('settings/')) {
             return [AppLayout, SettingsLayout];
+        }
+
+        /*
+         * §4's main navigation runs across the TOP for the pages a clerk uses
+         * all day -- Track Documents, the document view, Submit Document, the
+         * scan console, Reports and Help. The client's designs show it that
+         * way, and it is the same four items either shell renders.
+         *
+         * The role PANELS keep the sidebar: Admin and Super Admin have their
+         * own menus, and those designs show a sidebar.
+         */
+        if (
+            name === 'dashboard' ||
+            name.startsWith('documents/') ||
+            name.startsWith('reports/') ||
+            name.startsWith('help/') ||
+            name.startsWith('notifications/')
+        ) {
+            return AppTopLayout;
         }
 
         return AppLayout;

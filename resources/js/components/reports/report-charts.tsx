@@ -2,8 +2,12 @@ import {
     Bar,
     BarChart,
     CartesianGrid,
+    Cell,
+    Legend,
     Line,
     LineChart,
+    Pie,
+    PieChart,
     ResponsiveContainer,
     Tooltip,
     XAxis,
@@ -21,6 +25,15 @@ import {
  */
 
 export type MonthPoint = { month: string; label: string; count: number };
+export type MonthByStatus = {
+    month: string;
+    label: string;
+    pending: number;
+    in_process: number;
+    for_approval: number;
+    completed: number;
+    rejected: number;
+};
 export type TrendPoint = { month: string; label: string; days: number | null };
 export type StatusSlice = { status: string; count: number };
 
@@ -164,6 +177,123 @@ export function ProcessingTrendChart({ data }: { data: TrendPoint[] }) {
                     connectNulls={false}
                 />
             </LineChart>
+        </ResponsiveContainer>
+    );
+}
+
+/**
+ * The client's "Monthly Documents Processed" chart: five grouped bars a month.
+ *
+ * The palette is shared with the pie below so a colour means the same thing in
+ * both, and every series carries a legend entry -- colour is never the only way
+ * to tell them apart.
+ */
+export const REPORT_SERIES = [
+    { key: 'pending', name: 'Pending', colour: '#EFC65B' },
+    { key: 'in_process', name: 'In Process', colour: '#6FBF9A' },
+    { key: 'for_approval', name: 'For Approval', colour: '#2F7BE0' },
+    { key: 'completed', name: 'Completed', colour: '#DD7A4E' },
+    { key: 'rejected', name: 'Rejected', colour: '#E0473C' },
+] as const;
+
+export function MonthlyByStatusChart({ data }: { data: MonthByStatus[] }) {
+    return (
+        <ResponsiveContainer width="100%" height={300}>
+            <BarChart
+                data={data}
+                margin={{ top: 8, right: 8, bottom: 0, left: -20 }}
+                barGap={2}
+                barCategoryGap="18%"
+            >
+                <CartesianGrid
+                    strokeDasharray="3 3"
+                    opacity={0.25}
+                    vertical={false}
+                />
+                <XAxis
+                    dataKey="label"
+                    tick={AXIS}
+                    tickLine={false}
+                    axisLine={false}
+                />
+                <YAxis
+                    tick={AXIS}
+                    tickLine={false}
+                    axisLine={false}
+                    allowDecimals={false}
+                />
+                <Tooltip
+                    contentStyle={TOOLTIP_STYLE}
+                    cursor={{ opacity: 0.08 }}
+                />
+                <Legend
+                    iconType="circle"
+                    wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+                />
+                {REPORT_SERIES.map((series) => (
+                    <Bar
+                        key={series.key}
+                        dataKey={series.key}
+                        name={series.name}
+                        fill={series.colour}
+                        radius={[3, 3, 0, 0]}
+                    />
+                ))}
+            </BarChart>
+        </ResponsiveContainer>
+    );
+}
+
+/** Status Distribution, as the pie the design asks for. */
+export function StatusPieChart({ data }: { data: StatusSlice[] }) {
+    const SLICE: Record<string, string> = {
+        Pending: '#EFC65B',
+        'In Process': '#6FBF9A',
+        'For Approval': '#2F7BE0',
+        Completed: '#DD7A4E',
+        Rejected: '#E0473C',
+    };
+
+    const total = data.reduce((sum, slice) => sum + slice.count, 0);
+
+    // A pie of nothing renders as an invisible dot with a legend, which reads
+    // as a broken chart rather than an empty one.
+    if (total === 0) {
+        return (
+            <p className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
+                No documents in this period.
+            </p>
+        );
+    }
+
+    return (
+        <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+                <Tooltip contentStyle={TOOLTIP_STYLE} />
+                <Legend
+                    layout="vertical"
+                    align="left"
+                    verticalAlign="middle"
+                    iconType="circle"
+                    wrapperStyle={{ fontSize: 12 }}
+                />
+                <Pie
+                    data={data}
+                    dataKey="count"
+                    nameKey="status"
+                    innerRadius={0}
+                    outerRadius={110}
+                    stroke="#FFFFFF"
+                    strokeWidth={2}
+                >
+                    {data.map((slice) => (
+                        <Cell
+                            key={slice.status}
+                            fill={SLICE[slice.status] ?? '#9AA7B8'}
+                        />
+                    ))}
+                </Pie>
+            </PieChart>
         </ResponsiveContainer>
     );
 }

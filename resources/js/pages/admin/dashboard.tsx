@@ -249,7 +249,11 @@ function DocumentManagement({
                     </Select>
                 </div>
 
-                <div className="mt-4 overflow-x-auto">
+                <div className="mt-4 md:hidden">
+                    <AdminCards rows={page.data} withActions />
+                </div>
+
+                <div className="mt-4 hidden overflow-x-auto md:block">
                     <DocumentRows rows={page.data} withActions />
                 </div>
 
@@ -600,10 +604,84 @@ function ReportsCard({ trend }: { trend: Props['trend'] }) {
 function PendingCard({ rows }: { rows: AdminRow[] }) {
     return (
         <Card title="Pending Document">
-            <div className="overflow-x-auto">
+            <div className="md:hidden">
+                <AdminCards rows={rows} />
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
                 <DocumentRows rows={rows} />
             </div>
         </Card>
+    );
+}
+
+/**
+ * The phone rendering of the register.
+ *
+ * The table needs ~720px to show its five columns; below that everything past
+ * "Uploaded By" is off-screen with no affordance, including the Status badge
+ * and the row actions.
+ */
+function AdminCards({
+    rows,
+    withActions = false,
+}: {
+    rows: AdminRow[];
+    withActions?: boolean;
+}) {
+    if (rows.length === 0) {
+        return (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+                No documents match this view.
+            </p>
+        );
+    }
+
+    return (
+        <ul className="divide-y">
+            {rows.map((row) => (
+                <li key={row.id} className="py-4 first:pt-0">
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                            <Link
+                                href={documents.show(row.id)}
+                                className="block font-medium break-words hover:underline"
+                            >
+                                {row.title}
+                            </Link>
+                            <span className="mt-0.5 block font-mono text-xs text-muted-foreground">
+                                {row.control_number}
+                            </span>
+                        </div>
+
+                        <ToneBadge tone={row.status_tone}>
+                            {row.status_label}
+                        </ToneBadge>
+                    </div>
+
+                    <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                        <div className="flex gap-1">
+                            <dt>Uploaded by</dt>
+                            <dd className="font-medium text-foreground">
+                                {row.uploaded_by ?? '—'}
+                            </dd>
+                        </div>
+                        <div className="flex gap-1">
+                            <dt>Updated</dt>
+                            <dd className="font-medium text-foreground">
+                                <FormattedDate iso={row.updated_at} />
+                            </dd>
+                        </div>
+                    </dl>
+
+                    {withActions && (
+                        <div className="mt-3">
+                            <RowActions row={row} />
+                        </div>
+                    )}
+                </li>
+            ))}
+        </ul>
     );
 }
 

@@ -1,4 +1,5 @@
 import {
+    Archive as ArchiveIcon,
     BarChart3,
     Bell,
     FileSearch,
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react';
 import { dashboard } from '@/routes';
 import admin from '@/routes/admin';
+import archive from '@/routes/archive';
 import documents from '@/routes/documents';
 import help from '@/routes/help';
 import notifications from '@/routes/notifications';
@@ -90,6 +92,11 @@ export const NAV_BY_ROLE: Record<Role, RoleNav> = {
                     },
                     { title: 'Users', href: admin.users.index(), icon: Users },
                     {
+                        title: 'Archive',
+                        href: archive.index(),
+                        icon: ArchiveIcon,
+                    },
+                    {
                         title: 'Reports',
                         href: reports.index(),
                         icon: BarChart3,
@@ -122,6 +129,11 @@ export const NAV_BY_ROLE: Record<Role, RoleNav> = {
                         title: 'All Documents',
                         href: superAdmin.dashboard(),
                         icon: Files,
+                    },
+                    {
+                        title: 'Archive',
+                        href: archive.index(),
+                        icon: ArchiveIcon,
                     },
                     {
                         title: 'Reports & Analytics',
