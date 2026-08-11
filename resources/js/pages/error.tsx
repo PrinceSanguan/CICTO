@@ -6,6 +6,11 @@ type Props = {
     status: number;
     /** True when the visitor has a session, so we know where "back" is. */
     authenticated: boolean;
+    /**
+     * Which kind of refusal a 403 was. 'role' means the URL needs a role this
+     * account does not hold; null means record-level scoping.
+     */
+    reason?: 'role' | null;
 };
 
 /**
@@ -17,6 +22,11 @@ type Props = {
  * know to press the browser's Back button. These statuses are ordinary
  * outcomes of office scoping, not crashes, and should read that way.
  */
+const ROLE_DENIED = {
+    title: 'This area needs a different role',
+    body: 'Your account does not have access to this part of the system. Admin and Super Admin panels are limited to the staff who administer them. If you need access, ask a system administrator to change your role.',
+};
+
 const MESSAGES: Record<number, { title: string; body: string }> = {
     403: {
         title: 'You cannot open this document',
@@ -44,11 +54,20 @@ const MESSAGES: Record<number, { title: string; body: string }> = {
     },
 };
 
-export default function ErrorPage({ status, authenticated }: Props) {
-    const { title, body } = MESSAGES[status] ?? {
-        title: 'Something went wrong',
-        body: 'The page could not be displayed. Please try again.',
-    };
+export default function ErrorPage({ status, authenticated, reason }: Props) {
+    /*
+     * A 403 has two quite different causes and they need different sentences.
+     * Telling an Admin who typed a Super Admin URL that "it belongs to another
+     * office" and to ask their department head to forward it is advice about a
+     * document they never opened.
+     */
+    const { title, body } =
+        status === 403 && reason === 'role'
+            ? ROLE_DENIED
+            : (MESSAGES[status] ?? {
+                  title: 'Something went wrong',
+                  body: 'The page could not be displayed. Please try again.',
+              });
 
     // 419 always sends you to sign in -- the session is what expired, so the
     // dashboard would only bounce you here again.

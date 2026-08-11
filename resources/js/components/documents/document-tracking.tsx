@@ -285,83 +285,97 @@ export function ProgressTimeline({
     summary: string;
 }) {
     return (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-            <ol className="relative">
-                {timeline.map((entry, index) => {
-                    const last = index === timeline.length - 1;
+        /*
+         * A CONTAINER query, not a viewport one.
+         *
+         * This used to be `lg:grid-cols-[minmax(0,1fr)_320px]`, which triggers
+         * on viewport width -- but the card holding it sits in a two-column
+         * page grid, so at ~1137px the viewport said "go wide" while the column
+         * was only ~480px. The timeline got squeezed to ~160px and the fixed
+         * 320px aside printed straight over it. @container measures the space
+         * this component actually has.
+         */
+        <div className="@container">
+            <div className="grid gap-6 @2xl:grid-cols-[minmax(0,1fr)_300px]">
+                <ol className="relative">
+                    {timeline.map((entry, index) => {
+                        const last = index === timeline.length - 1;
 
-                    return (
-                        <li
-                            key={entry.id}
-                            className="flex gap-4 pb-8 last:pb-0"
-                        >
-                            <div className="flex flex-col items-center">
-                                <span
-                                    aria-hidden="true"
-                                    className={`flex size-7 shrink-0 items-center justify-center rounded-full ${
-                                        entry.is_open
-                                            ? 'bg-[#2563C9]'
-                                            : 'bg-[#2FA36B]'
-                                    }`}
-                                >
-                                    {!entry.is_open && (
-                                        <Check
-                                            className="size-4 text-white"
-                                            strokeWidth={3}
-                                        />
-                                    )}
-                                </span>
-                                {!last && (
+                        return (
+                            <li
+                                key={entry.id}
+                                className="flex gap-4 pb-8 last:pb-0"
+                            >
+                                <div className="flex flex-col items-center">
                                     <span
                                         aria-hidden="true"
-                                        className="mt-1 w-0.5 flex-1 bg-[#C9D2DE]"
-                                    />
-                                )}
-                            </div>
-
-                            <div className="flex flex-1 flex-wrap items-start justify-between gap-x-6 gap-y-1">
-                                <div>
-                                    <p className="text-[15px] font-bold text-navy">
-                                        {entry.action_label}
-                                    </p>
-                                    <p className="text-xs text-copy">
-                                        {formatDateTime(entry.arrived_at)}
-                                        {entry.to_office
-                                            ? ` · ${entry.to_office}`
-                                            : ''}
-                                    </p>
+                                        className={`flex size-7 shrink-0 items-center justify-center rounded-full ${
+                                            entry.is_open
+                                                ? 'bg-[#2563C9]'
+                                                : 'bg-[#2FA36B]'
+                                        }`}
+                                    >
+                                        {!entry.is_open && (
+                                            <Check
+                                                className="size-4 text-white"
+                                                strokeWidth={3}
+                                            />
+                                        )}
+                                    </span>
+                                    {!last && (
+                                        <span
+                                            aria-hidden="true"
+                                            className="mt-1 w-0.5 flex-1 bg-[#C9D2DE]"
+                                        />
+                                    )}
                                 </div>
 
-                                <p className="flex items-center gap-2 text-sm text-copy">
-                                    <span>Duration :</span>
-                                    <span className="font-bold text-navy">
-                                        {entry.dwell}
-                                    </span>
-                                    {entry.is_open && (
-                                        <span className="rounded bg-[#DCE9FB] px-2 py-0.5 text-xs font-bold text-link">
-                                            (In Process)
+                                <div className="flex flex-1 flex-wrap items-start justify-between gap-x-6 gap-y-1">
+                                    <div>
+                                        <p className="text-[15px] font-bold text-navy">
+                                            {entry.action_label}
+                                        </p>
+                                        <p className="text-xs text-copy">
+                                            {formatDateTime(entry.arrived_at)}
+                                            {entry.to_office
+                                                ? ` · ${entry.to_office}`
+                                                : ''}
+                                        </p>
+                                    </div>
+
+                                    <p className="flex items-center gap-2 text-sm text-copy">
+                                        <span>Duration :</span>
+                                        <span className="font-bold text-navy">
+                                            {entry.dwell}
                                         </span>
-                                    )}
-                                </p>
-                            </div>
+                                        {entry.is_open && (
+                                            <span className="rounded bg-[#DCE9FB] px-2 py-0.5 text-xs font-bold text-link">
+                                                (In Process)
+                                            </span>
+                                        )}
+                                    </p>
+                                </div>
+                            </li>
+                        );
+                    })}
+
+                    {timeline.length === 0 && (
+                        <li className="text-sm text-copy">
+                            Nothing has happened to this document yet.
                         </li>
-                    );
-                })}
+                    )}
+                </ol>
 
-                {timeline.length === 0 && (
-                    <li className="text-sm text-copy">
-                        Nothing has happened to this document yet.
-                    </li>
-                )}
-            </ol>
-
-            <aside className="self-end rounded-lg bg-[#DCE9FB] p-5">
-                <p className="flex items-center gap-2 text-[15px] font-bold text-link">
-                    <Clock aria-hidden="true" className="size-5" />
-                    Processing Summary
-                </p>
-                <p className="mt-3 text-sm font-medium text-navy">{summary}</p>
-            </aside>
+                <aside className="self-end rounded-lg bg-[#DCE9FB] p-5">
+                    <p className="flex items-center gap-2 text-[15px] font-bold text-link">
+                        <Clock aria-hidden="true" className="size-5" />
+                        Processing Summary
+                    </p>
+                    <p className="mt-3 text-sm font-medium text-navy">
+                        {summary}
+                    </p>
+                </aside>
+            </div>
         </div>
     );
 }

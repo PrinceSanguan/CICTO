@@ -56,7 +56,7 @@ export default function CreateDocument({
                 className="mt-6 rounded-xl bg-white p-6 shadow-xl sm:p-8"
                 encType="multipart/form-data"
             >
-                {({ processing, errors }) => (
+                {({ processing, errors, clearErrors }) => (
                     <>
                         <h2 className="text-lg font-bold text-link">
                             Document Information
@@ -180,7 +180,10 @@ export default function CreateDocument({
                             File Upload
                         </h2>
 
-                        <FileDropzone error={errors.file} />
+                        <FileDropzone
+                            error={errors.file}
+                            onFileChosen={() => clearErrors('file')}
+                        />
 
                         <div className="mt-8 flex flex-wrap items-center justify-end gap-3">
                             <Link
@@ -298,7 +301,22 @@ function CountedTextarea({
  * file assigns it through a DataTransfer, so keyboard users, screen readers and
  * browsers without drag support all still get a working file picker.
  */
-function FileDropzone({ error }: { error?: string }) {
+function FileDropzone({
+    error,
+    onFileChosen,
+}: {
+    error?: string;
+    /*
+     * Clears the server-side error for this field.
+     *
+     * "The file field is required." stayed on screen after the user picked a
+     * file, because a validation error lives until the next response -- so the
+     * form read as still broken while being perfectly submittable. This clears
+     * the actual error state rather than hiding the message, so a genuinely
+     * new error from the next submit still appears.
+     */
+    onFileChosen: () => void;
+}) {
     const inputRef = useRef<HTMLInputElement>(null);
     const [dragging, setDragging] = useState(false);
     const [fileName, setFileName] = useState<string | null>(null);
@@ -317,6 +335,7 @@ function FileDropzone({ error }: { error?: string }) {
         }
 
         setFileName(files[0].name);
+        onFileChosen();
     };
 
     return (
@@ -388,9 +407,14 @@ function FileDropzone({ error }: { error?: string }) {
                     id="file"
                     name="file"
                     type="file"
-                    onChange={(event) =>
-                        setFileName(event.target.files?.[0]?.name ?? null)
-                    }
+                    onChange={(event) => {
+                        const chosen = event.target.files?.[0]?.name ?? null;
+                        setFileName(chosen);
+
+                        if (chosen !== null) {
+                            onFileChosen();
+                        }
+                    }}
                     className="sr-only"
                 />
             </div>

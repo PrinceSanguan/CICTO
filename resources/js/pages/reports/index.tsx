@@ -85,50 +85,15 @@ export default function ReportsIndex({
     canExport,
     limits,
 }: Props) {
-    // Declared once and rendered in two places: beneath the tiles, where the
-    // design puts the pair, and again under the Status Distribution card.
-    const exportLinks = (
-        <>
-            <a
-                href={reports.export.url({ query: { format: 'pdf' } })}
-                className="inline-flex items-center gap-3 rounded-lg bg-white px-6 py-3 text-[15px] font-bold text-navy no-underline shadow-lg transition hover:bg-[#F2F6FC]"
-            >
-                <FileText
-                    aria-hidden="true"
-                    className="size-5 text-[#D7373F]"
-                />
-                Download PDF
-            </a>
-            <a
-                href={reports.export.url({ query: { format: 'xlsx' } })}
-                className="inline-flex items-center gap-3 rounded-lg bg-white px-6 py-3 text-[15px] font-bold text-navy no-underline shadow-lg transition hover:bg-[#F2F6FC]"
-            >
-                <FileSpreadsheet
-                    aria-hidden="true"
-                    className="size-5 text-[#1F7244]"
-                />
-                Export Excel
-            </a>
-            {/*
-                CSV is not in the design, and it stays anyway: it is the only
-                export with no row ceiling, and the note at the foot of this
-                page tells a records officer to reach for it once a range grows
-                past what PDF and Excel can hold. Removing it would leave that
-                advice pointing at nothing.
-            */}
-            <a
-                href={reports.export.url({ query: { format: 'csv' } })}
-                title="Plain CSV — opens in Excel, never runs out of memory"
-                className="inline-flex items-center gap-3 rounded-lg bg-white px-6 py-3 text-[15px] font-bold text-navy no-underline shadow-lg transition hover:bg-[#F2F6FC]"
-            >
-                <Download
-                    aria-hidden="true"
-                    className="size-5 text-[#3B72C4]"
-                />
-                CSV
-            </a>
-        </>
-    );
+    /*
+     * Rendered in the two places the design puts them: as full-size pills
+     * beneath the tiles, and again inside the Status Distribution card.
+     *
+     * The in-card set is `compact`. Both used to render at the full size, and
+     * three large pills do not fit across a half-width chart card -- the CSV
+     * one wrapped and hung outside the card border.
+     */
+    const exportLinks = <ExportLinks />;
 
     return (
         <>
@@ -219,7 +184,9 @@ export default function ReportsIndex({
                         monthlyByStatus={monthlyByStatus}
                         statusDistribution={statusDistribution}
                         processingTrend={processingTrend}
-                        exportButtons={canExport ? exportLinks : null}
+                        exportButtons={
+                            canExport ? <ExportLinks compact /> : null
+                        }
                     />
                 </Suspense>
 
@@ -335,6 +302,66 @@ export default function ReportsIndex({
  * The icon is decorative -- the label carries the meaning -- so it is hidden
  * from screen readers rather than being announced as "image".
  */
+/**
+ * The export pair, in the two places the design puts them.
+ *
+ * `compact` is the in-card set. Both used to render at full size, and three
+ * large pills do not fit across a half-width chart card -- the CSV one wrapped
+ * and hung outside the card border.
+ */
+function ExportLinks({ compact = false }: { compact?: boolean }) {
+    const style = compact
+        ? 'gap-2 px-3 py-2 text-xs shadow-sm'
+        : 'gap-3 px-6 py-3 text-[15px] shadow-lg';
+
+    const icon = compact ? 'size-4' : 'size-5';
+
+    return (
+        <>
+            <a
+                href={reports.export.url({ query: { format: 'pdf' } })}
+                className={`inline-flex items-center rounded-lg bg-white font-bold text-navy no-underline transition hover:bg-[#F2F6FC] ${style}`}
+            >
+                <FileText
+                    aria-hidden="true"
+                    className={`${icon} text-[#D7373F]`}
+                />
+                {compact ? 'PDF' : 'Download PDF'}
+            </a>
+
+            <a
+                href={reports.export.url({ query: { format: 'xlsx' } })}
+                className={`inline-flex items-center rounded-lg bg-white font-bold text-navy no-underline transition hover:bg-[#F2F6FC] ${style}`}
+            >
+                <FileSpreadsheet
+                    aria-hidden="true"
+                    className={`${icon} text-[#1F7244]`}
+                />
+                {compact ? 'Excel' : 'Export Excel'}
+            </a>
+
+            {/*
+                CSV is not in the design, and it stays anyway: it is the only
+                export with no row ceiling, and the note at the foot of this
+                page tells a records officer to reach for it once a range grows
+                past what PDF and Excel can hold. Removing it would leave that
+                advice pointing at nothing.
+            */}
+            <a
+                href={reports.export.url({ query: { format: 'csv' } })}
+                title="Plain CSV — opens in Excel, never runs out of memory"
+                className={`inline-flex items-center rounded-lg bg-white font-bold text-navy no-underline transition hover:bg-[#F2F6FC] ${style}`}
+            >
+                <Download
+                    aria-hidden="true"
+                    className={`${icon} text-[#3B72C4]`}
+                />
+                CSV
+            </a>
+        </>
+    );
+}
+
 function Tile({
     icon: Icon,
     tint,

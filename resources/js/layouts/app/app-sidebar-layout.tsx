@@ -20,7 +20,17 @@ export default function AppSidebarLayout({
             <PanelSidebar />
             <AppContent variant="sidebar" className="overflow-x-hidden">
                 <AppSidebarHeader breadcrumbs={breadcrumbs} />
-                {children}
+
+                {/*
+                    Padding lives here rather than in each page.
+                    /admin/dashboard carried its own wrapper and the other six
+                    panel screens carried none, so their headings sat flush
+                    against the sidebar -- and were clipped off the left edge
+                    entirely at 375px.
+                */}
+                <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6">
+                    {children}
+                </div>
             </AppContent>
         </AppShell>
     );

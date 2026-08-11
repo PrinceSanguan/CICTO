@@ -176,7 +176,7 @@ final class KnowledgeBase
                 'intro' => 'If you forget your password, you can reset it in a few simple steps.',
                 'steps' => [
                     'Go to the Login page.',
-                    'Click **Forget Password?** next to the Password field.',
+                    'Click **Forgot Password?** next to the Password field.',
                     'Enter your registered email address.',
                     'Check your email for the password reset link.',
                     'Click the link and create a new password.',

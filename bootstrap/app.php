@@ -5,6 +5,7 @@ use App\Exceptions\IllegalTransitionException;
 use App\Exceptions\StaleWorkflowStateException;
 use App\Http\Middleware\EnforceSessionTimeout;
 use App\Http\Middleware\EnsureAccountIsActive;
+use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\SecurityHeaders;
@@ -98,6 +99,17 @@ return Application::configure(basePath: dirname(__DIR__))
             return Inertia::render('error', [
                 'status' => $status,
                 'authenticated' => $request->hasSession() && Auth::check(),
+                /*
+                 * Which KIND of 403 this is.
+                 *
+                 * Office scoping and role gating both abort with 403, and the
+                 * page used to explain both as "this document belongs to
+                 * another office" -- nonsense for an Admin who typed a Super
+                 * Admin URL and opened no document at all.
+                 */
+                'reason' => $status === 403 && $e->getMessage() === EnsureRole::ROLE_DENIED
+                    ? 'role'
+                    : null,
             ])
                 ->toResponse($request)
                 ->setStatusCode($status);

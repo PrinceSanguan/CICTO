@@ -12,6 +12,7 @@ import {
     XCircle,
 } from 'lucide-react';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { PanelHeading } from '@/components/admin/panel-heading';
 import type { TileTone } from '@/components/admin/stat-tile';
 import { StatTile } from '@/components/admin/stat-tile';
 import { ToneBadge } from '@/components/documents/status-badge';
@@ -81,7 +82,6 @@ type Props = {
 
 /** §4 Admin Panel → Document Management, scoped to the admin's own office. */
 export default function AdminDashboard({
-    office,
     filters,
     stats,
     documents: page,
@@ -92,29 +92,13 @@ export default function AdminDashboard({
         <>
             <Head title="Admin Panel" />
 
-            <div className="flex h-full flex-1 flex-col gap-6 p-4 lg:p-6">
-                <header>
-                    <h1 className="text-2xl font-bold text-navy">
-                        Admin Panel
-                    </h1>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        {office
-                            ? `${office.code} — ${office.name}`
-                            : 'You have not been assigned to an office yet, so you can only see what you submitted.'}
-                    </p>
-                    <hr className="mt-4 border-hairline" />
-                </header>
+            <PanelHeading />
 
-                <DocumentManagement
-                    stats={stats}
-                    filters={filters}
-                    page={page}
-                />
+            <DocumentManagement stats={stats} filters={filters} page={page} />
 
-                <ReportsCard trend={trend} />
+            <ReportsCard trend={trend} />
 
-                <PendingCard rows={pending} />
-            </div>
+            <PendingCard rows={pending} />
         </>
     );
 }

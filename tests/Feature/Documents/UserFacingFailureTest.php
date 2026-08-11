@@ -178,6 +178,40 @@ class UserFacingFailureTest extends TestCase
     }
 
     /**
+     * A route-level refusal and a record-level one both abort with 403, and the
+     * error page used to explain both the same way -- an Admin who typed a
+     * Super Admin URL was told the DOCUMENT belonged to another office and to
+     * ask their department head to forward it, about a document they never
+     * opened.
+     */
+    public function test_a_role_refusal_is_explained_differently_from_an_office_refusal(): void
+    {
+        $office = $this->office('MO', "Mayor's Office");
+
+        $this->actingAs($this->admin($office))
+            ->get(route('super-admin.users.index'))
+            ->assertStatus(403)
+            ->assertInertia(
+                fn ($page) => $page
+                    ->component('error')
+                    ->where('reason', 'role'),
+            );
+
+        // The document refusal keeps its own, record-level explanation.
+        $theirs = $this->office('SB', 'Sangguniang Bayan');
+        $document = $this->registerDocument($theirs, $this->staff($theirs));
+
+        $this->actingAs($this->staff($office))
+            ->get(route('documents.show', $document))
+            ->assertStatus(403)
+            ->assertInertia(
+                fn ($page) => $page
+                    ->component('error')
+                    ->where('reason', null),
+            );
+    }
+
+    /**
      * Every list in the app has a Department column. Once a document is
      * completed there is no open leg, and the column read as an em dash -- for
      * a document whose own timeline named three offices.

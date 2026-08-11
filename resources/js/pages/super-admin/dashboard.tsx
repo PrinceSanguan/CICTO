@@ -91,7 +91,7 @@ export default function AllDocuments({ stats, documents: page }: Props) {
         <>
             <Head title="All Documents" />
 
-            <PanelHeading />
+            <PanelHeading title="Super Admin Panel" />
 
             <section className="mt-6 rounded-xl bg-white p-6 shadow-sm">
                 <h2 className="text-2xl font-extrabold tracking-tight text-navy">

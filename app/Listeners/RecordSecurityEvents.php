@@ -23,10 +23,19 @@ use Laravel\Fortify\Events\TwoFactorAuthenticationDisabled;
  *
  * Role changes, user CRUD and settings edits are NOT here: they have no
  * framework event, so they call SecurityEvent::log() explicitly.
+ *
+ * The methods are named record*, NOT handle*, and that is load-bearing.
+ * Laravel's event discovery scans app/Listeners for any public method matching
+ * `handle*` with a typed first parameter and registers it automatically. This
+ * class is ALSO registered explicitly through subscribe(), so handle* names
+ * meant every auth event was recorded twice -- 50 rows in the §21 security log
+ * for 25 actual events, each pair sharing a timestamp to the second. An audit
+ * log that double-counts sign-ins is worse than one that misses them, because
+ * it looks complete.
  */
 class RecordSecurityEvents
 {
-    public function handleLogin(Login $event): void
+    public function recordLogin(Login $event): void
     {
         $user = $event->user;
 
@@ -37,7 +46,7 @@ class RecordSecurityEvents
         );
     }
 
-    public function handleLogout(Logout $event): void
+    public function recordLogout(Logout $event): void
     {
         $user = $event->user;
 
@@ -51,7 +60,7 @@ class RecordSecurityEvents
     /**
      * Records the attempted identifier, never the attempted password.
      */
-    public function handleFailed(Failed $event): void
+    public function recordFailed(Failed $event): void
     {
         $email = $event->credentials['email'] ?? 'unknown';
 
@@ -62,7 +71,7 @@ class RecordSecurityEvents
         );
     }
 
-    public function handleLockout(Lockout $event): void
+    public function recordLockout(Lockout $event): void
     {
         SecurityEvent::log(
             SecurityEventType::Lockout,
@@ -73,7 +82,7 @@ class RecordSecurityEvents
         );
     }
 
-    public function handlePasswordReset(PasswordReset $event): void
+    public function recordPasswordReset(PasswordReset $event): void
     {
         $user = $event->user;
 
@@ -84,7 +93,7 @@ class RecordSecurityEvents
         );
     }
 
-    public function handleTwoFactorConfirmed(TwoFactorAuthenticationConfirmed $event): void
+    public function recordTwoFactorConfirmed(TwoFactorAuthenticationConfirmed $event): void
     {
         SecurityEvent::log(
             SecurityEventType::TwoFactorEnabled,
@@ -93,7 +102,7 @@ class RecordSecurityEvents
         );
     }
 
-    public function handleTwoFactorDisabled(TwoFactorAuthenticationDisabled $event): void
+    public function recordTwoFactorDisabled(TwoFactorAuthenticationDisabled $event): void
     {
         SecurityEvent::log(
             SecurityEventType::TwoFactorDisabled,
@@ -108,13 +117,13 @@ class RecordSecurityEvents
     public function subscribe(Dispatcher $events): array
     {
         return [
-            Login::class => 'handleLogin',
-            Logout::class => 'handleLogout',
-            Failed::class => 'handleFailed',
-            Lockout::class => 'handleLockout',
-            PasswordReset::class => 'handlePasswordReset',
-            TwoFactorAuthenticationConfirmed::class => 'handleTwoFactorConfirmed',
-            TwoFactorAuthenticationDisabled::class => 'handleTwoFactorDisabled',
+            Login::class => 'recordLogin',
+            Logout::class => 'recordLogout',
+            Failed::class => 'recordFailed',
+            Lockout::class => 'recordLockout',
+            PasswordReset::class => 'recordPasswordReset',
+            TwoFactorAuthenticationConfirmed::class => 'recordTwoFactorConfirmed',
+            TwoFactorAuthenticationDisabled::class => 'recordTwoFactorDisabled',
         ];
     }
 }

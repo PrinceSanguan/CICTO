@@ -102,7 +102,7 @@ export default function Login({
                                         href={request()}
                                         className="text-sm font-medium text-link no-underline hover:underline"
                                     >
-                                        Forget Password?
+                                        Forgot Password?
                                     </TextLink>
                                 )}
                             </div>

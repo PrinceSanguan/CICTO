@@ -31,7 +31,7 @@ export default function SuperAdminReports({
         <>
             <Head title="Reports & Analytics" />
 
-            <PanelHeading />
+            <PanelHeading title="Super Admin Panel" />
 
             <Card title="Reports & Analytics" className="mt-6">
                 <ChartFrame>

@@ -77,7 +77,7 @@ export default function ManageUsers({ users, filters, roles, offices }: Props) {
         <>
             <Head title="Manage Users" />
 
-            <PanelHeading />
+            <PanelHeading title="Super Admin Panel" />
 
             <h2 className="mt-6 text-2xl font-extrabold tracking-tight text-navy">
                 Manage Users

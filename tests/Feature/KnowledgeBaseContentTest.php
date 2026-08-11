@@ -95,6 +95,40 @@ class KnowledgeBaseContentTest extends TestCase
         }
     }
 
+    /**
+     * The article tells a reader to click a control by name, so the name has to
+     * match what the login screen actually says.
+     *
+     * The design writes "Forget Password?", and that typo had propagated: the
+     * screen said one thing beside the field and another below the button, and
+     * the article quoted the wrong one.
+     */
+    public function test_the_password_article_names_the_link_the_login_screen_shows(): void
+    {
+        $login = (string) file_get_contents(
+            resource_path('js/pages/auth/login.tsx'),
+        );
+
+        $this->assertStringNotContainsString(
+            'Forget Password',
+            $login,
+            'The login screen still says "Forget Password".',
+        );
+
+        $article = KnowledgeBase::find('i-forgot-my-password');
+
+        $this->assertStringNotContainsString(
+            'Forget Password',
+            (string) json_encode($article),
+            'The article still tells users to look for "Forget Password".',
+        );
+
+        $this->assertStringContainsString(
+            'Forgot Password',
+            (string) json_encode($article),
+        );
+    }
+
     public function test_every_article_renders(): void
     {
         $user = $this->staff($this->office('MO', "Mayor's Office"));

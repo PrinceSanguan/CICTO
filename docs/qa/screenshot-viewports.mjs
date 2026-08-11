@@ -26,6 +26,7 @@ const VIEWPORTS = [
     { name: 'iphone-se', width: 375, height: 667, dpr: 2 },
     { name: 'iphone-14', width: 390, height: 844, dpr: 3 },
     { name: 'tablet', width: 768, height: 1024, dpr: 2 },
+    { name: 'reviewer', width: 1137, height: 900, dpr: 1 },
     { name: 'laptop', width: 1280, height: 800, dpr: 1 },
 ];
 
@@ -229,6 +230,18 @@ for (const view of VIEWPORTS) {
                     clientW: document.documentElement.clientWidth,
                     scrollH: document.documentElement.scrollHeight,
                     title: document.title,
+                    /* OVERLAP_PROBE */
+                    overlap: (() => {
+                        const aside = Array.from(document.querySelectorAll('aside'))
+                            .find(el => el.textContent.includes('Processing Summary'));
+                        if (!aside) return null;
+                        const a = aside.getBoundingClientRect();
+                        const hits = Array.from(document.querySelectorAll('ol > li'))
+                            .map(li => li.getBoundingClientRect())
+                            .filter(r => r.width > 0 && a.left < r.right - 1 && r.left < a.right - 1 && a.top < r.bottom - 1 && r.top < a.bottom - 1)
+                            .map(r => ({ x: Math.round(Math.min(a.right, r.right) - Math.max(a.left, r.left)), y: Math.round(Math.min(a.bottom, r.bottom) - Math.max(a.top, r.top)) }));
+                        return hits.length ? hits : null;
+                    })(),
                     offenders: Array.from(document.querySelectorAll('*'))
                         .filter(el => {
                             const r = el.getBoundingClientRect();
@@ -272,6 +285,7 @@ for (const view of VIEWPORTS) {
             overflowBy: metrics.scrollW - metrics.clientW,
             height: metrics.scrollH,
             offenders: metrics.offenders,
+            overlap: metrics.overlap,
         });
 
         // Restore for the next measurement pass.
@@ -294,7 +308,7 @@ console.log('viewport  page      overflow  height  offenders');
 for (const row of report) {
     const flag = row.overflowBy > 0 ? `+${row.overflowBy}px` : 'none';
     console.log(
-        `${row.view.padEnd(10)}${row.page.padEnd(10)}${flag.padEnd(10)}${String(row.height).padEnd(8)}${row.offenders.join(' | ')}`,
+        `${row.view.padEnd(10)}${row.page.padEnd(10)}${flag.padEnd(10)}${String(row.height).padEnd(8)}${row.overlap ? 'OVERLAP ' + JSON.stringify(row.overlap) + ' ' : ''}${row.offenders.join(' | ')}`,
     );
 }
 

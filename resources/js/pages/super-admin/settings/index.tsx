@@ -97,7 +97,7 @@ export default function SystemSettings({
             <Head title="System Settings" />
 
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
-                <PanelHeading />
+                <PanelHeading title="Super Admin Panel" />
 
                 <Heading
                     title="System Settings"
