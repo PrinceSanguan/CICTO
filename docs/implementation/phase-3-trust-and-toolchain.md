@@ -215,8 +215,19 @@ above 1,000 rows for PDF and 25,000 for XLSX.
 
 There is no encrypting Flysystem adapter in Laravel. `Crypt` on file bytes doubles
 peak memory, breaks streaming and breaks inline PDF preview. §21 ships as **private
-disk + policy-gated + audited access + encrypted backups** — say so in writing
-rather than letting "encrypted storage" be heard as at-rest file encryption.
+disk + policy-gated + audited access** — say so in writing rather than letting
+"encrypted storage" be heard as at-rest file encryption.
+
+> **Correction, 11 Aug 2026.** An earlier draft of this section promised
+> "encrypted backups", and `config/cicto.php` carried a `backup.passphrase` key
+> to match. **Nothing encrypts the backup archive.** `cicto:backup` produces a
+> plain ZIP holding the SQL dump and the uploaded documents; the passphrase key
+> was read by no code and has been removed. The archive contains every document
+> the LGU holds, so it must be treated as confidential in transit and at rest —
+> that is an operational control (restricted destination, filesystem
+> permissions), not something the application provides. If real encryption is
+> required, it is a separate piece of work and needs its own key-management
+> answer alongside the APP_KEY escrow.
 
 ### RA 10173 (Data Privacy Act)
 
@@ -285,14 +296,22 @@ use it at 21:00.
    restoring encrypted settings under a different key produces silent garbage
 3. **Fetch the archive** and verify `sha256sum` against `checksum_sha256`. A
    mismatch means a corrupt copy — use the previous run
-4. **Extract** — `unzip -P "$BACKUP_PASSPHRASE" backup.zip -d /tmp/restore`
+4. **Extract** — `unzip cicto-<stamp>-<suffix>.zip -d /tmp/restore`. The archive
+   holds `database/` (one `.sql` or `.sql.gz`) and `documents/` (every uploaded
+   file). It is **not encrypted** — see the note below. A run whose `kind` is
+   `database` rather than `full` has **no** `documents/` directory; skip step 6
+   and read the warning there.
 5. **Restore schema and data** — shell dump: pipe straight in. PHP dump:
    `php artisan migrate --force` **first**, then load. If `last_migration` is older
    than the current code, check out the matching commit before migrating
-6. **Restore files** — `rsync -a /tmp/restore/documents/ storage/app/documents/`
+6. **Restore files** — `rsync -a /tmp/restore/documents/ storage/app/documents/`.
+   If the run was `kind = database`, there is nothing to restore here and the
+   uploaded files are gone unless they were copied off-host separately. Every
+   download will 410 and the nightly sweep will report every signature as
+   failing, because it re-hashes bytes that no longer exist.
 7. **Reconcile schema** — `php artisan migrate --force`
 8. **Clear caches** — `php artisan optimize:clear`
-9. **Verify, do not assume** — `php artisan documents:verify-status`; row counts for
+9. **Verify, do not assume** — `php artisan cicto:verify-signatures`; row counts for
    `documents` and `document_movements` against the pre-incident figure; open one
    document and download its file; confirm exactly one `is_open = 1` row per live
    document
@@ -677,3 +696,133 @@ server on any port while `curl` serves the same URLs — an extension limitation
 not an application fault. Note for whoever looks: **port 8000 is occupied by an
 unrelated project on this machine**, which is what made one earlier check appear
 to 404. Use another port.
+
+---
+
+## Track / View / Submit rebuilt to the client's designs — 10 Aug 2026
+
+Three more mockups implemented: **Track Documents**, **View Documents** and
+**Submit Document**.
+
+### The navigation question is now settled
+
+Every user-facing mockup supplied so far — Scan QR, Track, View, Submit — puts
+§4's main navigation (Home, Track Documents, Reports, Help + a red Logout)
+across the **top**. Only the Admin Panel design uses a sidebar.
+
+So there are now two shells, and the split matches the designs exactly:
+
+- `AppTopLayout` — documents, reports, help, notifications. White nav bar, blue
+  gradient body, city skyline.
+- `AppLayout` (sidebar) — the Admin and Super Admin panels, which have their own
+  menus and their own design.
+
+Both read their items from `navFor()`, the same source, so the two can never
+drift apart. Navigation stays a hint and never a gate: a link hidden in either
+shell is still refused with a 403 if the URL is typed.
+
+### A real inconsistency the design surfaced
+
+`publicLabel()` collapses six workflow states into the four labels the client
+names — Pending, In Process, Rejected, Completed — but `tone()` was still
+per-state. Two documents both reading **"Pending"** rendered in different
+colours (`initiated` slate, `returned` orange), and two both reading "In
+Process" in two more.
+
+A colour legend that shows one label in two colours is worse than no colour: it
+reads as a distinction that does not exist. There is now a `publicTone()` paired
+with `publicLabel()`, and `StatusPresentationTest` asserts each label has
+exactly one colour AND that the four do not collapse onto one.
+
+### Other decisions
+
+**`longestStage` is new server-side.** The View design asks for it; it is
+derived from the movement ledger rather than stored, and the OPEN leg counts —
+a document sitting in one office for three days is exactly what a records
+officer is looking for, and excluding it would hide the live problem while
+reporting a finished one.
+
+**The four-stage stepper covers six states.** `returned` reports against Under
+Review and `rejected` against the point where it was decided, rather than
+inventing a fifth box. The status pill carries the real answer.
+
+**The character counters show the server's real limits** (5000 description,
+2000 remarks), not the mockup's `0/500`. A counter that says 500 while the rule
+allows 5000 either wastes the field or reads as a hard limit the user fights.
+
+**The dropzone wraps a real `<input type="file">`** rather than replacing it.
+The input keeps its name and is what the form posts, so keyboard users, screen
+readers and browsers without drag support all still get a working picker.
+
+**Nothing was deleted from the View page.** The design covers status tracking
+only; the Actions, Version Control, Signatures and Comments sections are
+billable §9/§14/§15 work and remain below the tracking card, restyled as white
+cards. §13's per-office dwell table is kept in a disclosure — the design has no
+place for it, but it answers "which office is slow", the question §1 says the
+client actually has.
+
+### Verified
+
+- **193 tests green on SQLite, PostgreSQL 17 and MySQL 8**; PHPStan level 7,
+  Pint, ESLint, Prettier, `tsc --noEmit` and a production build all clean
+- Live against the running app: Track (12 rows, real control numbers, offices,
+  labels and tones), View (stepper, `longestStage` computing `3h 1m` at the
+  Mayor's Office, timeline, tracking metrics), Submit (11 offices, 9 document
+  types, 4 priorities), plus scan, reports, help and the admin panel all 200
+- Each public label confirmed to render in exactly one colour at runtime
+
+**Not verified: appearance.** Browser automation still cannot reach the dev
+server while `curl` serves the same URLs. These three screens need a visual
+pass. Port 8000 on this machine belongs to an unrelated project — use another.
+
+---
+
+## Mobile QA — 10 Aug 2026
+
+I could finally **see** the pages. The browser-automation tooling still cannot
+reach the dev server, so this pass drives the cached headless Chrome shell over
+the DevTools protocol instead: every page at 375, 390, 768 and 1280, with
+horizontal-overflow measurement and a PNG per combination. Harness and output
+are in `docs/qa/`.
+
+It immediately found things that source review had not.
+
+**Track Documents and the Admin Panel were unusable on a phone.** Their tables
+sit inside `overflow-x-auto`, so no measurement flagged them and no test failed
+— but at 375px only the first two columns were visible, with nothing indicating
+the rest existed. Status and the **View button**, the entire point of a row,
+were off-screen. Below `md` a row is now a card: labelled fields and a
+full-width action. Fixed for Track, both Admin tables, and the shared
+`DocumentTable` (which fixes the user and super-admin dashboards at once).
+
+**The View screen clipped its own content.** A fixed 160px label column with the
+value inline pushed the control number, title and timestamp off the right edge.
+The list stacks below `sm` now.
+
+**The scan console rendered a double skyline and a double gradient.** Moving it
+into the top-nav shell left its own copies of both in place. Removed.
+
+**Reports and Help were unreadable on the new shell.** Both were built for the
+grey sidebar; on the blue gradient their transparent cards and muted-grey labels
+vanished into the background. Both now use white cards.
+
+**The Admin Panel overflowed by 11px at 375px.** Gone.
+
+**Primary buttons were near-black.** The starter kit's `--primary` put a black
+"Comment" button inside an otherwise blue card. It is the brand blue now, which
+is what every mockup shows.
+
+### Verified
+
+- **Zero horizontal overflow on every page at every viewport** — Track, Submit,
+  View, Admin, Scan, Reports, Help, Dashboard, Login (all three portals),
+  Register
+- **193 tests green on SQLite, PostgreSQL 17 and MySQL 8**; PHPStan level 7,
+  Pint, ESLint, Prettier, `tsc --noEmit` and a production build all clean
+- 40 screenshots kept in `docs/qa/screenshots/` as a reference for the next pass
+
+### Still worth a human eye
+
+Screenshots are not the same as holding a phone. Touch-target sizes, real
+scrolling behaviour, the on-screen keyboard covering a focused field, and iOS
+Safari's dynamic viewport are all things this harness cannot judge.

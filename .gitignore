@@ -27,3 +27,7 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
+
+# Visual QA output. The harness that regenerates it is committed; the PNGs are
+# 5 MB of binaries that would be stale within a day.
+/docs/qa/screenshots
