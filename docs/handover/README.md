@@ -1,33 +1,50 @@
 # Handover documents
 
-| File | Ano ito |
+| File | What it is |
 |---|---|
 | [`DEPLOYMENT.md`](DEPLOYMENT.md) | Install and operations runbook, for whoever hosts the system. |
-| `CICTO-Gabay-sa-Pagsubok.pdf` | The client-facing UAT guide, in Filipino. This is the file to send. |
-| `CICTO-Gabay-sa-Pagsubok.html` | Source for the PDF above. Edit this, never the PDF. |
+| `CICTO-Testing-Guide.pdf` | The client-facing UAT guide, **in English**. |
+| `CICTO-Gabay-sa-Pagsubok.pdf` | The same guide **in Filipino**, for staff who prefer it. |
+| `CICTO-Testing-Guide.html`<br>`CICTO-Gabay-sa-Pagsubok.html` | Sources for the two PDFs. Edit these, never the PDFs. |
 
-## Regenerating the PDF
+Both guides say the same things in the same order, section for section. Send
+whichever suits the audience — or both, since counter staff and department heads
+do not always want the same language.
 
-The guide is written as HTML and rendered with the same headless Chrome the QA
-harness uses, so it needs no PDF dependency in `composer.json`:
+## Regenerating a PDF
+
+They are written as HTML and rendered with the same headless Chrome the QA
+harness already drives, so producing a PDF needs no dependency in
+`composer.json`:
 
 ```sh
+# English
+node docs/qa/html-to-pdf.mjs \
+    docs/handover/CICTO-Testing-Guide.html \
+    docs/handover/CICTO-Testing-Guide.pdf \
+    "CICTO — Testing Guide"
+
+# Filipino — the last two arguments are the footer's "Page" and "of"
 node docs/qa/html-to-pdf.mjs \
     docs/handover/CICTO-Gabay-sa-Pagsubok.html \
     docs/handover/CICTO-Gabay-sa-Pagsubok.pdf \
-    "CICTO — Gabay sa Pagsubok"
+    "CICTO — Gabay sa Pagsubok" "Pahina" "ng"
 ```
 
-## Before sending it
+**If you edit one, edit the other.** They are separate files by design — a
+translated document that has silently drifted from its original is worse than
+having only one.
 
-Two things in the guide are deliberately blank or provisional:
+## Before sending either of them
+
+Two things are deliberately blank or provisional:
 
 - **The system address** (§2) is a blank line. Fill it in, or send the URL in
   the covering message.
-- **The test accounts** (§2) all share the password `password`. The guide says
-  so plainly and warns they must be replaced before go-live — do not quietly
+- **The test accounts** (§2) all share the password `password`. Both guides say
+  so plainly and warn the accounts are replaced before go-live — do not quietly
   delete that warning to make the document look tidier.
 
-The guide also lists, in §7, everything that does not yet work and why, and in
-§8 the answers still needed from the client. Both sections exist so the client
-does not spend their afternoon reporting known gaps as defects.
+§7 lists everything that does not work yet and why; §8 lists the answers still
+needed from the client. Both exist so the client does not spend their afternoon
+reporting known gaps as defects.

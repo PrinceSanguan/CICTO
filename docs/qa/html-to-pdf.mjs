@@ -5,7 +5,11 @@
  * pulling in a PDF library for one document. Page.printToPDF gives real print
  * typography, honours @page margins, and needs no dependency.
  *
- *   node topdf.mjs <input.html> <output.pdf> "<footer title>"
+ *   node html-to-pdf.mjs <input.html> <output.pdf> "<footer title>" [word-for-page] [word-for-of]
+ *
+ * The last two default to English. The Filipino guide passes "Pahina" and "ng",
+ * because a footer reading "Page 4 of 10" under a document written entirely in
+ * Filipino is the sort of detail a client notices and nobody fixes.
  */
 
 import { spawn } from 'node:child_process';
@@ -22,6 +26,8 @@ const PORT = 9444;
 const INPUT = resolve(process.argv[2]);
 const OUTPUT = resolve(process.argv[3]);
 const TITLE = process.argv[4] ?? '';
+const WORD_PAGE = process.argv[5] ?? 'Page';
+const WORD_OF = process.argv[6] ?? 'of';
 
 class Socket {
     constructor(url) {
@@ -184,7 +190,7 @@ const { data } = await ws.send(
                         font-size:7.5pt;color:#8A9AAE;display:flex;
                         justify-content:space-between;">
                 <span>${TITLE}</span>
-                <span>Pahina <span class="pageNumber"></span> ng <span class="totalPages"></span></span>
+                <span>${WORD_PAGE} <span class="pageNumber"></span> ${WORD_OF} <span class="totalPages"></span></span>
             </div>`,
     },
     sessionId,
