@@ -81,7 +81,7 @@ export default function AuthSimpleLayout({
                     then snapped back to 480px at a single pixel of resize.
                 */}
                 <main className="mx-auto flex w-full flex-col justify-center sm:max-w-[480px] lg:mx-0 lg:w-[480px] lg:shrink-0">
-                    <div className="rounded-2xl bg-white px-6 py-8 shadow-xl sm:px-10">
+                    <div className="rounded-2xl bg-white px-6 py-10 shadow-xl sm:px-10 sm:py-14">
                         <CictoLockup />
 
                         {/*
@@ -103,7 +103,7 @@ export default function AuthSimpleLayout({
                             </div>
                         )}
 
-                        <div className={title ? 'mt-6' : 'mt-8'}>
+                        <div className={title ? 'mt-6' : 'mt-10'}>
                             {children}
                         </div>
                     </div>

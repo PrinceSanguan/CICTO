@@ -5,9 +5,7 @@ import {
     FieldLabel,
     PasswordField,
 } from '@/components/auth/auth-field';
-import { PortalChips } from '@/components/auth/portal-chips';
 import InputError from '@/components/input-error';
-import PasskeyVerify from '@/components/passkey-verify';
 import TextLink from '@/components/text-link';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Spinner } from '@/components/ui/spinner';
@@ -100,7 +98,7 @@ export default function Login({
                                 {canResetPassword && (
                                     <TextLink
                                         href={request()}
-                                        className="text-sm font-medium text-link"
+                                        className="text-sm font-medium text-link no-underline hover:underline"
                                     >
                                         Forget Password?
                                     </TextLink>
@@ -141,43 +139,28 @@ export default function Login({
                             </label>
                         </div>
 
-                        <AuthSubmit
-                            danger={danger}
-                            disabled={processing}
-                            data-test="login-button"
-                        >
-                            {processing && <Spinner />}
-                            Login
-                        </AuthSubmit>
+                        {/* Narrower and centred, as the supplied form shows. */}
+                        <div className="flex justify-center pt-1">
+                            <AuthSubmit
+                                danger={danger}
+                                disabled={processing}
+                                data-test="login-button"
+                                className="w-full max-w-[13rem]"
+                            >
+                                {processing && <Spinner />}
+                                Login
+                            </AuthSubmit>
+                        </div>
                     </>
                 )}
             </Form>
 
-            {/*
-                Kept, though the client's mockup omits it: passkeys are built,
-                tested and the only sign-in path here that cannot be phished.
-                Dropping the button would not remove the feature, only hide it.
-
-                Rendered WITHOUT the starter kit's "or continue with email"
-                divider, which belonged to a layout where the passkey button
-                came first. Here it is a secondary action under the primary one,
-                so a rule above it would be announcing a choice that has already
-                been made.
-            */}
-            <div className="mt-3">
-                <PasskeyVerify separator={null} />
-            </div>
-
-            {/* §3's three entry points, offered only from the public portal. */}
-            {portal === 'user' && (
-                <div className="mt-6">
-                    <PortalChips current={portal} />
-                </div>
-            )}
-
             <p className="mt-6 text-center text-sm font-medium text-navy">
                 Don&rsquo;t have an account?{' '}
-                <TextLink href={register()} className="font-bold text-link">
+                <TextLink
+                    href={register()}
+                    className="font-bold text-link no-underline hover:underline"
+                >
                     Register
                 </TextLink>
             </p>

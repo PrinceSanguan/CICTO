@@ -132,6 +132,7 @@ export function FieldLabel({
 export function AuthSubmit({
     children,
     danger = false,
+    className,
     ...props
 }: ComponentProps<'button'> & { danger?: boolean }) {
     return (
@@ -145,6 +146,10 @@ export function AuthSubmit({
                 danger
                     ? 'bg-[#C5372D] hover:bg-[#AC3027]'
                     : 'bg-[#3B72C4] hover:bg-[#31629F]',
+                // Last, so a caller can narrow the width. It has to go through
+                // cn(): spreading className via ...props would REPLACE the base
+                // classes rather than merge with them.
+                className,
             )}
             {...props}
         >
