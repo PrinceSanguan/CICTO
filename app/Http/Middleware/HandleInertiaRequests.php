@@ -4,8 +4,11 @@ namespace App\Http\Middleware;
 
 use App\Models\Notification;
 use App\Models\User;
+use Closure;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 use Inertia\Middleware;
+use Symfony\Component\HttpFoundation\Response;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -35,6 +38,36 @@ class HandleInertiaRequests extends Middleware
      *
      * @return array<string, mixed>
      */
+    /**
+     * Bridge Laravel's session flash onto Inertia's own flash channel.
+     *
+     * Controllers say back()->with('toast', [...]) -- the idiomatic Laravel
+     * spelling -- but the client listens on router.on('flash'), which Inertia
+     * fires from the top-level `page.flash` key, not from props. Without this
+     * bridge the session key was written and discarded, so every "Document
+     * registered", "Signed", "Archived" and "Backup complete" confirmation in
+     * the application silently never appeared.
+     *
+     * It has to happen HERE, before the response is resolved. Doing it in
+     * share() writes into the bag a request too late -- resolveFlashData() has
+     * already pulled by then, and the toast surfaces on the page after the one
+     * that earned it.
+     *
+     * @param  Closure(Request): Response  $next
+     */
+    public function handle(Request $request, Closure $next): Response
+    {
+        // hasSession(), not a nullsafe call: the CSP report endpoint and any
+        // future stateless route reach this middleware without one.
+        $toast = $request->hasSession() ? $request->session()->get('toast') : null;
+
+        if ($toast !== null) {
+            Inertia::flash('toast', $toast);
+        }
+
+        return parent::handle($request, $next);
+    }
+
     public function share(Request $request): array
     {
         $user = $request->user();
@@ -64,18 +97,6 @@ class HandleInertiaRequests extends Middleware
             'unreadNotifications' => fn () => $user instanceof User
                 ? Notification::query()->forUser($user)->unread()->count()
                 : 0,
-
-            /*
-             * Flashed toasts.
-             *
-             * Controllers say back()->with('toast', [...]) all over the app.
-             * Without this line the session key is written and then discarded,
-             * so every "Document registered", "Signed", "Archived" and
-             * "Backup complete" confirmation silently never appeared.
-             */
-            'flash' => [
-                'toast' => fn () => $request->session()->get('toast'),
-            ],
 
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];

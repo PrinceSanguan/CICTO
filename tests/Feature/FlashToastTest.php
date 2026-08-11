@@ -2,8 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Actions\Documents\ArchiveDocument;
-use App\Actions\Documents\TransitionDocument;
 use App\Enums\MovementAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\BuildsDocuments;
@@ -12,75 +10,77 @@ use Tests\TestCase;
 /**
  * Controllers confirm their work with back()->with('toast', [...]).
  *
- * That only reaches the user if HandleInertiaRequests shares the session key.
- * It did not, so every confirmation in the application -- registered, signed,
- * archived, uploaded, backup complete -- was written to the session and
- * discarded unread. Nothing failed; the user simply never saw a response.
+ * That reaches the user only if the session key is bridged onto Inertia's own
+ * flash channel: the client listens on router.on('flash'), which Inertia fires
+ * from the top-level `page.flash` key, NOT from props. Without the bridge every
+ * confirmation in the application -- registered, signed, archived, uploaded,
+ * backup complete -- was written to the session and discarded unread.
+ *
+ * Tested as two halves rather than one round trip, because the HTTP test client
+ * does not age flash data across calls the way a browser does, and a test that
+ * depends on that would pass or fail for reasons unrelated to this code.
  */
 class FlashToastTest extends TestCase
 {
     use BuildsDocuments, RefreshDatabase;
 
-    public function test_a_flashed_toast_reaches_the_page_props(): void
+    public function test_a_toast_in_the_session_reaches_the_pages_flash_channel(): void
     {
-        $office = $this->office();
-        $admin = $this->admin($office);
-        $clerk = $this->staff($office);
-        $document = $this->registerDocument($office, $clerk);
+        // Half one: the bridge in HandleInertiaRequests.
+        $page = $this->withSession(['toast' => ['type' => 'success', 'message' => 'Archived.']])
+            ->get(route('privacy'))
+            ->viewData('page');
 
-        $this->actingAs($admin)->post(route('documents.transitions.store', $document), [
-            'action' => MovementAction::Received->value,
-            'expected_movement_id' => $document->openMovement->id,
-        ])->assertRedirect();
-
-        $flash = $this->actingAs($admin)
-            ->get(route('documents.show', $document))
-            ->viewData('page')['props']['flash'];
-
-        $this->assertIsArray($flash);
-        $this->assertSame('success', $flash['toast']['type']);
-        $this->assertNotEmpty($flash['toast']['message']);
+        $this->assertArrayHasKey(
+            'flash',
+            $page,
+            'page.flash is missing, so router.on("flash") never fires.',
+        );
+        $this->assertSame('success', $page['flash']['toast']['type']);
+        $this->assertSame('Archived.', $page['flash']['toast']['message']);
     }
 
-    public function test_the_flash_key_is_always_present_even_when_empty(): void
+    public function test_a_page_with_nothing_to_say_carries_no_flash(): void
     {
-        $office = $this->office();
-
-        // The React hook reads props.flash.toast. If the key vanished on pages
-        // with nothing to say, the hook would have to guard against undefined
-        // on every render.
-        $props = $this->actingAs($this->admin($office))
+        $page = $this->actingAs($this->admin($this->office()))
             ->get(route('dashboard'))
-            ->viewData('page')['props'];
+            ->viewData('page');
 
-        $this->assertArrayHasKey('flash', $props);
-        $this->assertNull($props['flash']['toast']);
+        // Inertia omits the key when the bag is empty and only fires its event
+        // when it is not, so a quiet page cannot re-show the previous toast.
+        $this->assertArrayNotHasKey('flash', $page);
     }
 
-    public function test_the_archive_confirmation_is_flashed(): void
+    public function test_the_controllers_actually_flash_a_toast(): void
     {
+        // Half two: the confirmations exist to be bridged.
         $office = $this->office();
         $admin = $this->admin($office);
         $document = $this->registerDocument($office, $this->staff($office));
 
+        $this->actingAs($admin)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => MovementAction::Received->value,
+                'expected_movement_id' => $document->openMovement->id,
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('toast.type', 'success');
+
         foreach ([
-            MovementAction::Received,
             MovementAction::Approved,
             MovementAction::Completed,
         ] as $action) {
             $document->refresh();
-            app(TransitionDocument::class)->handle(
-                document: $document,
-                action: $action,
-                actor: $admin,
-                expectedMovementId: $document->openMovement?->id,
-            );
+            $this->actingAs($admin)
+                ->post(route('documents.transitions.store', $document), [
+                    'action' => $action->value,
+                    'expected_movement_id' => $document->openMovement->id,
+                ])
+                ->assertSessionHas('toast.type', 'success');
         }
 
         $this->actingAs($admin)
             ->post(route('documents.archive', $document->fresh()))
             ->assertSessionHas('toast.type', 'success');
-
-        app(ArchiveDocument::class)->restore($document->fresh(), $admin);
     }
 }
