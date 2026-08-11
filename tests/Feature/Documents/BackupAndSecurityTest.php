@@ -3,6 +3,7 @@
 namespace Tests\Feature\Documents;
 
 use App\Actions\Documents\RegisterDocument;
+use App\Actions\Documents\StoreDocumentFile;
 use App\Enums\BackupStatus;
 use App\Enums\DocumentPriority;
 use App\Enums\SecurityEventType;
@@ -503,5 +504,114 @@ class BackupAndSecurityTest extends TestCase
         // The browser posts this with no session and no CSRF token. A policy
         // that reports nowhere cannot be watched before it is enforced.
         $response->assertNoContent();
+    }
+
+    public function test_a_backup_contains_the_uploaded_documents_not_only_the_database(): void
+    {
+        Storage::fake('backups');
+
+        Storage::fake('documents');
+
+        $office = $this->office();
+        $clerk = $this->staff($office);
+        $document = $this->registerDocument($office, $clerk);
+
+        $file = app(StoreDocumentFile::class)->handle(
+            $document,
+            UploadedFile::fake()->createWithContent('attached.pdf', '%PDF-1.4 backed up'),
+            $clerk,
+        );
+
+        $run = app(BackupService::class)->run();
+
+        // A database-only backup is not a backup of this system: every
+        // document_files row points at bytes on disk and every signature is a
+        // hash OF those bytes. Restore the database alone and the register
+        // describes files that no longer exist, while the nightly sweep
+        // reports the whole signed record set as tampered.
+        $this->assertSame('full', $run->kind);
+        $this->assertStringEndsWith('.zip', (string) $run->path);
+
+        $zip = new \ZipArchive;
+        $this->assertTrue(
+            $zip->open(Storage::disk('backups')->path((string) $run->path)) === true,
+            'The backup archive could not be opened.',
+        );
+
+        $names = [];
+
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $names[] = (string) $zip->getNameIndex($i);
+        }
+
+        $zip->close();
+
+        $sql = array_filter($names, fn (string $n) => str_starts_with($n, 'database/'));
+        $docs = array_filter($names, fn (string $n) => str_starts_with($n, 'documents/'));
+
+        $this->assertCount(1, $sql, 'The archive holds no database dump.');
+        $this->assertNotEmpty($docs, 'The archive holds no document files.');
+        $this->assertContains(
+            'documents/'.$file->path,
+            $names,
+            'The uploaded file is missing from the backup.',
+        );
+    }
+
+    public function test_a_host_without_ziparchive_still_backs_up_the_database(): void
+    {
+        Storage::fake('backups');
+
+        // Shared hosting sometimes lacks the extension. The backup must degrade
+        // to database-only and SAY so on the row, not silently claim coverage
+        // it does not have.
+        $service = app(BackupService::class);
+
+        $this->assertTrue(
+            $service->canArchiveFiles(),
+            'This test environment is expected to have ZipArchive.',
+        );
+
+        config(['filesystems.disks.documents.driver' => 's3']);
+
+        $this->assertFalse($service->canArchiveFiles());
+        $this->assertFalse($service->capabilities()['includes_files']);
+    }
+
+    public function test_a_failure_before_the_dump_still_leaves_a_record(): void
+    {
+        Storage::fake('backups');
+
+        // The classic shared-hosting case: the operator forced the shell driver
+        // on a host that cannot shell out. dumper() throws before any file is
+        // touched -- and that used to happen before the backup_runs row was
+        // created, so the run vanished while the console reported that the
+        // failure had been recorded.
+        config(['cicto.backup.driver' => 'shell']);
+
+        $this->swap(ShellDumper::class, new class extends ShellDumper
+        {
+            public function isSupported(): bool
+            {
+                return false;
+            }
+        });
+
+        $before = BackupRun::query()->count();
+
+        try {
+            app(BackupService::class)->run();
+            $this->fail('The backup should have failed.');
+        } catch (\Throwable) {
+            // expected
+        }
+
+        $this->assertSame($before + 1, BackupRun::query()->count());
+
+        $run = BackupRun::query()->latest('id')->first();
+
+        $this->assertSame(BackupStatus::Failed, $run->status);
+        $this->assertNotNull($run->error);
+        $this->assertNotNull($run->finished_at);
     }
 }

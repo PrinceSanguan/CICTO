@@ -72,7 +72,7 @@ class DocumentSignatureController extends Controller
         $pdf = Pdf::loadView('documents.signature-certificate', [
             'signature' => $signature->load(['document', 'file', 'signer']),
             'document' => $document,
-            'valid' => $signature->isValid(),
+            'valid' => $signature->isValid(rehashBytes: true),
             'superseded' => $signature->isSuperseded(),
             'verifyUrl' => $this->verifyUrl($signature),
             'qr' => new HtmlString($this->qr->svg($this->verifyUrl($signature), 220)),
@@ -93,7 +93,10 @@ class DocumentSignatureController extends Controller
     {
         $signature = DocumentSignature::query()
             ->where('serial', $serial)
-            ->with(['document:id,control_number,title', 'file:id,version,checksum_sha256,document_id'])
+            ->with(['document:id,control_number,title', // disk, path and purged_at are required: isValid(rehashBytes: true)
+                // re-reads the bytes, and a column list that omits them hands
+                // hashOnDisk() a null path.
+                'file:id,version,checksum_sha256,document_id,disk,path,purged_at'])
             ->first();
 
         if ($signature === null) {
@@ -110,7 +113,12 @@ class DocumentSignatureController extends Controller
                 'purpose' => $signature->purpose,
                 'signed_at' => $signature->signed_at->toIso8601String(),
                 'file_version' => $signature->file?->version,
-                'valid' => $signature->isValid(),
+                // rehashBytes: this page IS the tamper check. Comparing two
+                // database columns leaves a byte swap on disk invisible, and
+                // the nightly sweep that would catch it writes to a log the
+                // person holding the paper will never read. One file hash on a
+                // page nobody loads in bulk is the right trade.
+                'valid' => $signature->isValid(rehashBytes: true),
                 'superseded' => $signature->isSuperseded(),
             ],
         ]);

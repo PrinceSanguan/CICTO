@@ -123,6 +123,17 @@ class ShellDumper implements Dumper
         ];
     }
 
+    private function canShellExec(): bool
+    {
+        if (! function_exists('shell_exec')) {
+            return false;
+        }
+
+        $disabled = array_map('trim', explode(',', (string) ini_get('disable_functions')));
+
+        return ! in_array('shell_exec', $disabled, true);
+    }
+
     private function binary(): ?string
     {
         $name = DB::connection()->getDriverName() === 'pgsql' ? 'pg_dump' : 'mysqldump';
@@ -139,6 +150,14 @@ class ShellDumper implements Dumper
 
         foreach ($candidates as $candidate) {
             if ($candidate === $name) {
+                // shell_exec can be disabled independently of proc_open, and
+                // calling a disabled function raises a fatal Error rather than
+                // a warning -- which took down the whole Super Admin settings
+                // page, not just the backup panel.
+                if (! $this->canShellExec()) {
+                    continue;
+                }
+
                 $found = trim((string) @shell_exec('command -v '.escapeshellarg($name).' 2>/dev/null'));
 
                 if ($found !== '' && is_executable($found)) {

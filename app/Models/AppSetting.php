@@ -10,7 +10,7 @@ use Illuminate\Support\Carbon;
  *
  * setting_value is cast `encrypted` UNCONDITIONALLY. A per-row "is this one
  * secret" flag is a flag somebody forgets to set on the row that mattered, and
- * this table is where SMTP credentials and the backup passphrase live.
+ * this table is where SMTP credentials live.
  *
  * @property string $setting_key
  * @property string|null $setting_value

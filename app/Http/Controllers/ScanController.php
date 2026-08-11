@@ -73,7 +73,11 @@ class ScanController extends Controller
             'document' => [
                 'control_number' => $document->control_number,
                 'status_label' => $document->status->publicLabel(),
-                'status_tone' => $document->status->tone(),
+                // publicTone(), to pair with publicLabel() above. tone() is
+                // per workflow STATE, so an initiated and a returned document
+                // both reading "Pending" would render in different colours on
+                // a page a member of the public sees.
+                'status_tone' => $document->status->publicTone(),
                 'current_office' => $document->openMovement?->toOffice?->name,
                 'updated_at' => $document->updated_at?->toIso8601String(),
                 'is_complete' => $document->status->isTerminal(),

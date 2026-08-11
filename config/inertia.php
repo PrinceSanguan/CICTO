@@ -15,6 +15,29 @@ return [
     |
     */
 
+    /*
+    |--------------------------------------------------------------------------
+    | DevTools
+    |--------------------------------------------------------------------------
+    |
+    | Explicitly OFF, not left to the package default.
+    |
+    | Inertia's DevTools registers /_inertia/devtools/entries under the `web`
+    | middleware with no auth gate, and records the full props of every page
+    | rendered. Those props include whatever the viewer was authorised to see --
+    | document titles, office names, user records -- so the endpoint reads back
+    | payloads that DocumentPolicy, EnsureRole and visibleTo() were all applied
+    | to produce. The package only records in a local environment, which means
+    | the exposure is one mistaken APP_ENV away rather than impossible.
+    |
+    | Set INERTIA_DEVTOOLS_ENABLED=true in a local .env if you want it.
+    |
+    */
+
+    'devtools' => [
+        'enabled' => (bool) env('INERTIA_DEVTOOLS_ENABLED', false),
+    ],
+
     'ssr' => [
         'enabled' => true,
         'url' => 'http://127.0.0.1:13714',

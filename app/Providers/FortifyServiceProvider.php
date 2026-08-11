@@ -116,6 +116,17 @@ class FortifyServiceProvider extends ServiceProvider
             return Limit::perMinute(5)->by($throttleKey);
         });
 
+        /*
+         * Registration is PUBLIC and linked from the login page, so without a
+         * limiter one script can fill the users table overnight -- and because
+         * User does not implement MustVerifyEmail, every one of those accounts
+         * is immediately usable rather than parked awaiting a confirmation
+         * nobody can send while MAIL_MAILER=log.
+         */
+        RateLimiter::for('registration', function (Request $request) {
+            return Limit::perHour(5)->by($request->ip());
+        });
+
         RateLimiter::for('passkeys', function (Request $request) {
             return Limit::perMinute(10)->by(
                 ($request->input('credential.id') ?: $request->session()->getId()).'|'.$request->ip(),

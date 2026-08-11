@@ -223,6 +223,29 @@ class SignatureTest extends TestCase
         $this->assertFalse($signature->fresh()->selfHashMatches());
     }
 
+    public function test_the_public_verify_page_detects_bytes_swapped_on_disk(): void
+    {
+        $document = $this->reviewable();
+        $admin = $this->admin($document->originatingOffice);
+
+        $signature = app(SignDocument::class)->handle($document, $admin, SignatureMethod::Typed);
+        $file = $signature->file;
+
+        // The row is untouched -- only the bytes changed. A column comparison
+        // cannot see this, and the page that exists to answer "is this real?"
+        // is the last place that should say yes.
+        Storage::disk($file->disk)->put($file->path, '%PDF-1.4 SUBSTITUTED');
+
+        $props = $this->get('/verify/'.$signature->serial)
+            ->assertOk()
+            ->viewData('page')['props']['signature'];
+
+        $this->assertFalse(
+            $props['valid'],
+            'The public verify page reported a swapped file as valid.',
+        );
+    }
+
     /** A one-pixel PNG, magic bytes and all. */
     private function pngBytes(): string
     {

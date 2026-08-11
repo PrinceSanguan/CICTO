@@ -72,16 +72,55 @@ class BackupService
             'includes_schema' => $this->dumper()->includesSchema(),
             'disk' => (string) config('cicto.backup.disk'),
             'has_ever_restored' => BackupRun::hasEverBeenRestored(),
+            'includes_files' => $this->canArchiveFiles(),
         ];
     }
 
     public function run(?User $triggeredBy = null): BackupRun
+    {
+        // The row is created FIRST, before anything that can fail.
+        //
+        // dumper() throws when CICTO_BACKUP_DRIVER=shell on a host that cannot
+        // shell out, and makeDirectory() throws on an unwritable disk. Both used
+        // to happen before any backup_runs row existed, so the run vanished
+        // entirely while the console still printed that the failure had been
+        // recorded -- the exact silence a backup system must never produce.
+        $run = BackupRun::create([
+            'kind' => 'database',
+            'status' => BackupStatus::Running->value,
+            'driver' => 'pending',
+            'disk' => (string) config('cicto.backup.disk'),
+            'path' => null,
+            'last_migration' => $this->lastMigration(),
+            'started_at' => Deadlines::now(),
+            'triggered_by_id' => $triggeredBy?->id,
+        ]);
+
+        try {
+            return $this->perform($run, $triggeredBy);
+        } catch (Throwable $e) {
+            if ($run->status === BackupStatus::Running) {
+                $this->recordFailure($run, $e, $triggeredBy);
+            }
+
+            throw $e;
+        }
+    }
+
+    private function perform(BackupRun $run, ?User $triggeredBy): BackupRun
     {
         $dumper = $this->dumper();
         $disk = (string) config('cicto.backup.disk');
         $stamp = Deadlines::now()->format('Ymd-His');
 
         $extension = $dumper->includesSchema() ? 'sql' : 'sql.gz';
+
+        // A database-only backup is not a backup of this system. Every
+        // document_files row points at bytes on the documents disk, and every
+        // signature is a hash OF those bytes -- restore the database alone and
+        // the register describes files that no longer exist while the nightly
+        // sweep reports the entire signed record set as tampered.
+        $withFiles = $this->canArchiveFiles();
 
         // Second resolution is not enough on its own: a scheduled run and a
         // manual one can land in the same second, and the loser's row would
@@ -90,16 +129,12 @@ class BackupService
         $suffix = mb_strtolower(mb_substr((string) Str::ulid(), -6));
         $relative = "cicto-{$stamp}-{$suffix}.{$extension}";
 
-        $run = BackupRun::create([
-            'kind' => 'database',
-            'status' => BackupStatus::Running->value,
+        $run->forceFill([
+            'kind' => $withFiles ? 'full' : 'database',
             'driver' => $dumper->name(),
             'disk' => $disk,
             'path' => $relative,
-            'last_migration' => $this->lastMigration(),
-            'started_at' => Deadlines::now(),
-            'triggered_by_id' => $triggeredBy?->id,
-        ]);
+        ])->save();
 
         // Ensure the directory exists, then dump to the real filesystem path --
         // a dumper writes with fopen/proc_open, not through Flysystem.
@@ -113,27 +148,22 @@ class BackupService
                 throw new RuntimeException('The dump produced an empty file.');
             }
 
-            $checksum = hash_file('sha256', $absolute);
-        } catch (Throwable $e) {
-            // A failed run must survive as a record. A backup system that goes
-            // quiet when it breaks is worse than none, because everyone assumes
-            // it is working.
-            $run->forceFill([
-                'status' => BackupStatus::Failed->value,
-                'finished_at' => Deadlines::now(),
-                'error' => mb_substr($e->getMessage(), 0, 2000),
-            ])->save();
+            if ($withFiles) {
+                // Fold the dump and the uploaded documents into one archive, so
+                // the two can never be separated in transit or restored out of
+                // step with each other.
+                $archive = "cicto-{$stamp}-{$suffix}.zip";
+                $bytes = $this->archive($absolute, Storage::disk($disk)->path($archive));
 
-            if (Storage::disk($disk)->exists($relative)) {
-                Storage::disk($disk)->delete($relative);
+                @unlink($absolute);
+                $relative = $archive;
+                $run->forceFill(['path' => $relative])->save();
+                $absolute = Storage::disk($disk)->path($relative);
             }
 
-            SecurityEvent::log(
-                SecurityEventType::BackupFailed,
-                sprintf('Backup FAILED (%s): %s', $dumper->name(), mb_substr($e->getMessage(), 0, 150)),
-                $triggeredBy,
-                $relative,
-            );
+            $checksum = hash_file('sha256', $absolute);
+        } catch (Throwable $e) {
+            $this->recordFailure($run, $e, $triggeredBy);
 
             throw $e;
         }
@@ -182,6 +212,116 @@ class BackupService
         );
 
         return $run;
+    }
+
+    /**
+     * Mark a run failed and clean up after it.
+     *
+     * A failed run must survive as a record. A backup system that goes quiet
+     * when it breaks is worse than none, because everyone assumes it works.
+     */
+    private function recordFailure(BackupRun $run, Throwable $e, ?User $triggeredBy): void
+    {
+        $run->forceFill([
+            'status' => BackupStatus::Failed->value,
+            'finished_at' => Deadlines::now(),
+            'error' => mb_substr($e->getMessage(), 0, 2000),
+        ])->save();
+
+        $disk = (string) ($run->disk ?? config('cicto.backup.disk'));
+
+        try {
+            if ($run->path !== null && Storage::disk($disk)->exists($run->path)) {
+                Storage::disk($disk)->delete($run->path);
+            }
+        } catch (Throwable) {
+            // A disk we cannot reach is why we are here. Do not mask the
+            // original failure with a second one.
+        }
+
+        SecurityEvent::log(
+            SecurityEventType::BackupFailed,
+            sprintf('Backup FAILED: %s', mb_substr($e->getMessage(), 0, 150)),
+            $triggeredBy,
+            $run->path,
+        );
+    }
+
+    /**
+     * Whether uploaded documents can be folded into the backup.
+     *
+     * Needs ZipArchive and a local documents disk. Shared hosting sometimes
+     * lacks the extension, and a remote disk cannot be walked cheaply -- in
+     * either case the backup falls back to database-only and says so, rather
+     * than pretending the files are covered.
+     */
+    public function canArchiveFiles(): bool
+    {
+        if (! class_exists(\ZipArchive::class)) {
+            return false;
+        }
+
+        // A remote disk cannot be walked cheaply, so file coverage is only
+        // claimed for a local one.
+        return config('filesystems.disks.documents.driver') === 'local';
+    }
+
+    /**
+     * Build a single archive holding the SQL dump and every uploaded document.
+     *
+     * Written to a temporary name and renamed on success, so an interrupted run
+     * never leaves a half-written archive where a restore would find it and
+     * trust it.
+     *
+     * @return int bytes of the finished archive
+     */
+    private function archive(string $dump, string $target): int
+    {
+        $zip = new \ZipArchive;
+        $temporary = $target.'.part';
+
+        if ($zip->open($temporary, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            throw new RuntimeException("Could not create the backup archive at {$target}.");
+        }
+
+        $zip->addFile($dump, 'database/'.basename($dump));
+
+        // Read from the DISK, not from config: anything that rebinds the disk
+        // at runtime -- a test fake, a runtime reconfiguration -- leaves the
+        // config value pointing at a directory nothing is written to, and the
+        // archive would silently contain no documents at all.
+        $root = rtrim(Storage::disk('documents')->path(''), '/');
+
+        if (is_dir($root)) {
+            $files = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
+            );
+
+            foreach ($files as $file) {
+                if ($file instanceof \SplFileInfo && $file->isFile()) {
+                    $zip->addFile(
+                        $file->getPathname(),
+                        'documents/'.ltrim(substr($file->getPathname(), strlen($root)), '/'),
+                    );
+                }
+            }
+        }
+
+        if (! $zip->close()) {
+            @unlink($temporary);
+
+            throw new RuntimeException('The backup archive could not be finalised; the disk may be full.');
+        }
+
+        if (! rename($temporary, $target)) {
+            @unlink($temporary);
+
+            throw new RuntimeException('The backup archive could not be moved into place.');
+        }
+
+        clearstatcache(true, $target);
+
+        return (int) filesize($target);
     }
 
     /**

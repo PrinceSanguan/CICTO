@@ -179,7 +179,6 @@ return [
         'disk' => env('CICTO_BACKUP_DISK', 'backups'),
         'driver' => env('CICTO_BACKUP_DRIVER', 'auto'),   // auto|shell|php
         'keep_runs' => (int) env('CICTO_BACKUP_KEEP', 14),
-        'passphrase' => env('CICTO_BACKUP_PASSPHRASE'),
     ],
 
     /*

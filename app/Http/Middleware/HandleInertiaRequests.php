@@ -65,6 +65,18 @@ class HandleInertiaRequests extends Middleware
                 ? Notification::query()->forUser($user)->unread()->count()
                 : 0,
 
+            /*
+             * Flashed toasts.
+             *
+             * Controllers say back()->with('toast', [...]) all over the app.
+             * Without this line the session key is written and then discarded,
+             * so every "Document registered", "Signed", "Archived" and
+             * "Backup complete" confirmation silently never appeared.
+             */
+            'flash' => [
+                'toast' => fn () => $request->session()->get('toast'),
+            ],
+
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }
