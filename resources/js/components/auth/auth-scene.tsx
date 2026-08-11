@@ -30,10 +30,12 @@ type Motif = {
 const MOTIFS: readonly Motif[] = [
     { x: 4, y: 7, size: 46, kind: 'pencil', leftOfCard: true },
     { x: 4, y: 40, size: 40, kind: 'faded', leftOfCard: true },
-    { x: 68, y: 8, size: 34, kind: 'pin' },
-    { x: 76, y: 16, size: 36, kind: 'lines' },
-    { x: 90, y: 11, size: 40, kind: 'page' },
-    { x: 95, y: 23, size: 30, kind: 'pin' },
+    // Kept clear of the title block, which spans roughly y 10-35% on the right
+    // half. A motif sitting on the word "Document" reads as a rendering fault.
+    { x: 63, y: 4, size: 34, kind: 'pin' },
+    { x: 73, y: 3, size: 34, kind: 'lines' },
+    { x: 92, y: 7, size: 40, kind: 'page' },
+    { x: 96, y: 20, size: 30, kind: 'pin' },
 ];
 
 function Glyph({ kind }: { kind: Motif['kind'] }) {
@@ -181,20 +183,33 @@ export function AuthWelcome() {
         >
             <CloudBank />
 
-            <div className="relative z-10 pt-16 pl-4 xl:pl-10">
-                <p className="text-3xl font-extrabold tracking-tight text-navy xl:text-4xl">
+            <div className="relative z-10 pt-14 pl-4 xl:pl-10">
+                {/*
+                    "Welcome to" is deliberately smaller than the three lines
+                    under it -- roughly three quarters -- and the whole block is
+                    set tight, so the title reads as one mass rather than four
+                    separate sentences.
+                */}
+                <p className="text-4xl font-extrabold tracking-tight text-navy xl:text-[2.75rem]">
                     Welcome to
                 </p>
-                <p className="mt-1 text-4xl font-extrabold tracking-tight xl:text-5xl">
-                    {/* Grey in the mockup, not a translucent white -- against
-                        the gradient a 70% white reads as pale blue. */}
-                    <span className="text-[#A9B2C4]">CICTO</span>{' '}
+
+                <p className="mt-1 text-5xl leading-[1.05] font-extrabold tracking-tight xl:text-6xl">
+                    {/* Grey, not a translucent white -- against the gradient a
+                        70% white reads as pale blue rather than silver. */}
+                    <span className="text-[#9AA3B4]">CICTO</span>{' '}
                     <span className="text-[#F0B94A]">Document</span>
                 </p>
-                <p className="text-4xl font-extrabold tracking-tight text-[#F0B94A] xl:text-5xl">
+                <p className="text-5xl leading-[1.05] font-extrabold tracking-tight text-[#F0B94A] xl:text-6xl">
                     Tracking System
                 </p>
-                <p className="mt-4 max-w-xs text-sm leading-relaxed font-semibold text-white">
+
+                {/*
+                    Centred within its own column rather than against the panel:
+                    the design balances the two lines with each other while the
+                    block stays under the left of the title.
+                */}
+                <p className="mt-6 max-w-[19rem] text-center text-base leading-relaxed font-semibold text-white xl:text-lg">
                     Track, Manage and Monitor Documents Efficiently.
                 </p>
             </div>
