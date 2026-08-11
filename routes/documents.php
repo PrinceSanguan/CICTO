@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ArchiveController;
 use App\Http\Controllers\DocumentCommentController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentFileController;
@@ -94,6 +95,17 @@ Route::get('s/{token}', [ScanController::class, 'show'])
 |
 | Reveals only what the certificate already prints, plus the verdict.
 */
+/*
+| §16 Archive Management. Filing, not deletion -- see ArchiveController.
+*/
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('archive', [ArchiveController::class, 'index'])->name('archive.index');
+    Route::post('documents/{document}/archive', [ArchiveController::class, 'store'])
+        ->name('documents.archive');
+    Route::delete('documents/{document}/archive', [ArchiveController::class, 'destroy'])
+        ->name('documents.restore');
+});
+
 Route::get('verify/{serial}', [DocumentSignatureController::class, 'verify'])
     ->middleware('throttle:30,1')
     ->name('signatures.verify');

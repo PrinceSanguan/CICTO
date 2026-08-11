@@ -30,6 +30,21 @@ use Illuminate\Support\Facades\DB;
 class DocumentStats
 {
     /**
+     * The five report buckets, keyed by workflow status.
+     *
+     * Declared once so the chart, its legend and any future export cannot
+     * disagree about what "For Approval" counts.
+     */
+    private const REPORT_BUCKETS = [
+        'initiated' => 'pending',
+        'returned' => 'pending',
+        'under_review' => 'in_process',
+        'approved' => 'for_approval',
+        'completed' => 'completed',
+        'rejected' => 'rejected',
+    ];
+
+    /**
      * §18: total, monthly processed, delayed, approval rate.
      *
      * Four numbers, one query. Conditional aggregates via CASE WHEN are
@@ -113,6 +128,74 @@ class DocumentStats
                 'month' => $bucket,
                 'label' => $date->format('M Y'),
                 'count' => $row === null ? 0 : (int) $row->c,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Monthly volume split by status, for the client's "Monthly Documents
+     * Processed" chart.
+     *
+     * FIVE buckets, not the four §8 names. The design's legend separates "In
+     * Process" from "For Approval", which is a genuinely useful distinction
+     * here: it is the difference between work an office is still doing and work
+     * waiting on a signature. DocumentStatus::publicLabel() merges them because
+     * a citizen tracking a folder does not need that detail; a records officer
+     * reading a report does.
+     *
+     * Bucketed by created_at rather than completed_at, so a month's bar shows
+     * everything that ARRIVED in it. monthlyProcessed() answers the other
+     * question -- what was finished -- and both are on the page.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function monthlyByStatus(User $user, int $months): array
+    {
+        $start = Deadlines::now()->startOfMonth()->subMonths($months - 1);
+
+        // Whole literal strings per driver, as above: EXTRACT is identical on
+        // PostgreSQL and MySQL, SQLite has none.
+        $select = $this->sqlite()
+            ? "cast(strftime('%Y', created_at) as integer) as y, cast(strftime('%m', created_at) as integer) as m, status, count(*) as c"
+            : 'extract(year from created_at) as y, extract(month from created_at) as m, status, count(*) as c';
+
+        $group = $this->sqlite()
+            ? "strftime('%Y', created_at), strftime('%m', created_at), status"
+            : 'extract(year from created_at), extract(month from created_at), status';
+
+        $rows = Document::query()
+            ->visibleTo($user)
+            ->where('created_at', '>=', $start)
+            ->toBase()
+            ->selectRaw($select)
+            ->groupByRaw($group)
+            ->get();
+
+        $buckets = [];
+
+        foreach ($rows as $row) {
+            $key = sprintf('%04d-%02d', (int) $row->y, (int) $row->m);
+            $bucket = self::REPORT_BUCKETS[(string) $row->status] ?? 'pending';
+
+            $buckets[$key][$bucket] = ($buckets[$key][$bucket] ?? 0) + (int) $row->c;
+        }
+
+        $out = [];
+
+        for ($i = 0; $i < $months; $i++) {
+            $date = $start->copy()->addMonths($i);
+            $key = $date->format('Y-m');
+
+            $out[] = [
+                'month' => $key,
+                'label' => $date->format('M'),
+                'pending' => $buckets[$key]['pending'] ?? 0,
+                'in_process' => $buckets[$key]['in_process'] ?? 0,
+                'for_approval' => $buckets[$key]['for_approval'] ?? 0,
+                'completed' => $buckets[$key]['completed'] ?? 0,
+                'rejected' => $buckets[$key]['rejected'] ?? 0,
             ];
         }
 

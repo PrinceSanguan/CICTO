@@ -27,6 +27,9 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property string $password
  * @property Role $role
  * @property int|null $office_id
+ * @property-read Office|null $office Nullable: office_id is, and a
+ *   user can exist before being assigned to one. Declared explicitly because
+ *   larastan otherwise infers a non-null Office from the relation's generics.
  * @property string|null $position
  * @property string|null $phone
  * @property bool $is_active

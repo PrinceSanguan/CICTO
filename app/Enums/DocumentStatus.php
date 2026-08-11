@@ -48,6 +48,26 @@ enum DocumentStatus: string
         };
     }
 
+    /**
+     * The colour that pairs with publicLabel().
+     *
+     * tone() is per WORKFLOW STATE and there are six of them; publicLabel()
+     * collapses those into the four the client's designs name. Using tone() for
+     * a public pill meant two documents both reading "Pending" rendered in
+     * different colours (initiated slate, returned orange), and two both
+     * reading "In Process" in two more. Colour and wording have to agree or the
+     * legend is a lie.
+     */
+    public function publicTone(): string
+    {
+        return match ($this) {
+            self::Initiated, self::Returned => 'amber',
+            self::UnderReview, self::Approved => 'emerald',
+            self::Rejected => 'red',
+            self::Completed => 'orange',
+        };
+    }
+
     public function isTerminal(): bool
     {
         return in_array($this, [self::Completed, self::Rejected], true);

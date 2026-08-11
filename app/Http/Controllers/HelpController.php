@@ -1,0 +1,145 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Requests\SupportTicketRequest;
+use App\Mail\SupportTicketMail;
+use App\Support\Help\KnowledgeBase;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Inertia\Inertia;
+use Inertia\Response;
+
+/**
+ * §23 Help & Support: knowledge base, support ticket, contact details.
+ *
+ * §23 names these three pages but the signed 20-row cost breakdown has no line
+ * item for any of them (client question B5). They are built here because the
+ * client supplied designs for them, which settles the question -- but the
+ * cheapest honest version: static articles, an emailed ticket, and contact
+ * details read from config. No CMS, no ticket table, no admin inbox. A stored
+ * ticket model with statuses and replies is a separate feature and a re-quote.
+ */
+class HelpController extends Controller
+{
+    public function index(): Response
+    {
+        return Inertia::render('help/index', [
+            'support' => $this->support(),
+        ]);
+    }
+
+    public function knowledgeBase(): Response
+    {
+        return Inertia::render('help/knowledge-base', [
+            'articles' => array_map(
+                fn (array $article) => [
+                    'slug' => $article['slug'],
+                    'title' => $article['title'],
+                    'summary' => $article['summary'],
+                    'category' => $article['category'],
+                    'icon' => $article['icon'],
+                ],
+                KnowledgeBase::articles(),
+            ),
+            'categories' => KnowledgeBase::CATEGORIES,
+        ]);
+    }
+
+    public function article(string $slug): Response
+    {
+        $article = KnowledgeBase::find($slug);
+
+        abort_if($article === null, 404);
+
+        return Inertia::render('help/article', [
+            'article' => $article,
+            'categories' => KnowledgeBase::CATEGORIES,
+        ]);
+    }
+
+    public function contact(): Response
+    {
+        return Inertia::render('help/contact', [
+            'support' => $this->support(),
+        ]);
+    }
+
+    public function ticket(): Response
+    {
+        return Inertia::render('help/ticket', [
+            'support' => $this->support(),
+        ]);
+    }
+
+    public function submitTicket(SupportTicketRequest $request): RedirectResponse
+    {
+        $user = $request->user();
+
+        $payload = [
+            'from' => $user->email,
+            'name' => $user->name,
+            'office' => $user->office?->name,
+            'subject' => $request->string('subject')->value(),
+            'body' => $request->string('body')->value(),
+        ];
+
+        $to = (string) config('cicto.support.email');
+
+        // Always recorded, whether or not mail is configured. A ticket that
+        // exists only inside a mail transport that is not set up is a ticket
+        // nobody will ever read.
+        Log::channel('stack')->info('Support ticket raised', $payload);
+
+        if ($to !== '' && $this->mailIsConfigured()) {
+            Mail::to($to)->send(new SupportTicketMail(
+                $user,
+                $payload['subject'],
+                $payload['body'],
+            ));
+
+            return back()->with('toast', [
+                'type' => 'success',
+                'message' => 'Your ticket has been sent to '.$to.'.',
+            ]);
+        }
+
+        // Deliberately NOT a success message. Telling somebody their ticket was
+        // sent when no mail transport exists is the one outcome this page must
+        // never produce.
+        return back()->with('toast', [
+            'type' => 'warning',
+            'message' => 'Outgoing mail is not configured on this server, so your ticket was recorded in the system log but not delivered. Please contact the office directly.',
+        ]);
+    }
+
+    /**
+     * Whether mail can actually leave this server.
+     *
+     * `log` and `array` are the two mailers that accept everything and deliver
+     * nothing, and `log` is the default in this deployment until SMTP details
+     * are supplied (client question B3).
+     */
+    private function mailIsConfigured(): bool
+    {
+        return ! in_array(
+            (string) config('mail.default'),
+            ['log', 'array'],
+            true,
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function support(): array
+    {
+        return [
+            'office' => config('cicto.support.office'),
+            'email' => config('cicto.support.email'),
+            'phone' => config('cicto.support.phone'),
+            'mail_configured' => $this->mailIsConfigured(),
+        ];
+    }
+}

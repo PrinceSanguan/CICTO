@@ -33,7 +33,7 @@ class DocumentPresenter
             'title' => $document->title,
             'status' => $document->status->value,
             'status_label' => $document->status->publicLabel(),
-            'status_tone' => $document->status->tone(),
+            'status_tone' => $document->status->publicTone(),
             'priority' => $document->priority->value,
             'priority_label' => $document->priority->label(),
             'priority_tone' => $document->priority->tone(),
@@ -141,6 +141,47 @@ class DocumentPresenter
         }
 
         return $rows;
+    }
+
+    /**
+     * The single slowest leg so far, for §10's tracking panel.
+     *
+     * Derived from the same movement rows the timeline uses rather than stored,
+     * so it cannot go stale. The OPEN leg counts: a document that has been
+     * sitting in one office for three days is exactly the case a records
+     * officer is looking for, and excluding it would hide the live problem
+     * while reporting a finished one.
+     *
+     * @param  iterable<int, DocumentMovement>  $movements
+     * @return array<string, mixed>|null
+     */
+    public function longestStage(iterable $movements): ?array
+    {
+        $slowest = null;
+        $slowestMinutes = -1;
+
+        foreach ($movements as $movement) {
+            $minutes = $movement->dwellMinutes() ?? $this->openLegMinutes($movement);
+
+            if ($minutes === null || $minutes <= $slowestMinutes) {
+                continue;
+            }
+
+            $slowest = $movement;
+            $slowestMinutes = $minutes;
+        }
+
+        if ($slowest === null) {
+            return null;
+        }
+
+        return [
+            'office' => $slowest->toOffice?->name,
+            'stage' => $slowest->action->label(),
+            'minutes' => $slowestMinutes,
+            'duration' => $this->humanMinutes($slowestMinutes),
+            'is_open' => $slowest->departed_at === null,
+        ];
     }
 
     /**

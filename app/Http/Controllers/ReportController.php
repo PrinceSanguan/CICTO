@@ -35,6 +35,7 @@ class ReportController extends Controller
         return Inertia::render('reports/index', [
             'summary' => $this->stats->summary($user),
             'monthlyProcessed' => $this->stats->monthlyProcessed($user, $months),
+            'monthlyByStatus' => $this->stats->monthlyByStatus($user, $months),
             'statusDistribution' => $this->stats->statusDistribution($user),
             'processingTrend' => $this->stats->processingTrend($user, $months),
             'userActivity' => $user->atLeast(Role::Admin)

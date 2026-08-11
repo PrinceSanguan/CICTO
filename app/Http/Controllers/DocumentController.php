@@ -134,6 +134,7 @@ class DocumentController extends Controller
         return Inertia::render('documents/show', [
             'document' => $this->presenter->detail($document, $user),
             'timeline' => $this->presenter->timeline($document->movements),
+            'longestStage' => $this->presenter->longestStage($document->movements),
             'officeRollup' => $this->presenter->officeRollup($document->movements),
             'files' => $this->presenter->files($document->files),
             'signatures' => $this->presenter->signatures(

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CspReportController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\HelpController;
 use App\Http\Controllers\ReportController;
 use App\Http\Middleware\EnsureAccountIsActive;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -77,7 +78,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // §19 Reports and Analytics
     Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
     Route::get('reports/export', [ReportController::class, 'export'])->name('reports.export');
-    Route::inertia('help', 'help/index')->name('help.index');
+    /*
+    | §23 Help & Support. Static knowledge base, an emailed ticket and contact
+    | details -- see HelpController for why it is deliberately that small.
+    */
+    Route::get('help', [HelpController::class, 'index'])->name('help.index');
+    Route::get('help/knowledge-base', [HelpController::class, 'knowledgeBase'])
+        ->name('help.knowledge-base');
+    Route::get('help/knowledge-base/{slug}', [HelpController::class, 'article'])
+        ->name('help.article');
+    Route::get('help/contact', [HelpController::class, 'contact'])->name('help.contact');
+    Route::get('help/ticket', [HelpController::class, 'ticket'])->name('help.ticket');
+    Route::post('help/ticket', [HelpController::class, 'submitTicket'])
+        ->middleware('throttle:6,1')
+        ->name('help.ticket.store');
 });
 
 require __DIR__.'/documents.php';
