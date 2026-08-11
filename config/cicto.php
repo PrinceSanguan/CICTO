@@ -221,10 +221,27 @@ return [
     |--------------------------------------------------------------------------
     */
 
+    /*
+     * Contact details for §23's Contact Support page.
+     *
+     * The defaults are the ones the client printed on their own design, so the
+     * page ships showing real details rather than "not published yet". They
+     * remain env-overridable because a support number is exactly the sort of
+     * thing that changes without a deployment.
+     *
+     * `hours` reads "Monday - Thursday" because that is what the supplied
+     * design says. Flagged to the client as a likely typo for Friday -- a
+     * published counter that closes a day early is a complaint, so this is
+     * copied verbatim rather than silently corrected.
+     */
     'support' => [
         'office' => env('CICTO_SUPPORT_OFFICE', 'Municipal Information Technology Office'),
-        'email' => env('CICTO_SUPPORT_EMAIL'),
-        'phone' => env('CICTO_SUPPORT_PHONE'),
+        'email' => env('CICTO_SUPPORT_EMAIL', 'cicto@baliwag.gov.ph'),
+        'phone' => env('CICTO_SUPPORT_PHONE', '(044) 798 0391'),
+        'address' => env('CICTO_SUPPORT_ADDRESS', 'Baliuag, Philippines, 3006'),
+        'hours' => env('CICTO_SUPPORT_HOURS', 'Monday - Thursday'),
+        'hours_detail' => env('CICTO_SUPPORT_HOURS_DETAIL', '8:00 AM - 5:00 PM'),
+        'response_window' => env('CICTO_SUPPORT_RESPONSE_WINDOW', '24-48 hours'),
     ],
 
 ];

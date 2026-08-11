@@ -3,6 +3,7 @@
 use App\Exceptions\AlreadySignedException;
 use App\Exceptions\IllegalTransitionException;
 use App\Exceptions\StaleWorkflowStateException;
+use App\Http\Middleware\EnforceSessionTimeout;
 use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -33,6 +34,9 @@ return Application::configure(basePath: dirname(__DIR__))
             // Before HandleInertiaRequests, so a deactivated account never gets
             // as far as having its role and office serialised into a page.
             EnsureAccountIsActive::class,
+            // Same reasoning, one step further: an idle session is signed out
+            // before the page it asked for is built.
+            EnforceSessionTimeout::class,
             HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,

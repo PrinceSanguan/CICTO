@@ -322,22 +322,22 @@ function FileDropzone({ error }: { error?: string }) {
     return (
         <div className="mt-3">
             {/*
-             * Marked optional, against the mockup, which shows an asterisk.
+             * Required, matching the design -- and enforced in
+             * StoreDocumentRequest, never here alone. An asterisk the server
+             * does not check is the exact defect QA found: the form accepted
+             * submissions with no file at all while promising otherwise.
              *
-             * A registry whose whole purpose is tracking paper folders between
-             * offices has to be able to register a document that has not been
-             * scanned yet -- that is the common case at a receiving counter.
-             * StoreDocumentRequest accordingly validates `file` as nullable, so
-             * the asterisk was promising an enforcement that does not exist and
-             * never should. If the client does want an attachment on every
-             * registration, the rule changes here and in StoreDocumentRequest
-             * together, never in only one of them.
+             * Worth the client knowing what this costs: a receiving counter can
+             * no longer register a paper folder that has not been scanned yet.
+             * If that turns out to matter, the rule relaxes in both places
+             * together.
              */}
             <label htmlFor="file" className="block text-sm font-bold text-navy">
                 Upload File
-                <span className="ml-1 text-xs font-semibold text-copy">
-                    (optional)
+                <span className="text-danger" aria-hidden="true">
+                    *
                 </span>
+                <span className="sr-only"> (required)</span>
             </label>
 
             <div

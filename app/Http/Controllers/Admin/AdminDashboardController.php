@@ -8,9 +8,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Builders\DocumentBuilder;
 use App\Models\Document;
 use App\Support\Presenters\DocumentPresenter;
+use App\Support\Reporting\AdminTrend;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -25,25 +24,20 @@ use Inertia\Response;
  */
 class AdminDashboardController extends Controller
 {
-    public function __construct(private readonly DocumentPresenter $presenter) {}
+    public function __construct(
+        private readonly DocumentPresenter $presenter,
+        private readonly AdminTrend $trend,
+    ) {}
 
     /**
-     * The client's four buckets, expressed in workflow states.
-     *
-     * `approved` and `completed` are one bucket: a completed document was
-     * approved first, and showing them apart would make the Approved tile read
-     * lower than the number of documents the office actually approved.
+     * The client's four buckets live on AdminTrend, which owns the chart this
+     * page and the panel's Reports page both draw. One definition, because
+     * "Pending" has to mean the same thing on the tile, in the table filter and
+     * on the chart.
      *
      * @var array<string, list<string>>
      */
-    private const BUCKETS = [
-        'pending' => ['initiated', 'under_review', 'returned'],
-        'approved' => ['approved', 'completed'],
-        'rejected' => ['rejected'],
-    ];
-
-    /** How many months of history the trend chart covers. */
-    private const TREND_MONTHS = 12;
+    private const BUCKETS = AdminTrend::BUCKETS;
 
     public function index(Request $request): Response
     {
@@ -113,7 +107,7 @@ class AdminDashboardController extends Controller
             'queue' => collect($page->items())
                 ->map(fn (Document $document) => $this->row($document))
                 ->all(),
-            'trend' => $this->trend($user),
+            'trend' => $this->trend->monthly($user),
             'pending' => $base()
                 // currentFile too: row() reads it, and without this the five
                 // pending rows each cost their own query.
@@ -183,13 +177,7 @@ class AdminDashboardController extends Controller
 
     private function bucketFor(DocumentStatus $status): string
     {
-        foreach (self::BUCKETS as $name => $states) {
-            if (in_array($status->value, $states, true)) {
-                return $name;
-            }
-        }
-
-        return 'pending';
+        return AdminTrend::bucketFor($status);
     }
 
     /**
@@ -223,67 +211,5 @@ class AdminDashboardController extends Controller
             'approved' => $sum('approved'),
             'rejected' => $sum('rejected'),
         ];
-    }
-
-    /**
-     * Approved / pending / rejected per month for the last year.
-     *
-     * EXTRACT rather than DATE_FORMAT, and the month grid is built in PHP so a
-     * month with no documents is a zero rather than a missing point -- a line
-     * chart that silently skips empty months misreports the shape of the year.
-     *
-     * @return list<array<string, mixed>>
-     */
-    private function trend(mixed $user): array
-    {
-        $start = Carbon::now()->startOfMonth()->subMonths(self::TREND_MONTHS - 1);
-
-        // Whole literal strings per driver, matching DocumentStats: EXTRACT is
-        // identical on PostgreSQL and MySQL, but SQLite (tests) has no EXTRACT
-        // at all and needs strftime. Concatenating fragments is how a report
-        // ends up silently wrong on one driver only.
-        $sqlite = DB::connection()->getDriverName() === 'sqlite';
-
-        $select = $sqlite
-            ? "cast(strftime('%Y', documents.created_at) as integer) as y, cast(strftime('%m', documents.created_at) as integer) as m, documents.status as status, count(*) as total"
-            : 'extract(year from documents.created_at) as y, extract(month from documents.created_at) as m, documents.status as status, count(*) as total';
-
-        $group = $sqlite
-            ? "strftime('%Y', documents.created_at), strftime('%m', documents.created_at), documents.status"
-            : 'extract(year from documents.created_at), extract(month from documents.created_at), documents.status';
-
-        $rows = Document::query()
-            ->visibleTo($user)
-            ->where('documents.created_at', '>=', $start)
-            ->selectRaw($select)
-            ->groupByRaw($group)
-            ->toBase()
-            ->get();
-
-        $buckets = [];
-
-        foreach ($rows as $row) {
-            $key = sprintf('%04d-%02d', (int) $row->y, (int) $row->m);
-            $bucket = $this->bucketFor(DocumentStatus::from((string) $row->status));
-
-            $buckets[$key][$bucket] = ($buckets[$key][$bucket] ?? 0) + (int) $row->total;
-        }
-
-        $series = [];
-
-        for ($i = 0; $i < self::TREND_MONTHS; $i++) {
-            $month = $start->copy()->addMonths($i);
-            $key = $month->format('Y-m');
-
-            $series[] = [
-                'month' => $key,
-                'label' => $month->format('M'),
-                'approved' => $buckets[$key]['approved'] ?? 0,
-                'pending' => $buckets[$key]['pending'] ?? 0,
-                'rejected' => $buckets[$key]['rejected'] ?? 0,
-            ];
-        }
-
-        return $series;
     }
 }

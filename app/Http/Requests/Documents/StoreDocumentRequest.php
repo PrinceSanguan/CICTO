@@ -37,7 +37,11 @@ class StoreDocumentRequest extends FormRequest
             // extensions() checks the actual filename extension. SVG is
             // permanently excluded from the allow-list -- stored XSS.
             'file' => [
-                'nullable',
+                // Required, per the client's design. Kept in step with the
+                // asterisk on the Upload File label -- the two must change
+                // together or the form goes back to promising a check that
+                // does not happen.
+                'required',
                 File::types(config('cicto.uploads.mimes'))
                     ->extensions(config('cicto.uploads.extensions'))
                     ->max((int) config('cicto.uploads.max_size_kb')),

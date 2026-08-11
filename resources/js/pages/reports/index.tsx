@@ -9,7 +9,6 @@ import {
     ShieldCheck,
 } from 'lucide-react';
 import { lazy, Suspense } from 'react';
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
     Table,
@@ -86,22 +85,48 @@ export default function ReportsIndex({
     canExport,
     limits,
 }: Props) {
-    // Declared once and rendered in two places: the toolbar and, per the
-    // design, under the Status Distribution card.
+    // Declared once and rendered in two places: beneath the tiles, where the
+    // design puts the pair, and again under the Status Distribution card.
     const exportLinks = (
         <>
-            <Button variant="outline" size="sm" asChild>
-                <a href={reports.export.url({ query: { format: 'pdf' } })}>
-                    <FileText className="size-4" />
-                    Download PDF
-                </a>
-            </Button>
-            <Button variant="outline" size="sm" asChild>
-                <a href={reports.export.url({ query: { format: 'xlsx' } })}>
-                    <FileSpreadsheet className="size-4" />
-                    Export Excel
-                </a>
-            </Button>
+            <a
+                href={reports.export.url({ query: { format: 'pdf' } })}
+                className="inline-flex items-center gap-3 rounded-lg bg-white px-6 py-3 text-[15px] font-bold text-navy no-underline shadow-lg transition hover:bg-[#F2F6FC]"
+            >
+                <FileText
+                    aria-hidden="true"
+                    className="size-5 text-[#D7373F]"
+                />
+                Download PDF
+            </a>
+            <a
+                href={reports.export.url({ query: { format: 'xlsx' } })}
+                className="inline-flex items-center gap-3 rounded-lg bg-white px-6 py-3 text-[15px] font-bold text-navy no-underline shadow-lg transition hover:bg-[#F2F6FC]"
+            >
+                <FileSpreadsheet
+                    aria-hidden="true"
+                    className="size-5 text-[#1F7244]"
+                />
+                Export Excel
+            </a>
+            {/*
+                CSV is not in the design, and it stays anyway: it is the only
+                export with no row ceiling, and the note at the foot of this
+                page tells a records officer to reach for it once a range grows
+                past what PDF and Excel can hold. Removing it would leave that
+                advice pointing at nothing.
+            */}
+            <a
+                href={reports.export.url({ query: { format: 'csv' } })}
+                title="Plain CSV — opens in Excel, never runs out of memory"
+                className="inline-flex items-center gap-3 rounded-lg bg-white px-6 py-3 text-[15px] font-bold text-navy no-underline shadow-lg transition hover:bg-[#F2F6FC]"
+            >
+                <Download
+                    aria-hidden="true"
+                    className="size-5 text-[#3B72C4]"
+                />
+                CSV
+            </a>
         </>
     );
 
@@ -139,51 +164,6 @@ export default function ReportsIndex({
                                 </option>
                             ))}
                         </select>
-
-                        {canExport && (
-                            <>
-                                <Button variant="outline" size="sm" asChild>
-                                    <a
-                                        href={reports.export.url({
-                                            query: { format: 'xlsx' },
-                                        })}
-                                    >
-                                        <FileSpreadsheet className="size-4" />
-                                        Excel
-                                    </a>
-                                </Button>
-                                <Button variant="outline" size="sm" asChild>
-                                    <a
-                                        href={reports.export.url({
-                                            query: { format: 'pdf' },
-                                        })}
-                                    >
-                                        <FileText className="size-4" />
-                                        PDF
-                                    </a>
-                                </Button>
-                                {/*
-                                 * Same variant as its two neighbours. As a
-                                 * ghost button it had no background of its
-                                 * own, so its white label landed directly on
-                                 * the decorative watermark behind the header
-                                 * and was effectively invisible -- while
-                                 * staying perfectly clickable, which is the
-                                 * worst of both.
-                                 */}
-                                <Button variant="outline" size="sm" asChild>
-                                    <a
-                                        href={reports.export.url({
-                                            query: { format: 'csv' },
-                                        })}
-                                        title="Plain CSV — opens in Excel, never runs out of memory"
-                                    >
-                                        <Download className="size-4" />
-                                        CSV
-                                    </a>
-                                </Button>
-                            </>
-                        )}
                     </div>
                 </div>
 
@@ -220,6 +200,16 @@ export default function ReportsIndex({
                         }
                     />
                 </div>
+
+                {/*
+                    The export pair sits directly beneath the tiles, which is
+                    where the design puts it -- and, incidentally, out from
+                    under the decorative watermark that made the old header
+                    cluster hard to read.
+                */}
+                {canExport && (
+                    <div className="flex flex-wrap gap-3">{exportLinks}</div>
+                )}
 
                 <Suspense
                     fallback={<Skeleton className="h-64 w-full rounded-xl" />}

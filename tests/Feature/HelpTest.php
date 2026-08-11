@@ -77,7 +77,9 @@ class HelpTest extends TestCase
 
         $this->actingAs($this->user())
             ->post(route('help.ticket.store'), [
-                'subject' => 'Cannot scan a label',
+                'name' => 'Emarie Alonzo',
+                'email' => 'emarie@example.test',
+                'issue_type' => 'QR code will not scan',
                 'body' => 'The camera button does nothing.',
             ])
             ->assertRedirect()
@@ -93,7 +95,9 @@ class HelpTest extends TestCase
 
         $response = $this->actingAs($this->user())
             ->post(route('help.ticket.store'), [
-                'subject' => 'Cannot scan a label',
+                'name' => 'Emarie Alonzo',
+                'email' => 'emarie@example.test',
+                'issue_type' => 'QR code will not scan',
                 'body' => 'The camera button does nothing.',
             ]);
 
@@ -107,10 +111,10 @@ class HelpTest extends TestCase
         $response->assertSessionHas('toast.type', 'warning');
     }
 
-    public function test_a_ticket_requires_both_a_subject_and_a_body(): void
+    public function test_a_ticket_requires_an_issue_type_and_a_body(): void
     {
         $this->actingAs($this->user())
-            ->post(route('help.ticket.store'), ['subject' => '', 'body' => ''])
-            ->assertSessionHasErrors(['subject', 'body']);
+            ->post(route('help.ticket.store'), ['issue_type' => '', 'body' => ''])
+            ->assertSessionHasErrors(['name', 'email', 'issue_type', 'body']);
     }
 }

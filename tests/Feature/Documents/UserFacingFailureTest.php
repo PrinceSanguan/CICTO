@@ -152,6 +152,32 @@ class UserFacingFailureTest extends TestCase
     }
 
     /**
+     * The Upload File label carries a required asterisk, so the server has to
+     * agree with it.
+     *
+     * QA found the two out of step: the form promised an attachment was
+     * mandatory and accepted submissions with none. Whichever way the client
+     * settles this, the asterisk and this rule move together -- which is what
+     * the assertion below is really pinning.
+     */
+    public function test_registering_without_an_attachment_is_refused(): void
+    {
+        $office = $this->office('MO', "Mayor's Office");
+
+        $this->actingAs($this->staff($office))
+            ->from(route('documents.create'))
+            ->post(route('documents.store'), [
+                'title' => 'Validation probe - no file',
+                'document_type_id' => $this->documentType()->id,
+                'originating_office_id' => $office->id,
+                'priority' => 'normal',
+            ])
+            ->assertSessionHasErrors('file');
+
+        $this->assertSame(0, Document::query()->count());
+    }
+
+    /**
      * Every list in the app has a Department column. Once a document is
      * completed there is no open leg, and the column read as an em dash -- for
      * a document whose own timeline named three offices.

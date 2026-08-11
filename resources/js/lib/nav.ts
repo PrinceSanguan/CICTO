@@ -98,7 +98,7 @@ export const NAV_BY_ROLE: Record<Role, RoleNav> = {
                     },
                     {
                         title: 'Reports',
-                        href: reports.index(),
+                        href: admin.reports.index(),
                         icon: BarChart3,
                     },
                     {
@@ -153,4 +153,50 @@ export const NAV_BY_ROLE: Record<Role, RoleNav> = {
 
 export function navFor(role: Role | null | undefined): RoleNav {
     return NAV_BY_ROLE[role ?? 'user'] ?? NAV_BY_ROLE.user;
+}
+
+/**
+ * The panel sidebar's own items, exactly as §4 and the client's design name
+ * them -- four for Admin, four for Super Admin, none for a plain user.
+ *
+ * Kept separate from NAV_BY_ROLE.sidebar because that structure is grouped and
+ * labelled for the general shell, while the panel design is one flat column
+ * with no group headings at all.
+ */
+const PANEL_NAV: Record<Role, NavItem[]> = {
+    user: [],
+
+    admin: [
+        {
+            title: 'Document Management',
+            href: admin.dashboard(),
+            icon: FolderOpen,
+        },
+        { title: 'Users', href: admin.users.index(), icon: Users },
+        { title: 'Reports', href: admin.reports.index(), icon: BarChart3 },
+        { title: 'Settings', href: admin.settings.edit(), icon: Settings },
+    ],
+
+    super_admin: [
+        {
+            title: 'Manage Users',
+            href: superAdmin.users.index(),
+            icon: UserCog,
+        },
+        { title: 'All Documents', href: superAdmin.dashboard(), icon: Files },
+        {
+            title: 'Reports & Analytics',
+            href: reports.index(),
+            icon: TrendingUp,
+        },
+        {
+            title: 'System Settings',
+            href: superAdmin.settings.edit(),
+            icon: SlidersHorizontal,
+        },
+    ],
+};
+
+export function panelNavFor(role: Role | null | undefined): NavItem[] {
+    return PANEL_NAV[role ?? 'user'] ?? PANEL_NAV.user;
 }

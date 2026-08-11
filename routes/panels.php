@@ -2,6 +2,9 @@
 
 use App\Enums\Role;
 use App\Http\Controllers\Admin\AdminDashboardController;
+use App\Http\Controllers\Admin\AdminReportController;
+use App\Http\Controllers\Admin\AdminSettingsController;
+use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\SuperAdmin\SuperAdminDashboardController;
 use App\Http\Controllers\SuperAdmin\SystemController;
 use App\Http\Middleware\EnsureRole;
@@ -23,11 +26,11 @@ Route::middleware(['auth', 'verified', EnsureRole::using(Role::Admin, Role::Supe
     ->group(function () {
         Route::get('dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
 
-        // §4 names these four sidebar items. Documents and Reports route to the
-        // shared screens; Users and Settings are Phase 3 and ship as honest,
-        // labelled placeholders rather than dead links.
-        Route::inertia('users', 'admin/users/index')->name('users.index');
-        Route::inertia('settings', 'admin/settings/index')->name('settings.edit');
+        // §4's four sidebar items, all now real screens.
+        Route::get('users', [AdminUserController::class, 'index'])->name('users.index');
+        Route::get('reports', [AdminReportController::class, 'index'])->name('reports.index');
+        Route::get('settings', [AdminSettingsController::class, 'edit'])->name('settings.edit');
+        Route::patch('settings', [AdminSettingsController::class, 'update'])->name('settings.update');
     });
 
 Route::middleware(['auth', 'verified', EnsureRole::using(Role::SuperAdmin)])

@@ -34,6 +34,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property string|null $phone
  * @property bool $is_active
  * @property Carbon|null $last_login_at
+ * @property array<string, mixed>|null $preferences Cast from a nullable json column.
  * @property string|null $two_factor_secret
  * @property string|null $two_factor_recovery_codes
  * @property Carbon|null $two_factor_confirmed_at
@@ -94,7 +95,34 @@ class User extends Authenticatable implements PasskeyUser
             'is_active' => 'boolean',
             'last_login_at' => 'datetime',
             'two_factor_confirmed_at' => 'datetime',
+            'preferences' => 'array',
         ];
+    }
+
+    /**
+     * One display preference, or the fallback when it has never been set.
+     *
+     * Reads through the cast rather than exposing the column, so a caller can
+     * never accidentally treat a missing preferences row as an empty array of
+     * settings and write the whole thing away.
+     */
+    public function preference(string $key, mixed $default = null): mixed
+    {
+        // ?? on the whole property, not just the offset: `preferences` is
+        // null for every account created before this column existed, which is
+        // all of them at the point this shipped.
+        return ($this->preferences ?? [])[$key] ?? $default;
+    }
+
+    /**
+     * Merge preferences without clobbering keys this caller does not know
+     * about.
+     *
+     * @param  array<string, mixed>  $values
+     */
+    public function mergePreferences(array $values): void
+    {
+        $this->preferences = [...$this->preferences ?? [], ...$values];
     }
 
     /** @return BelongsTo<Office, $this> */

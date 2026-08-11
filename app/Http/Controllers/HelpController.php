@@ -70,6 +70,7 @@ class HelpController extends Controller
     {
         return Inertia::render('help/ticket', [
             'support' => $this->support(),
+            'issueTypes' => SupportTicketRequest::ISSUE_TYPES,
         ]);
     }
 
@@ -77,11 +78,22 @@ class HelpController extends Controller
     {
         $user = $request->user();
 
+        /*
+         * The design collects a name and email even though both are already on
+         * the signed-in account. They are recorded as CONTACT details -- where
+         * to reply -- and never used to attribute the ticket: `from` and `name`
+         * below still come from the session, so a reporter cannot file a ticket
+         * as somebody else by typing their address into the form.
+         */
         $payload = [
             'from' => $user->email,
             'name' => $user->name,
             'office' => $user->office?->name,
-            'subject' => $request->string('subject')->value(),
+            'reply_to' => $request->string('email')->value(),
+            'contact_name' => $request->string('name')->value(),
+            'tracking_number' => $request->string('tracking_number')->value(),
+            'issue_type' => $request->string('issue_type')->value(),
+            'subject' => $request->subject(),
             'body' => $request->string('body')->value(),
         ];
 
@@ -139,6 +151,10 @@ class HelpController extends Controller
             'office' => config('cicto.support.office'),
             'email' => config('cicto.support.email'),
             'phone' => config('cicto.support.phone'),
+            'address' => config('cicto.support.address'),
+            'hours' => config('cicto.support.hours'),
+            'hours_detail' => config('cicto.support.hours_detail'),
+            'response_window' => config('cicto.support.response_window'),
             'mail_configured' => $this->mailIsConfigured(),
         ];
     }

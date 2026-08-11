@@ -5,6 +5,7 @@ import {
     FieldLabel,
     PasswordField,
 } from '@/components/auth/auth-field';
+import { PortalChips } from '@/components/auth/portal-chips';
 import InputError from '@/components/input-error';
 import TextLink from '@/components/text-link';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -45,6 +46,7 @@ export default function Login({
 }: Props) {
     const copy = PORTALS[portal] ?? PORTALS.user;
     const danger = portal === 'super-admin';
+    const isRolePortal = portal !== 'user';
 
     return (
         <>
@@ -151,19 +153,48 @@ export default function Login({
                                 Login
                             </AuthSubmit>
                         </div>
+                        {/*
+                            Repeated under the button on the two role portals,
+                            which is where their designs put it. The plain login
+                            screen keeps only the one beside the Password label
+                            and offers the portal chips here instead.
+                        */}
+                        {isRolePortal && canResetPassword && (
+                            <p className="text-center">
+                                <TextLink
+                                    href={request()}
+                                    className="text-sm font-bold text-link no-underline hover:underline"
+                                >
+                                    Forgot Password?
+                                </TextLink>
+                            </p>
+                        )}
                     </>
                 )}
             </Form>
 
-            <p className="mt-6 text-center text-sm font-medium text-navy">
-                Don&rsquo;t have an account?{' '}
-                <TextLink
-                    href={register()}
-                    className="font-bold text-link no-underline hover:underline"
-                >
-                    Register
-                </TextLink>
-            </p>
+            {/*
+                §3's three entry points, offered from the plain login screen
+                only. Reaching /login/admin FROM /login/admin is not a choice
+                worth showing, and the role designs do not show it.
+            */}
+            {!isRolePortal && (
+                <div className="mt-6">
+                    <PortalChips current={portal} />
+                </div>
+            )}
+
+            {!isRolePortal && (
+                <p className="mt-6 text-center text-sm font-medium text-navy">
+                    Don&rsquo;t have an account?{' '}
+                    <TextLink
+                        href={register()}
+                        className="font-bold text-link no-underline hover:underline"
+                    >
+                        Register
+                    </TextLink>
+                </p>
+            )}
         </>
     );
 }
