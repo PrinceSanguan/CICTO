@@ -56,6 +56,9 @@ class HelpController extends Controller
         return Inertia::render('help/article', [
             'article' => $article,
             'categories' => KnowledgeBase::CATEGORIES,
+            // The password article suppresses its own steps when this server
+            // cannot send the email step 4 tells the reader to wait for.
+            'support' => $this->support(),
         ]);
     }
 
