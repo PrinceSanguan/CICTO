@@ -2,11 +2,15 @@
 
 namespace App\Http\Controllers\SuperAdmin;
 
+use App\Enums\MovementAction;
 use App\Enums\SecurityEventType;
 use App\Http\Controllers\Controller;
 use App\Models\BackupRun;
+use App\Models\Document;
 use App\Models\SecurityEvent;
 use App\Services\Backup\BackupService;
+use App\Support\DocumentWorkflow;
+use App\Support\Reporting\AdminTrend;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -51,6 +55,39 @@ class SystemController extends Controller
 
             // §21: the security log. Read-only and Super Admin only -- it
             // contains failed sign-in attempts and IP addresses.
+            /*
+             * §4's System Control card.
+             *
+             * The design puts an Approve button beside each pending document.
+             * It is only rendered where approval is genuinely legal from that
+             * document's current state AND permitted for this viewer -- the
+             * same DocumentWorkflow map and the same policy that guard the
+             * document page, so this shortcut cannot do anything the long way
+             * round would refuse.
+             */
+            'pending' => Document::query()
+                ->active()
+                ->with(['documentType:id,name', 'openMovement:id,document_id'])
+                ->whereIn('documents.status', AdminTrend::PENDING_STATES)
+                ->orderByDesc('documents.updated_at')
+                ->limit(8)
+                ->get()
+                ->map(fn (Document $document) => [
+                    'id' => $document->id,
+                    'control_number' => $document->control_number,
+                    'title' => $document->title,
+                    'type' => $document->documentType?->name,
+                    'status_label' => $document->status->publicLabel(),
+                    'status_tone' => $document->status->publicTone(),
+                    'expected_movement_id' => $document->openMovement?->id,
+                    'can_approve' => in_array(
+                        MovementAction::Approved,
+                        DocumentWorkflow::allowed($document->status),
+                        true,
+                    ) && $request->user()->can('act', [$document, MovementAction::Approved]),
+                ])
+                ->all(),
+
             'securityEvents' => SecurityEvent::query()
                 ->orderByDesc('id')
                 ->limit(50)

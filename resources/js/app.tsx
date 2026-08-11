@@ -25,6 +25,12 @@ const STANDALONE_PAGES = new Set([
      * way back, so it needs no shell in either case.
      */
     'error',
+    /*
+     * The sign-out confirmation. It matches `auth/` so it would otherwise get
+     * the login artwork shell, but it renders after the session is destroyed
+     * and carries its own full-screen layout.
+     */
+    'auth/logged-out',
 ]);
 
 createInertiaApp({

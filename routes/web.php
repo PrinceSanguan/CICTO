@@ -100,6 +100,14 @@ require __DIR__.'/panels.php';
 require __DIR__.'/settings.php';
 
 /*
+| The sign-out confirmation, per §4's design.
+|
+| Public and unauthenticated by construction: it renders after the session has
+| been destroyed, so requiring a session would make it unreachable.
+*/
+Route::inertia('logged-out', 'auth/logged-out')->name('logout.confirmed');
+
+/*
 | Unmatched URLs, handled inside the web group.
 |
 | The exception handler already renders this page for a 404 raised anywhere,

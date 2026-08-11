@@ -19,6 +19,7 @@ enum SecurityEventType: string
     case TwoFactorEnabled = 'auth.two_factor_enabled';
     case TwoFactorDisabled = 'auth.two_factor_disabled';
 
+    case UserCreated = 'user.created';
     case RoleChanged = 'user.role_changed';
     case UserDeactivated = 'user.deactivated';
     case UserReactivated = 'user.reactivated';
@@ -45,6 +46,7 @@ enum SecurityEventType: string
             self::PasswordReset => 'Password reset',
             self::TwoFactorEnabled => 'Two-factor enabled',
             self::TwoFactorDisabled => 'Two-factor disabled',
+            self::UserCreated => 'Account created',
             self::RoleChanged => 'Role changed',
             self::UserDeactivated => 'Account deactivated',
             self::UserReactivated => 'Account reactivated',

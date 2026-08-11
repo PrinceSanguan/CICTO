@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
+use App\Http\Responses\LogoutResponse;
 use App\Http\Responses\RoleAwareLoginResponse;
 use App\Http\Responses\RoleAwarePasskeyLoginResponse;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -14,6 +15,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
+use Laravel\Fortify\Contracts\LogoutResponse as LogoutResponseContract;
 use Laravel\Fortify\Contracts\RegisterResponse as RegisterResponseContract;
 use Laravel\Fortify\Contracts\TwoFactorLoginResponse as TwoFactorLoginResponseContract;
 use Laravel\Fortify\Features;
@@ -58,6 +60,10 @@ class FortifyServiceProvider extends ServiceProvider
     {
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
         Fortify::createUsersUsing(CreateNewUser::class);
+
+        // §4's design ends the session on a confirmation screen rather than the
+        // landing page, which looks identical whether or not sign-out worked.
+        $this->app->singleton(LogoutResponseContract::class, LogoutResponse::class);
     }
 
     /**

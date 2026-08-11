@@ -6,6 +6,8 @@ use App\Http\Controllers\Admin\AdminReportController;
 use App\Http\Controllers\Admin\AdminSettingsController;
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\SuperAdmin\SuperAdminDashboardController;
+use App\Http\Controllers\SuperAdmin\SuperAdminReportController;
+use App\Http\Controllers\SuperAdmin\SuperAdminUserController;
 use App\Http\Controllers\SuperAdmin\SystemController;
 use App\Http\Middleware\EnsureRole;
 use Illuminate\Support\Facades\Route;
@@ -39,7 +41,10 @@ Route::middleware(['auth', 'verified', EnsureRole::using(Role::SuperAdmin)])
     ->group(function () {
         Route::get('dashboard', [SuperAdminDashboardController::class, 'index'])->name('dashboard');
 
-        Route::inertia('users', 'super-admin/users/index')->name('users.index');
+        Route::get('users', [SuperAdminUserController::class, 'index'])->name('users.index');
+        Route::post('users', [SuperAdminUserController::class, 'store'])->name('users.store');
+
+        Route::get('reports', [SuperAdminReportController::class, 'index'])->name('reports.index');
 
         // §2 system settings, §22 backup console, §21 security log.
         Route::get('settings', [SystemController::class, 'index'])->name('settings.edit');

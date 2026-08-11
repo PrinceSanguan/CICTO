@@ -1,6 +1,13 @@
-import { Head, router, useForm } from '@inertiajs/react';
-import { AlertTriangle, DatabaseBackup, ShieldCheck } from 'lucide-react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
+import {
+    AlertTriangle,
+    DatabaseBackup,
+    ShieldCheck,
+    SlidersHorizontal,
+} from 'lucide-react';
 import { useState } from 'react';
+import { PanelHeading } from '@/components/admin/panel-heading';
+import { StatusPill } from '@/components/documents/status-pill';
 import Heading from '@/components/heading';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +19,9 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import documents from '@/routes/documents';
 import superAdmin from '@/routes/super-admin';
+import type { Tone } from '@/types';
 
 type BackupRow = {
     id: number;
@@ -61,6 +70,16 @@ type Props = {
         versionsEnabled: boolean;
         securityEvents: number;
     };
+    pending: {
+        id: number;
+        control_number: string;
+        title: string;
+        type: string | null;
+        status_label: string;
+        status_tone: Tone;
+        expected_movement_id: number | null;
+        can_approve: boolean;
+    }[];
 };
 
 export default function SystemSettings({
@@ -68,6 +87,7 @@ export default function SystemSettings({
     backups,
     securityEvents,
     retention,
+    pending,
 }: Props) {
     const [restoringId, setRestoringId] = useState<number | null>(null);
     const restore = useForm({ notes: '' });
@@ -77,10 +97,42 @@ export default function SystemSettings({
             <Head title="System Settings" />
 
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
+                <PanelHeading />
+
                 <Heading
                     title="System Settings"
                     description="Backups, retention and the security log."
                 />
+
+                {/*
+                    §4's three tiles. They are anchors into the sections below
+                    rather than separate screens: every setting they name
+                    already lives on this page, and splitting one short page
+                    into three would add navigation without adding anything to
+                    read.
+                */}
+                <div className="grid gap-4 sm:grid-cols-3">
+                    <Tile
+                        href="#security"
+                        icon={ShieldCheck}
+                        tint="#3B72C4"
+                        label="Security Settings"
+                    />
+                    <Tile
+                        href="#preferences"
+                        icon={SlidersHorizontal}
+                        tint="#7FA398"
+                        label="System Preferences"
+                    />
+                    <Tile
+                        href="#backups"
+                        icon={DatabaseBackup}
+                        tint="#E8B84B"
+                        label="Data Backup"
+                    />
+                </div>
+
+                <SystemControl rows={pending} />
 
                 {/*
                     §22 is "Backup AND Recovery". Until a restore has actually
@@ -99,7 +151,7 @@ export default function SystemSettings({
                     </div>
                 )}
 
-                <section className="rounded-xl border p-4">
+                <section id="backups" className="rounded-xl border p-4">
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                         <h3 className="text-sm font-semibold">
                             Backups
@@ -281,7 +333,7 @@ export default function SystemSettings({
                     </Table>
                 </section>
 
-                <section className="rounded-xl border p-4">
+                <section id="preferences" className="rounded-xl border p-4">
                     <h3 className="mb-2 text-sm font-semibold">Retention</h3>
                     <ul className="space-y-1 text-sm text-muted-foreground">
                         <li>
@@ -319,7 +371,7 @@ export default function SystemSettings({
                 </section>
 
                 {/* §21 security log */}
-                <section className="rounded-xl border">
+                <section id="security" className="rounded-xl border">
                     <h3 className="border-b p-4 text-sm font-semibold">
                         Security log
                         <span className="ml-2 font-normal text-muted-foreground">
@@ -377,6 +429,120 @@ export default function SystemSettings({
                 </section>
             </div>
         </>
+    );
+}
+
+/** One of §4's three settings tiles: an anchor into the section below. */
+function Tile({
+    href,
+    icon: Icon,
+    tint,
+    label,
+}: {
+    href: string;
+    icon: typeof ShieldCheck;
+    tint: string;
+    label: string;
+}) {
+    return (
+        <a
+            href={href}
+            className="flex flex-col items-center gap-3 rounded-xl border p-4 text-center no-underline transition hover:bg-muted/50"
+        >
+            <span
+                aria-hidden="true"
+                className="flex size-20 items-center justify-center rounded-lg text-white"
+                style={{ backgroundColor: tint }}
+            >
+                <Icon className="size-10" strokeWidth={1.5} />
+            </span>
+            <span className="text-sm font-semibold">{label}</span>
+        </a>
+    );
+}
+
+/**
+ * §4's System Control card.
+ *
+ * Approve posts to the same guarded endpoint the document page uses, carrying
+ * the open leg it was rendered against -- so a stale page here is refused with
+ * the same conflict message rather than silently acting on a document that has
+ * already moved. The button only appears where the workflow and the policy
+ * both allow it, which is why some rows show only a link.
+ */
+function SystemControl({ rows }: { rows: Props['pending'] }) {
+    return (
+        <section className="rounded-xl border p-4">
+            <h3 className="mb-3 text-sm font-semibold">
+                System Control
+                <span className="ml-2 font-normal text-muted-foreground">
+                    pending documents across every office
+                </span>
+            </h3>
+
+            {rows.length === 0 && (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                    Nothing is waiting anywhere in the building.
+                </p>
+            )}
+
+            <ul className="space-y-2">
+                {rows.map((row) => (
+                    <li
+                        key={row.id}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
+                    >
+                        <div className="min-w-0">
+                            <Link
+                                href={documents.show(row.id)}
+                                className="font-semibold hover:underline"
+                            >
+                                {row.title}
+                            </Link>
+                            <p className="font-mono text-xs text-muted-foreground">
+                                {row.control_number}
+                                {row.type && ` · ${row.type}`}
+                            </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <StatusPill
+                                tone={row.status_tone}
+                                label={row.status_label}
+                                className="min-w-0 px-3 py-1 text-xs"
+                            />
+
+                            {row.can_approve ? (
+                                <Button
+                                    size="sm"
+                                    onClick={() =>
+                                        router.post(
+                                            documents.transitions.store.url(
+                                                row.id,
+                                            ),
+                                            {
+                                                action: 'approved',
+                                                expected_movement_id:
+                                                    row.expected_movement_id,
+                                            },
+                                            { preserveScroll: true },
+                                        )
+                                    }
+                                >
+                                    Approve
+                                </Button>
+                            ) : (
+                                <Button size="sm" variant="outline" asChild>
+                                    <Link href={documents.show(row.id)}>
+                                        Review
+                                    </Link>
+                                </Button>
+                            )}
+                        </div>
+                    </li>
+                ))}
+            </ul>
+        </section>
     );
 }
 

@@ -71,9 +71,22 @@ class AuthenticationTest extends TestCase
 
         $response = $this->actingAs($user)->post(route('logout'));
 
-        $response->assertRedirect(route('home'));
+        // §4's design ends the session on a confirmation screen rather than the
+        // landing page, which looks identical whether or not sign-out worked --
+        // an ambiguity that matters on a shared counter terminal.
+        $response->assertRedirect(route('logout.confirmed'));
 
         $this->assertGuest();
+    }
+
+    public function test_the_sign_out_confirmation_is_reachable_without_a_session(): void
+    {
+        // It renders AFTER the session is destroyed, so anything requiring one
+        // would make it unreachable -- which is how a sign-out ends in a
+        // redirect loop.
+        $this->get(route('logout.confirmed'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->component('auth/logged-out'));
     }
 
     public function test_users_are_rate_limited()
