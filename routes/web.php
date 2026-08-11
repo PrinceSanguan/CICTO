@@ -7,6 +7,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Middleware\EnsureAccountIsActive;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Contracts\LoginViewResponse;
@@ -97,3 +98,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
 require __DIR__.'/documents.php';
 require __DIR__.'/panels.php';
 require __DIR__.'/settings.php';
+
+/*
+| Unmatched URLs, handled inside the web group.
+|
+| The exception handler already renders this page for a 404 raised anywhere,
+| but a URL matching no route at all never reaches session middleware -- so the
+| page could not tell whether the visitor was signed in, and offered a "Go to
+| sign in" button to people who already were. Routing the miss through the web
+| stack first means the answer is known by the time the page renders.
+|
+| The router tries fallback routes last regardless of where they are declared,
+| so this does not shadow anything required above.
+*/
+Route::fallback(function (Request $request) {
+    return Inertia::render('error', [
+        'status' => 404,
+        'authenticated' => Auth::check(),
+    ])
+        ->toResponse($request)
+        ->setStatusCode(404);
+})->name('fallback');

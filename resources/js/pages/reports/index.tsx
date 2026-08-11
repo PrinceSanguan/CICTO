@@ -162,7 +162,16 @@ export default function ReportsIndex({
                                         PDF
                                     </a>
                                 </Button>
-                                <Button variant="ghost" size="sm" asChild>
+                                {/*
+                                 * Same variant as its two neighbours. As a
+                                 * ghost button it had no background of its
+                                 * own, so its white label landed directly on
+                                 * the decorative watermark behind the header
+                                 * and was effectively invisible -- while
+                                 * staying perfectly clickable, which is the
+                                 * worst of both.
+                                 */}
+                                <Button variant="outline" size="sm" asChild>
                                     <a
                                         href={reports.export.url({
                                             query: { format: 'csv' },

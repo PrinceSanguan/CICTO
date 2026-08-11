@@ -15,6 +15,16 @@ const STANDALONE_PAGES = new Set([
     'documents/scan-not-found',
     'privacy',
     'signatures/verify',
+    /*
+     * The error page, reachable both ways.
+     *
+     * Inside the shell it showed a signed-out visitor the full authenticated
+     * sidebar -- Track Documents, Reports, Submit Document, and a Logout link
+     * for someone who was never in. Every one of those bounces straight back to
+     * the login screen. The page carries its own full-screen layout and its own
+     * way back, so it needs no shell in either case.
+     */
+    'error',
 ]);
 
 createInertiaApp({

@@ -56,7 +56,18 @@ export function StageStepper({ status }: { status: string }) {
     const current = stageIndex(status);
 
     return (
-        <ol className="flex flex-wrap items-center gap-y-3">
+        /*
+         * gap-x below `sm` only.
+         *
+         * All the horizontal separation in this row came from the connector's
+         * `mx-2`, and the connector is hidden on phones -- so at 375px the
+         * stages butted together: the green tick sat flush against the previous
+         * label and the active chevron's arrow tip, which overflows its own box
+         * by 16px, printed straight over the word before it. From `sm` up the
+         * connector is back and supplies the spacing itself, so the gap is
+         * switched off there rather than added to it.
+         */
+        <ol className="flex flex-wrap items-center gap-x-3 gap-y-3 sm:gap-x-0">
             {STAGES.map((stage, index) => {
                 const done = index < current;
                 const active = index === current;
@@ -80,7 +91,7 @@ export function StageStepper({ status }: { status: string }) {
                             // screen reader.
                             <span
                                 aria-current="step"
-                                className="relative flex h-10 items-center rounded-sm bg-[#3B72C4] pr-6 pl-5 text-[15px] font-bold text-white"
+                                className="relative mr-4 flex h-10 items-center rounded-sm bg-[#3B72C4] pr-6 pl-5 text-[15px] font-bold text-white sm:mr-0"
                             >
                                 {stage.label}
                                 <span
@@ -129,7 +140,7 @@ export function DocumentFacts({ document }: { document: DocumentDetail }) {
         { label: 'Title', value: document.title },
         {
             label: 'Department',
-            value: document.tracking.current_office ?? '—',
+            value: document.tracking.resting_office ?? '—',
         },
         {
             label: 'Status',
@@ -202,8 +213,14 @@ export function TrackingMetrics({
                 />
                 <Metric
                     icon={Building2}
-                    title="Current Stage"
-                    value={tracking.current_office ?? 'Not routed yet'}
+                    /*
+                     * A finished document has no open leg, so reading the open
+                     * leg alone made this tile say "Not routed yet" about a
+                     * document that had just been routed through three offices.
+                     * Past tense once it has come to rest.
+                     */
+                    title={tracking.is_open ? 'Current Stage' : 'Last Stage'}
+                    value={tracking.resting_office ?? 'Not routed yet'}
                     caption={`(${document.status_label})`}
                 />
             </div>

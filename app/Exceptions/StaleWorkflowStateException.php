@@ -13,7 +13,7 @@ use DomainException;
  */
 class StaleWorkflowStateException extends DomainException
 {
-    public function __construct(string $message = 'This document has already been acted on. Refresh to see its current state.')
+    public function __construct(string $message = 'This document has already moved on. Somebody else acted on it while this page was open — refresh to see where it is now. Nothing was lost.')
     {
         parent::__construct($message);
     }

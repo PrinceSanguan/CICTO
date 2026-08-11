@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Documents;
 
 use App\Enums\MovementAction;
+use App\Exceptions\StaleWorkflowStateException;
 use App\Models\Document;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -24,6 +25,23 @@ class TransitionDocumentRequest extends FormRequest
 
         if (! $document instanceof Document || $action === null) {
             return false;
+        }
+
+        /*
+         * Staleness is checked FIRST, and deliberately.
+         *
+         * When a second tab acts on a document the first tab has already moved,
+         * the policy is what refuses -- the action is no longer legal from the
+         * new state -- and the user gets a bare "This action is unauthorized."
+         * That is both ugly and wrong: it is a conflict, not a permissions
+         * problem, and the knowledge base promises a different sentence
+         * entirely. TransitionDocument raises the same exception under its row
+         * lock; this only moves the common case earlier so the message is right.
+         */
+        $expected = $this->integer('expected_movement_id') ?: null;
+
+        if ($expected !== null && $document->openMovement?->id !== $expected) {
+            throw new StaleWorkflowStateException;
         }
 
         return $this->user()?->can('act', [$document, $action]) ?? false;

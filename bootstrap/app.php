@@ -13,6 +13,9 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\Response;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -64,5 +67,35 @@ return Application::configure(basePath: dirname(__DIR__))
             return $request->expectsJson()
                 ? response()->json(['message' => $e->getMessage()], 409)
                 : back()->withErrors(['action' => $e->getMessage()]);
+        });
+
+        /*
+         * Branded pages for the statuses a user can actually reach.
+         *
+         * 403 in particular is a routine outcome here -- office scoping means a
+         * clerk who opens another department's document gets one -- and
+         * Laravel's stock page for it is unstyled, unbranded and, worst of all,
+         * has no link back into the app. 404 and 419 are the same story.
+         *
+         * 500 and 503 are handled too, but only once debug is off: with debug
+         * on the detailed error page is the entire point, and hiding it behind
+         * a friendly card would make local development considerably worse.
+         */
+        $exceptions->respond(function (Response $response, Throwable $e, Request $request) {
+            $status = $response->getStatusCode();
+
+            $friendly = in_array($status, [403, 404, 419, 429], true)
+                || (in_array($status, [500, 503], true) && ! config('app.debug'));
+
+            if (! $friendly || $request->expectsJson() || $request->is('api/*')) {
+                return $response;
+            }
+
+            return Inertia::render('error', [
+                'status' => $status,
+                'authenticated' => $request->hasSession() && Auth::check(),
+            ])
+                ->toResponse($request)
+                ->setStatusCode($status);
         });
     })->create();

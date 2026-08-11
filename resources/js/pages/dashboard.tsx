@@ -189,7 +189,7 @@ export default function Dashboard({ summary, stats, recent, isAdmin }: Props) {
                                         {item.title}
                                     </td>
                                     <td className="px-5 py-3 text-sm text-copy">
-                                        {item.current_office ?? '—'}
+                                        {item.resting_office ?? '—'}
                                     </td>
                                     <td className="px-5 py-3">
                                         <StatusPill

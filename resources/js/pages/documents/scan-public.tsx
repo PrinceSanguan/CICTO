@@ -8,6 +8,7 @@ type Props = {
         status_label: string;
         status_tone: Tone;
         current_office: string | null;
+        resting_office: string | null;
         updated_at: string | null;
         is_complete: boolean;
     };
@@ -54,7 +55,7 @@ export default function ScanPublic({ document }: Props) {
                                     : 'Currently at'}
                             </dt>
                             <dd className="mt-1 font-medium">
-                                {document.current_office ?? 'Not yet recorded'}
+                                {document.resting_office ?? 'Not yet recorded'}
                             </dd>
                         </div>
 

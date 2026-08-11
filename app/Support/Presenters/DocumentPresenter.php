@@ -21,6 +21,32 @@ use App\Support\DocumentWorkflow;
 class DocumentPresenter
 {
     /**
+     * Where the document is, or -- once it is finished -- where it finished.
+     *
+     * The open leg answers this while the document is moving. After the last
+     * transition there is no open leg, and the Department column would read as
+     * an em dash even though the ledger plainly records the office that closed
+     * it. Falls back to the originating office for a document that was created
+     * and never routed, so the column is only ever blank when the register
+     * genuinely has no office to name.
+     */
+    private function restingOffice(Document $document, ?DocumentMovement $leg): string
+    {
+        // Branching on the foreign key rather than nullsafe-chaining the
+        // relation: to_office_id is nullable in the schema but larastan reads
+        // the relation itself as non-null, so `?->toOffice?->name` is an error
+        // at level 7. originating_office_id is NOT NULL, which is why the
+        // fallback needs no guard and this returns a plain string.
+        $resting = $leg ?? $document->lastMovement;
+
+        if ($resting !== null && $resting->to_office_id !== null) {
+            return $resting->toOffice->name;
+        }
+
+        return $document->originatingOffice->name;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function listItem(Document $document): array
@@ -39,6 +65,7 @@ class DocumentPresenter
             'priority_tone' => $document->priority->tone(),
             'document_type' => $document->documentType?->name,
             'current_office' => $leg?->toOffice?->name,
+            'resting_office' => $this->restingOffice($document, $leg),
             'due_at' => $document->due_at?->toIso8601String(),
             'due_state' => $document->dueState()->value,
             'due_state_label' => $document->dueState()->label(),
@@ -70,6 +97,8 @@ class DocumentPresenter
             'tracking' => [
                 'current_office' => $leg?->toOffice?->name,
                 'current_office_id' => $leg?->to_office_id,
+                'resting_office' => $this->restingOffice($document, $leg),
+                'is_open' => $leg !== null,
                 'arrived_at' => $leg?->arrived_at?->toIso8601String(),
                 'minutes_at_current_office' => $minutesHere,
                 'time_at_current_office' => $this->humanMinutes($minutesHere),

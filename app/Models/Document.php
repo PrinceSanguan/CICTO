@@ -128,6 +128,22 @@ class Document extends Model
         return $this->hasOne(DocumentMovement::class)->whereNull('departed_at');
     }
 
+    /**
+     * The last leg the document travelled, open or closed.
+     *
+     * openMovement answers "who holds this now" and is correctly null once the
+     * document is completed, rejected or archived. But every list in the app
+     * has a Department column, and rendering an em dash there for a finished
+     * document loses information that is still in the ledger -- the office it
+     * finished at. This relation is what that column reads through.
+     *
+     * @return HasOne<DocumentMovement, $this>
+     */
+    public function lastMovement(): HasOne
+    {
+        return $this->hasOne(DocumentMovement::class)->latestOfMany('sequence');
+    }
+
     /** @return HasMany<DocumentFile, $this> */
     public function files(): HasMany
     {

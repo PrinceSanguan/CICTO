@@ -321,10 +321,22 @@ function FileDropzone({ error }: { error?: string }) {
 
     return (
         <div className="mt-3">
+            {/*
+             * Marked optional, against the mockup, which shows an asterisk.
+             *
+             * A registry whose whole purpose is tracking paper folders between
+             * offices has to be able to register a document that has not been
+             * scanned yet -- that is the common case at a receiving counter.
+             * StoreDocumentRequest accordingly validates `file` as nullable, so
+             * the asterisk was promising an enforcement that does not exist and
+             * never should. If the client does want an attachment on every
+             * registration, the rule changes here and in StoreDocumentRequest
+             * together, never in only one of them.
+             */}
             <label htmlFor="file" className="block text-sm font-bold text-navy">
                 Upload File
-                <span className="text-danger" aria-hidden="true">
-                    *
+                <span className="ml-1 text-xs font-semibold text-copy">
+                    (optional)
                 </span>
             </label>
 

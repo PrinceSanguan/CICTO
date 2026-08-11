@@ -39,7 +39,11 @@ class DashboardController extends Controller
         // the opposite of what the archive is for. The queue below is a
         // different question and does exclude them.
         $base = fn () => Document::query()->visibleTo($user)->active()
-            ->with(['documentType:id,name', 'openMovement.toOffice:id,name']);
+            ->with([
+                'documentType:id,name',
+                'openMovement.toOffice:id,name',
+                'lastMovement.toOffice:id,name',
+            ]);
 
         // "In my office right now" is the whole point of the system for an
         // Admin. For a plain user it is "what I submitted".

@@ -120,6 +120,7 @@ class DocumentController extends Controller
             'originatingOffice:id,name',
             'creator:id,name',
             'openMovement.toOffice:id,name',
+            'lastMovement.toOffice:id,name',
             'movements.actor:id,name',
             'movements.fromOffice:id,name',
             'movements.toOffice:id,name',

@@ -9,6 +9,87 @@ Ticked items were fixed in the same pass (15 of them, covering both
 criticals and 9 of the 11 highs). Everything unticked is real,
 verified, and outstanding.
 
+A second pass on 11 Aug drove the running app in a real browser rather
+than reading code, and found nine more. They are recorded below under
+BROWSER PASS; all nine are fixed. Worth noting what separates them from
+the list above: every one returned a correct HTTP status while showing
+the user something wrong, so no status-code assertion could have caught
+them. `tests/Feature/Documents/UserFacingFailureTest.php` now pins the
+six that are assertable.
+
+
+## BROWSER PASS — 11 Aug (all fixed)
+
+- [x] **A stale second tab was told "This action is unauthorized."**
+  `app/Http/Requests/Documents/TransitionDocumentRequest.php:20` · correctness
+  Two tabs on one document: the second posts against a leg that has closed,
+  the policy refuses because the action is no longer legal from the new
+  state, and Laravel renders a bare 403. It is a conflict, not a
+  permissions failure, and the Common Errors article promised different
+  wording entirely. _Fixed:_ staleness is checked before the policy, so the
+  request raises StaleWorkflowStateException and the user gets the sentence
+  the knowledge base documents. A test now asserts the article and the
+  exception cannot drift apart.
+
+- [x] **Completed and rejected documents lost their Department**
+  `app/Support/Presenters/DocumentPresenter.php:24` · correctness
+  Every Department column read through the open leg, which is correctly
+  null once a document is finished — so a document whose own timeline named
+  three offices showed an em dash, and the tracking tile said "Not routed
+  yet". _Fixed:_ added `Document::lastMovement` and a `resting_office`
+  field that falls back to the last leg, then the originating office. The
+  tile now reads "Last Stage" and the summary uses the past tense.
+
+- [x] **Dark mode painted navy headings onto a near-black background**
+  `resources/views/app.blade.php:7` · design
+  The ~180 brand colours across the pages are fixed hex values chosen
+  against a white card. With `.dark` on the root, "Admin Panel" rendered in
+  rgb(21,27,84) on near-black — unreadable, and not mobile-specific.
+  _Fixed:_ the whole app is light-only. Every screen the client designed is
+  light and there is no dark artwork to fall back to, so the theme switcher
+  is retired rather than left offering a broken option.
+
+- [x] **Upload File carried a required asterisk that nothing enforced**
+  `resources/js/pages/documents/create.tsx:322` · correctness
+  Submitting with no file at all succeeded. _Fixed:_ the label, not the
+  rule — a registry for tracking paper folders between offices has to be
+  able to register a document that has not been scanned yet, which is the
+  common case at a receiving counter. Flagged to the client as a question,
+  since their mockup shows the asterisk.
+
+- [x] **403 and 404 were unstyled pages with no way back into the app**
+  `bootstrap/app.php:63` · design
+  Office scoping makes 403 an ordinary outcome — a clerk opening another
+  department's document gets one — and it dead-ended on Laravel's stock
+  page. _Fixed:_ a branded error page for 403/404/419/429, and for 500/503
+  once debug is off. A `Route::fallback` puts unmatched URLs back inside the
+  web group, because a route that matches nothing never starts a session and
+  the page could not otherwise tell whether the visitor was signed in.
+
+- [x] **The stage stepper collided with itself below `sm`**
+  `resources/js/components/documents/document-tracking.tsx:70` · design
+  All the horizontal spacing came from the connector's `mx-2`, and the
+  connector is hidden on phones — so the active chevron's arrow tip, which
+  overflows its own box by 16px, printed over the previous label. _Fixed:_
+  a gap-x below `sm` only, plus margin for the tip.
+
+- [x] **The CSV export button was invisible**
+  `resources/js/pages/reports/index.tsx:165` · design
+  A ghost variant beside two solid pills put its white label directly on
+  the decorative watermark — while staying perfectly clickable. _Fixed:_
+  same variant as its neighbours.
+
+- [x] **Every toast was the same dark pill**
+  `resources/js/components/ui/sonner.tsx` · design
+  "Registered" and "not delivered" differed only by a small icon, on a
+  message that disappears after four seconds. _Fixed:_ `richColors`.
+
+- [x] **Demo accounts were named for an office they were not in**
+  `database/seeders/DatabaseSeeder.php:40` · data
+  "MPDO Admin" and "MPDO Clerk" sat in the Mayor's Office, so every screen
+  showed one department's name beside another's documents — which reads as
+  a bug in the office scoping. _Fixed:_ renamed to MO Admin / MO Clerk.
+
 
 ## CRITICAL
 

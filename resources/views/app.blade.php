@@ -1,10 +1,18 @@
 <!DOCTYPE html>
 @php
-    // The landing page and the six Fortify auth screens carry the client's own
-    // artwork, which has no dark variant: a light-blue gradient behind white
-    // text is unreadable inverted. They opt out of the theme entirely.
     $component = $page['component'] ?? '';
-    $lightOnly = $component === 'welcome' || str_starts_with($component, 'auth/');
+    /*
+     * The whole application renders light, not just the public pages.
+     *
+     * Every screen the client designed is navy and blue on white, and the 180-odd
+     * brand colours across the pages are fixed hex values chosen against a white
+     * card -- so switching <html> to .dark left headings in rgb(21,27,84) sitting
+     * on a near-black background, which is unreadable. There is no dark artwork
+     * to fall back to, and inventing one would be off-brand. Dark mode was a
+     * starter-kit default nobody asked for; it is off until there is a dark
+     * design to implement, at which point this becomes a condition again.
+     */
+    $lightOnly = true;
 @endphp
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}"
     @class([

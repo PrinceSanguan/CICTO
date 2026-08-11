@@ -85,7 +85,18 @@ class InertiaLayoutContractTest extends TestCase
         }
     }
 
-    public function test_the_signed_in_app_still_honours_the_theme(): void
+    /**
+     * The signed-in app is light too, and a stale `appearance=dark` cookie must
+     * not resurrect the theme.
+     *
+     * This used to assert the opposite -- that the dark opt-out was scoped to
+     * the public pages. It was changed deliberately: the ~180 brand colours
+     * across the app are fixed hex values picked against a white card, so the
+     * dark class left navy headings on a near-black background. The cookie
+     * survives on machines that once had it set, which is exactly why this is
+     * asserted with the cookie present rather than absent.
+     */
+    public function test_the_signed_in_app_renders_light_whatever_the_cookie_says(): void
     {
         $user = User::factory()->create();
 
@@ -94,10 +105,9 @@ class InertiaLayoutContractTest extends TestCase
             ->get('/dashboard')
             ->getContent();
 
-        // The opt-out is scoped to the light-only pages; removing it everywhere
-        // would silently delete the appearance setting.
-        $this->assertStringNotContainsString('data-force-light', $html);
-        $this->assertStringContainsString('color-scheme: normal', $html);
+        $this->assertStringContainsString('data-force-light', $html);
+        $this->assertStringContainsString('color-scheme: light', $html);
+        $this->assertStringNotContainsString('class="dark"', $html);
     }
 
     /** @return list<string> */

@@ -34,6 +34,7 @@ class ArchiveController extends Controller
                 'documentType:id,name',
                 'archivedBy:id,name',
                 'openMovement.toOffice:id,name',
+                'lastMovement.toOffice:id,name',
             ])
             ->when($search !== '', fn ($query) => $query->search($search))
             ->orderByDesc('documents.archived_at')

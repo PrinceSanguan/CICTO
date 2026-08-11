@@ -105,9 +105,11 @@ export default function ShowDocument({
 
     // One plain sentence for the Processing Summary panel, derived from the
     // ledger rather than stored, so it can never contradict the timeline.
-    const processingSummary = document.tracking.current_office
-        ? `The document is currently ${document.status_label.toLowerCase()} by ${document.tracking.current_office}.`
-        : `The document is ${document.status_label.toLowerCase()}.`;
+    const processingSummary = !document.tracking.resting_office
+        ? `The document is ${document.status_label.toLowerCase()}.`
+        : document.tracking.is_open
+          ? `The document is currently ${document.status_label.toLowerCase()} by ${document.tracking.resting_office}.`
+          : `The document was ${document.status_label.toLowerCase()} at ${document.tracking.resting_office}.`;
 
     return (
         <>

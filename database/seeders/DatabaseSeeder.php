@@ -39,14 +39,19 @@ class DatabaseSeeder extends Seeder
      */
     private function seedDemoAccounts(): void
     {
-        $mpdo = Office::query()->where('code', 'MPDO')->first();
+        // Named after the office they are actually in. These two used to read
+        // "MPDO Admin" and "MPDO Clerk" while sitting in the Mayor's Office, so
+        // every screen showed a name from one department beside documents from
+        // another -- which reads as a bug in the office scoping when it is only
+        // a label.
+        $mo = Office::query()->where('code', 'MO')->first();
         $mto = Office::query()->where('code', 'MTO')->first();
 
         $accounts = [
             ['Super Admin', 'super@cicto.test', Role::SuperAdmin, null, 'System Administrator'],
-            ['MPDO Admin', 'admin@cicto.test', Role::Admin, $mpdo, 'Department Head'],
+            ['MO Admin', 'admin@cicto.test', Role::Admin, $mo, 'Department Head'],
             ['MTO Admin', 'mto@cicto.test', Role::Admin, $mto, 'Treasurer'],
-            ['MPDO Clerk', 'clerk@cicto.test', Role::User, $mpdo, 'Administrative Aide'],
+            ['MO Clerk', 'clerk@cicto.test', Role::User, $mo, 'Administrative Aide'],
         ];
 
         foreach ($accounts as [$name, $email, $role, $office, $position]) {

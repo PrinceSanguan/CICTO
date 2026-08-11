@@ -209,7 +209,7 @@ export default function DocumentsIndex({
                                         {document.title}
                                     </td>
                                     <td className="px-5 py-4 text-center text-[15px] font-bold text-navy">
-                                        {document.current_office ?? '—'}
+                                        {document.resting_office ?? '—'}
                                     </td>
                                     <td className="px-5 py-4 text-center">
                                         <StatusPill

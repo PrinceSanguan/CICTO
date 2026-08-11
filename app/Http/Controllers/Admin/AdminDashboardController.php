@@ -67,6 +67,7 @@ class AdminDashboardController extends Controller
                 'documentType:id,name',
                 'creator:id,name',
                 'openMovement.toOffice:id,name',
+                'lastMovement.toOffice:id,name',
                 // No column list: currentFile is a latestOfMany relation, so
                 // it joins a subquery and an unqualified select is ambiguous.
                 'currentFile',

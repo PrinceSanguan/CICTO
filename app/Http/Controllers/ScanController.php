@@ -48,7 +48,11 @@ class ScanController extends Controller
 
         $document = Document::query()
             ->where('qr_token', $token)
-            ->with(['openMovement.toOffice:id,name', 'documentType:id,name'])
+            ->with([
+                'openMovement.toOffice:id,name',
+                'lastMovement.toOffice:id,name',
+                'documentType:id,name',
+            ])
             ->first();
 
         if ($document === null) {

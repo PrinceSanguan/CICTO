@@ -41,7 +41,7 @@ export function DocumentCards({ items }: { items: DocumentListItem[] }) {
 
                     <dl className="mt-3 space-y-1.5 text-sm">
                         <Row label="Department">
-                            {document.current_office ?? '—'}
+                            {document.resting_office ?? '—'}
                         </Row>
                         <Row label="Date">
                             {document.created_at

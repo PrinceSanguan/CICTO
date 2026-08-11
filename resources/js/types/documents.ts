@@ -12,6 +12,7 @@ export type DocumentListItem = {
     priority_tone: Tone;
     document_type: string | null;
     current_office: string | null;
+    resting_office: string;
     due_at: string | null;
     due_state: string;
     due_state_label: string;
@@ -23,6 +24,10 @@ export type DocumentListItem = {
 /** Spec §10: current stage, holding office, time there, expected completion. */
 export type DocumentTracking = {
     current_office: string | null;
+    /** Where it is, or -- once finished -- where it finished. Never null. */
+    resting_office: string;
+    /** False once the document is completed, rejected or archived. */
+    is_open: boolean;
     current_office_id: number | null;
     arrived_at: string | null;
     minutes_at_current_office: number | null;

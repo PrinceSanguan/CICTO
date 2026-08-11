@@ -1,5 +1,4 @@
 import { Head } from '@inertiajs/react';
-import AppearanceTabs from '@/components/appearance-tabs';
 import Heading from '@/components/heading';
 import { edit as editAppearance } from '@/routes/appearance';
 
@@ -14,9 +13,20 @@ export default function Appearance() {
                 <Heading
                     variant="small"
                     title="Appearance settings"
-                    description="Update the appearance settings for your account"
+                    description="How CICTO renders on your screen"
                 />
-                <AppearanceTabs />
+
+                {/*
+                 * The theme switcher is gone rather than hidden. It used to
+                 * offer a dark mode that painted the client's navy headings
+                 * onto a black background; a setting that makes the app
+                 * unreadable is worse than no setting.
+                 */}
+                <p className="max-w-prose text-sm text-muted-foreground">
+                    CICTO uses a single light theme, matching the City
+                    Government's document forms and printed materials. There is
+                    nothing to configure here yet.
+                </p>
             </div>
         </>
     );

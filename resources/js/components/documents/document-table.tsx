@@ -59,7 +59,7 @@ export function DocumentTable({
                                 <p className="mt-2 text-xs text-muted-foreground">
                                     Currently at{' '}
                                     <span className="font-medium text-foreground">
-                                        {item.current_office ?? '—'}
+                                        {item.resting_office ?? '—'}
                                     </span>
                                 </p>
                             </li>
@@ -110,7 +110,7 @@ export function DocumentTable({
                                     </ToneBadge>
                                 </TableCell>
                                 <TableCell>
-                                    {item.current_office ?? '—'}
+                                    {item.resting_office ?? '—'}
                                 </TableCell>
                                 <TableCell>
                                     {item.due_state === 'none' ? (
