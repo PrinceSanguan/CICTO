@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="fil">
+<head>
+<meta charset="utf-8">
+<title>CICTO — Gabay sa Pagsubok ng Sistema</title>
+<style>
+    @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+
+    :root {
+        --navy: #151B54;
+        --blue: #3B72C4;
+        --link: #2F6BC4;
+        --copy: #4A5568;
+        --rule: #D8E3F2;
+        --tint: #EEF4FC;
+        --amber-bg: #FDF3DC;
+        --amber-ink: #7A5B12;
+        --green-bg: #E9F6EE;
+        --green-ink: #1F5136;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+        margin: 0;
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        font-size: 10.5pt;
+        line-height: 1.55;
+        color: var(--copy);
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    h1, h2, h3, h4 { color: var(--navy); margin: 0; }
+
+    /* ---------- pabalat ---------- */
+
+    .cover {
+        height: 245mm;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        text-align: center;
+        page-break-after: always;
+    }
+    .cover .mark {
+        width: 78px; height: 78px;
+        margin: 0 auto 26px;
+        border-radius: 50%;
+        border: 6px solid var(--navy);
+        border-bottom-color: #5A9E3C;
+        border-right-color: #5A9E3C;
+    }
+    .cover .brand { font-size: 26pt; font-weight: 800; letter-spacing: -.5px; }
+    .cover .sub { font-size: 11pt; font-weight: 700; color: var(--navy); margin-top: 2px; }
+    .cover h1 { font-size: 21pt; font-weight: 800; margin-top: 34px; line-height: 1.25; }
+    .cover .lede { font-size: 11pt; max-width: 118mm; margin: 14px auto 0; }
+    .cover .meta {
+        margin-top: 40px; padding-top: 16px;
+        border-top: 1px solid var(--rule);
+        font-size: 9.5pt;
+    }
+    .cover .meta strong { color: var(--navy); }
+
+    /* ---------- balangkas ---------- */
+
+    h2 {
+        font-size: 14pt; font-weight: 800;
+        margin: 26px 0 4px;
+        padding-bottom: 6px;
+        border-bottom: 2px solid var(--rule);
+        page-break-after: avoid;
+    }
+    h2 .num {
+        display: inline-block;
+        min-width: 26px; height: 26px; line-height: 26px;
+        margin-right: 9px;
+        border-radius: 6px;
+        background: var(--blue); color: #fff;
+        font-size: 11pt; text-align: center;
+    }
+    h3 {
+        font-size: 11.5pt; font-weight: 800;
+        margin: 18px 0 5px;
+        page-break-after: avoid;
+    }
+    h4 { font-size: 10.5pt; font-weight: 800; margin: 13px 0 3px; }
+
+    p { margin: 0 0 9px; }
+    ul, ol { margin: 0 0 10px; padding-left: 20px; }
+    li { margin-bottom: 4px; }
+    strong { color: var(--navy); }
+    code {
+        font-family: "SF Mono", Menlo, Consolas, monospace;
+        font-size: 9pt;
+        background: #F1F5FA;
+        padding: 1px 4px;
+        border-radius: 3px;
+        color: var(--navy);
+    }
+
+    /* ---------- talahanayan ---------- */
+
+    table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9.5pt; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+    th { background: var(--tint); color: var(--navy); font-weight: 800; }
+    td.role { white-space: nowrap; }
+
+    /* ---------- kahon ---------- */
+
+    .note, .warn, .ok {
+        padding: 10px 13px;
+        border-radius: 7px;
+        margin: 10px 0 13px;
+        font-size: 9.8pt;
+        page-break-inside: avoid;
+    }
+    .note { background: var(--tint); border-left: 4px solid var(--blue); }
+    .warn { background: var(--amber-bg); border-left: 4px solid #D9A520; color: var(--amber-ink); }
+    .warn strong { color: var(--amber-ink); }
+    .ok   { background: var(--green-bg); border-left: 4px solid #2FA36B; color: var(--green-ink); }
+    .ok strong { color: var(--green-ink); }
+
+    .steps { counter-reset: hakbang; padding-left: 0; list-style: none; }
+    .steps > li {
+        counter-increment: hakbang;
+        position: relative;
+        padding-left: 26px;
+        margin-bottom: 7px;
+    }
+    .steps > li::before {
+        content: counter(hakbang);
+        position: absolute; left: 0; top: 1px;
+        width: 18px; height: 18px; line-height: 18px;
+        border-radius: 50%;
+        background: var(--blue); color: #fff;
+        font-size: 8.5pt; font-weight: 700; text-align: center;
+    }
+
+    .expect {
+        margin: 6px 0 0 26px;
+        padding: 7px 11px;
+        background: var(--green-bg);
+        border-radius: 6px;
+        font-size: 9.5pt;
+        color: var(--green-ink);
+    }
+    .expect strong { color: var(--green-ink); }
+
+    .test { page-break-inside: avoid; margin-bottom: 16px; }
+
+    .pagebreak { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<!-- =============== PABALAT =============== -->
+<div class="cover">
+    <div class="mark"></div>
+    <div class="brand">CICTO</div>
+    <div class="sub">Baliwag City</div>
+
+    <h1>Gabay sa Pagsubok ng<br>Document Tracking System</h1>
+
+    <p class="lede">
+        Gabay po ito kung paano ninyo masusubukan ang sistema bago ito
+        tuluyang gamitin sa opisina. Hindi po kailangan ng kaalaman sa
+        computer programming — sundin lamang po ang mga hakbang.
+    </p>
+
+    <div class="meta">
+        <strong>Para sa:</strong> City Government of Baliwag<br>
+        <strong>Sistema:</strong> CICTO Document Tracking System<br>
+        <strong>Yugto:</strong> User Acceptance Testing (UAT)
+    </div>
+</div>
+
+<!-- =============== 1 =============== -->
+<h2><span class="num">1</span>Ano po ang gagawin natin dito</h2>
+
+<p>
+    Tapos na po ang pagbuo ng sistema at nasubukan na namin ito nang paulit-ulit.
+    Ngunit ang pinakamahalagang pagsubok po ay ang <strong>inyong pagsubok</strong> —
+    kayo po ang nakakaalam kung paano talaga umaandar ang papeles sa Baliwag.
+</p>
+
+<p>
+    Ang layunin po ng gabay na ito ay tulungan kayong subukan ang bawat mahalagang
+    bahagi ng sistema. Kapag may nakita kayong mali, kakaiba, o hindi malinaw,
+    <strong>pakisulat po ito</strong> — makikita ninyo sa dulo kung paano ito i-report.
+</p>
+
+<div class="note">
+    <strong>Mahalaga:</strong> Hindi po kayo makakasira ng kahit ano.
+    Ito po ay test system na may pekeng datos, hindi tunay na papeles ng
+    lungsod. Malaya po kayong mag-click, mag-submit, at magkamali.
+</div>
+
+<h3>Gaano po katagal?</h3>
+<p>
+    Humigit-kumulang <strong>60 hanggang 90 minuto</strong> kung susubukan ninyo
+    ang lahat. Maaari po ninyong hatiin sa ilang araw. Mas mabuti po kung
+    <strong>dalawa hanggang tatlong tao</strong> ang sumubok — iba-iba po ang
+    napapansin ng bawat isa.
+</p>
+
+<!-- =============== 2 =============== -->
+<h2><span class="num">2</span>Paano po mag-simula</h2>
+
+<h3>Address ng sistema</h3>
+<p>
+    Buksan po ang <strong>Google Chrome</strong> o <strong>Microsoft Edge</strong>,
+    tapos pumunta sa address na ibinigay namin sa inyo kasabay ng gabay na ito.
+</p>
+
+<div class="note">
+    <strong>Address:</strong> ______________________________________________<br>
+    <span style="font-size:9pt">
+        (Ipapadala po namin ito nang hiwalay. Kung wala pa po kayong natatanggap,
+        pakisabi lang po sa amin.)
+    </span>
+</div>
+
+<h3>Mga pansubok na account</h3>
+<p>
+    Limang account po ang inihanda namin — isa para sa bawat uri ng gumagamit.
+    <strong>Pare-pareho po ang password: <code>password</code></strong>
+</p>
+
+<table>
+    <thead>
+        <tr>
+            <th style="width:38%">Email (pang-log in)</th>
+            <th style="width:26%">Uri ng gumagamit</th>
+            <th>Opisina</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr><td><code>clerk@cicto.test</code></td><td class="role">User (Kawani)</td><td>Mayor's Office</td></tr>
+        <tr><td><code>admin@cicto.test</code></td><td class="role">Admin</td><td>Mayor's Office</td></tr>
+        <tr><td><code>mto@cicto.test</code></td><td class="role">Admin</td><td>Treasurer's Office</td></tr>
+        <tr><td><code>sb@cicto.test</code></td><td class="role">Admin</td><td>Sangguniang Bayan</td></tr>
+        <tr><td><code>super@cicto.test</code></td><td class="role">Super Admin</td><td>Lahat ng opisina</td></tr>
+    </tbody>
+</table>
+
+<div class="warn">
+    <strong>Babala tungkol sa seguridad.</strong>
+    Ang mga account po sa itaas ay <strong>pantest lamang</strong> at napakahina
+    ng password. Bago po tuluyang gamitin ang sistema sa opisina, buburahin po
+    namin ang lahat ng ito at gagawa ng tunay na account para sa bawat kawani,
+    na may sarili nilang malakas na password. Huwag po ninyong gamitin ang mga
+    ito sa tunay na papeles.
+</div>
+
+<h3>Ano ang pinagkaiba ng tatlong uri ng gumagamit</h3>
+<table>
+    <thead>
+        <tr><th style="width:24%">Uri</th><th>Ano ang kaya nilang gawin</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="role"><strong>User</strong><br>(Kawani)</td>
+            <td>Magpasok ng bagong dokumento, hanapin ang dokumento, tingnan kung saan na ito nakarating.</td>
+        </tr>
+        <tr>
+            <td class="role"><strong>Admin</strong><br>(Namumuno sa opisina)</td>
+            <td>Lahat ng kaya ng User, dagdag pa ang pagtanggap, pag-apruba, pag-reject at pagpapasa ng dokumento sa ibang opisina. May sariling panel na may listahan at ulat — <strong>ngunit sa sariling opisina lamang.</strong></td>
+        </tr>
+        <tr>
+            <td class="role"><strong>Super Admin</strong><br>(Namamahala ng sistema)</td>
+            <td>Nakikita ang <strong>lahat</strong> ng opisina. Siya lamang ang makakagawa ng bagong account, makakakita ng buong security log, at makakapag-backup.</td>
+        </tr>
+    </tbody>
+</table>
+
+<!-- =============== 3 =============== -->
+<h2 class="pagebreak"><span class="num">3</span>Pagsubok bilang Kawani (User)</h2>
+
+<p>Mag-log in po muna gamit ang <code>clerk@cicto.test</code>.</p>
+
+<div class="test">
+    <h3>3.1 — Pag-log in</h3>
+    <ol class="steps">
+        <li>Ilagay ang email at password, pindutin ang <strong>Login</strong>.</li>
+        <li>Subukan din pong maling password muna, para makita ang mensahe.</li>
+    </ol>
+    <div class="expect">
+        <strong>Dapat mangyari:</strong> Kapag tama, dadalhin kayo sa Home.
+        Kapag mali, may lalabas na pulang mensahe sa ilalim ng email —
+        hindi po dapat mag-error o mag-blangko ang screen.
+    </div>
+</div>
+
+<div class="test">
+    <h3>3.2 — Pagpasok ng bagong dokumento</h3>
+    <ol class="steps">
+        <li>Pindutin ang <strong>Track Documents</strong>, tapos <strong>Submit Document</strong>.</li>
+        <li>Punan ang Title, Document Type, Department at Priority.</li>
+        <li><strong>Huwag muna pong maglagay ng file</strong>, tapos pindutin ang Submit.</li>
+        <li>Ngayon po, maglagay ng kahit anong PDF o larawan, tapos Submit ulit.</li>
+    </ol>
+    <div class="expect">
+        <strong>Dapat mangyari:</strong> Sa hakbang 3, tatanggihan po ito —
+        kailangan talaga ng file. Sa hakbang 4, may lalabas na
+        <strong>berdeng mensahe</strong> na may bagong control number
+        (halimbawa <code>MO-2026-00019</code>). Isulat po ninyo ang numerong iyon.
+    </div>
+</div>
+
+<div class="note">
+    <strong>Tanong po sa inyo:</strong> Tama po ba na <em>laging kailangan</em>
+    ng nakalakip na file? Kung minsan po kasi ay papel lang ang dumarating sa
+    counter at wala pang scan. Kung gusto ninyong pwedeng walang file,
+    sabihin lang po ninyo at mabilis naming baguhin.
+</div>
+
+<div class="test">
+    <h3>3.3 — Paghahanap ng dokumento</h3>
+    <ol class="steps">
+        <li>Pumunta sa <strong>Track Documents</strong>.</li>
+        <li>I-type ang control number sa search box, pindutin ang <strong>Search</strong>.</li>
+        <li>Subukan din pong maliit na letra — halimbawa <code>mo-2026-00001</code>.</li>
+        <li>Subukan ang <strong>Status</strong> na dropdown para salain ang listahan.</li>
+        <li>Pindutin ang <strong>View</strong> sa isang dokumento.</li>
+    </ol>
+    <div class="expect">
+        <strong>Dapat mangyari:</strong> Mahahanap ang dokumento kahit maliit
+        na letra. Sa View, makikita ninyo kung saang opisina ito naroon,
+        gaano na katagal, at lahat ng opisinang dinaanan nito.
+    </div>
+</div>
+
+<div class="test">
+    <h3>3.4 — QR Code</h3>
+    <ol class="steps">
+        <li>Sa loob ng dokumento, pindutin ang <strong>Show QR</strong> o <strong>Print label</strong>.</li>
+        <li>Tingnan po kung malinaw at kasya sa sticker na balak ninyong gamitin.</li>
+    </ol>
+    <div class="expect">
+        <strong>Dapat mangyari:</strong> May lalabas na QR code na may control
+        number sa ilalim nito, handa nang i-print.
+    </div>
+</div>
+
+<!-- =============== 4 =============== -->
+<h2><span class="num">4</span>Pagsubok bilang Admin</h2>
+
+<p>
+    Mag-log out po, tapos mag-log in gamit ang <code>admin@cicto.test</code>.
+</p>
+
+<div class="test">
+    <h3>4.1 — Daloy ng dokumento (pinakamahalaga pong subukan)</h3>
+    <ol class="steps">
+        <li>Buksan ang dokumentong ginawa ninyo kanina.</li>
+        <li>Pindutin ang <strong>Received</strong>, tapos <strong>Confirm</strong>.</li>
+        <li>Pindutin ang <strong>Approved</strong>, tapos <strong>Confirm</strong>.</li>
+        <li>Pindutin ang <strong>Completed</strong>, tapos <strong>Confirm</strong>.</li>
+    </ol>
+    <div class="expect">
+        <strong>Dapat mangyari:</strong> Sa bawat hakbang, may berdeng mensahe
+        at umuusad ang linya sa itaas: Initiated → Under Review → Approved →
+        Completed. Nakatala rin po sa ibaba kung sino ang gumawa at kung kailan.
+    </div>
+</div>
+
+<div class="test">
+    <h3>4.2 — Pagpapasa sa ibang opisina</h3>
+    <ol class="steps">
+        <li>Sa ibang dokumento, pindutin ang <strong>Send to Another Office</strong>.</li>
+        <li>Pumili ng ibang opisina, maglagay ng remarks, tapos Confirm.</li>
+        <li>Mag-log out at mag-log in gamit ang account ng opisinang pinadalhan
+            (halimbawa <code>mto@cicto.test</code>).</li>
+    </ol>
+    <div class="expect">
+        <strong>Dapat mangyari:</strong> Makikita na ng bagong opisina ang
+        dokumento sa kanilang listahan.
+    </div>
+</div>
+
+<div class="test">
+    <h3>4.3 — Hindi dapat magkita ang magkaibang opisina</h3>
+    <p style="font-size:9.8pt">
+        Ito po ang pinakamahalagang panuntunan sa seguridad ng sistema:
+        <strong>ang isang opisina ay hindi dapat makakita ng papeles ng ibang
+        opisina.</strong>
+    </p>
+    <ol class="steps">
+        <li>Bilang <code>admin@cicto.test</code>, hanapin ang <code>SB-2026-00001</code>.</li>
+        <li>Mag-log out, tapos mag-log in bilang <code>sb@cicto.test</code>.</li>
+        <li>Tingnan kung ano ang nakikita nila sa Track Documents.</li>
+    </ol>
+    <div class="expect">
+        <strong>Dapat mangyari:</strong> Sa hakbang 1, <strong>wala pong dapat
+        lumabas</strong>. Sa hakbang 3, isang dokumento lamang ang makikita ng
+        Sangguniang Bayan — ang sa kanila — at wala ni isa sa Mayor's Office.
+    </div>
+    <div class="warn">
+        <strong>Kung may nakita kayong papeles ng ibang opisina, ito po ay
+        seryosong depekto.</strong> Pakisabi po agad sa amin.
+    </div>
+</div>
+
+<div class="test">
+    <h3>4.4 — Admin Panel</h3>
+    <ol class="steps">
+        <li>Sa gilid, pindutin ang <strong>Document Management</strong>.</li>
+        <li>Tingnan ang apat na kahon sa itaas — <strong>tama po ba ang bilang?</strong></li>
+        <li>Pindutin ang <strong>Users</strong> — makikita ang mga kawani ng inyong opisina.</li>
+        <li>Pindutin ang <strong>Reports</strong> — may grap at listahan ng nakabinbin.</li>
+        <li>Pindutin ang <strong>Settings</strong> — subukang palitan ang Date Format,
+            tapos <strong>Save Changes</strong>. I-refresh ang page.</li>
+    </ol>
+    <div class="expect">
+        <strong>Dapat mangyari:</strong> Nananatili ang setting kahit na-refresh.
+        Sa Users, ang inyong opisina lamang ang makikita.
+    </div>
+</div>
+
+<div class="test">
+    <h3>4.5 — Reports at pag-export</h3>
+    <ol class="steps">
+        <li>Sa itaas na menu, pindutin ang <strong>Reports</strong>.</li>
+        <li>Tingnan ang apat na kahon at ang mga grap.</li>
+        <li>Pindutin ang <strong>Download PDF</strong>, tapos <strong>Export Excel</strong>.</li>
+        <li>Buksan ang mga na-download na file.</li>
+    </ol>
+    <div class="expect">
+        <strong>Dapat mangyari:</strong> Bubukas nang maayos ang PDF at ang
+        Excel, at tama ang mga datos sa loob.
+    </div>
+    <div class="note">
+        <strong>Pakisuri po nang mabuti:</strong> Ito po ang mga ulat na
+        ipapasa ninyo sa taas. Kung may kulang na column o kailangan pang
+        ibang datos, ngayon po ang pinakamagandang panahon para sabihin.
+    </div>
+</div>
+
+<!-- =============== 5 =============== -->
+<h2 class="pagebreak"><span class="num">5</span>Pagsubok bilang Super Admin</h2>
+
+<p>Mag-log in po gamit ang <code>super@cicto.test</code>.</p>
+
+<div class="test">
+    <h3>5.1 — Paggawa ng bagong account</h3>
+    <ol class="steps">
+        <li>Sa gilid, pindutin ang <strong>Manage Users</strong>.</li>
+        <li>Pindutin ang <strong>Add New Admin</strong>.</li>
+        <li>Punan ang pangalan, bagong email, piliin ang Role at Office,
+            maglagay ng malakas na password.</li>
+        <li>Pindutin ang <strong>Create account</strong>.</li>
+        <li>Mag-log out, tapos subukang mag-log in gamit ang bagong account.</li>
+    </ol>
+    <div class="expect">
+        <strong>Dapat mangyari:</strong> Lalabas ang bagong account sa listahan
+        at agad na makakapag-log in.
+    </div>
+    <div class="warn">
+        <strong>Paalala:</strong> Dahil wala pa pong email na naka-setup
+        (tingnan ang Bahagi 7), <strong>walang ipapadalang email</strong> sa
+        bagong kawani. Kayo po mismo ang magbibigay ng password sa kanila.
+    </div>
+</div>
+
+<div class="test">
+    <h3>5.2 — All Documents</h3>
+    <ol class="steps">
+        <li>Pindutin ang <strong>All Documents</strong>.</li>
+        <li>Tingnan kung nakikita ninyo ang papeles ng <em>lahat</em> ng opisina.</li>
+        <li>Subukan ang search at ang status filter.</li>
+    </ol>
+    <div class="expect">
+        <strong>Dapat mangyari:</strong> Ang Super Admin lamang ang nakakakita
+        ng lahat. Ang bawat linya ay may <strong>View</strong> at
+        <strong>Archive</strong>.
+    </div>
+    <div class="note">
+        <strong>Bakit walang “Delete”?</strong> Sadya po ito. Ang isang
+        naitalang dokumento ay hindi dapat mabura — kasama po kasing mawawala
+        ang buong kasaysayan nito, at iyon mismo ang dahilan kung bakit may
+        ganitong sistema. Sa halip po ay <strong>Archive</strong>: naitatago
+        ito sa listahan pero nananatili ang record, at maibabalik anumang oras.
+    </div>
+</div>
+
+<div class="test">
+    <h3>5.3 — Reports &amp; Analytics at System Settings</h3>
+    <ol class="steps">
+        <li>Pindutin ang <strong>Reports &amp; Analytics</strong> — tatlong grap.</li>
+        <li>Pindutin ang <strong>System Settings</strong>.</li>
+        <li>Sa ibaba, tingnan ang <strong>Security log</strong> — nakatala rito
+            ang bawat pag-log in, pag-download at pagbabago ng account.</li>
+        <li>Subukan ang <strong>Backup</strong>.</li>
+    </ol>
+    <div class="expect">
+        <strong>Dapat mangyari:</strong> Makikita sa security log ang inyong
+        sariling pag-log in kanina, at ang account na ginawa ninyo sa 5.1.
+    </div>
+</div>
+
+<!-- =============== 6 =============== -->
+<h2><span class="num">6</span>Pagsubok sa cellphone</h2>
+
+<p>
+    Marami po sa inyong kawani ang gagamit nito sa cellphone, kaya mahalaga
+    pong subukan ito roon. Buksan lamang po ang parehong address sa browser
+    ng inyong telepono.
+</p>
+
+<ul>
+    <li>Track Documents — dapat pong nagiging <strong>card</strong> ang bawat
+        linya, hindi mahabang talahanayan.</li>
+    <li>Submit Document — dapat kasya ang lahat ng field.</li>
+    <li>Ang menu sa itaas ay dapat maging tatlong guhit (☰).</li>
+    <li><strong>Hindi po dapat kailangang mag-slide pakanan</strong> para
+        mabasa ang laman.</li>
+</ul>
+
+<div class="expect" style="margin-left:0">
+    <strong>Dapat mangyari:</strong> Nababasa ang lahat nang hindi kailangang
+    i-zoom o i-slide pakaliwa't pakanan.
+</div>
+
+<!-- =============== 7 =============== -->
+<h2><span class="num">7</span>Mga hindi pa gumagana — at bakit</h2>
+
+<p>
+    Para po maging patas at malinaw: may ilang bahagi na <strong>sadyang
+    hindi pa gumagana</strong> dahil may kailangan pa kaming impormasyon o
+    setup mula sa inyo. Hindi po ito mga depekto. Huwag na po ninyong
+    i-report ang mga ito.
+</p>
+
+<h3>7.1 — Walang email (pinakamahalaga)</h3>
+<p>
+    Wala pa pong naka-setup na email sa server, kaya:
+</p>
+<ul>
+    <li><strong>Ang “Forgot Password” ay hindi pa gumagana.</strong>
+        Walang darating na email. Sa ngayon po, ang Super Admin ang
+        magpapalit ng password ng nakalimot.</li>
+    <li><strong>Ang mga support ticket ay naitatala lamang</strong> sa loob ng
+        sistema, hindi naipapadala sa email. Sinasabi po ito nang malinaw ng
+        sistema mismo kapag nag-submit kayo.</li>
+    <li><strong>Walang email na abiso</strong> kapag may dumating na bagong
+        dokumento sa inyong opisina.</li>
+</ul>
+<div class="warn">
+    <strong>Kailangan namin mula sa inyo:</strong> ang SMTP details ng
+    email ng lungsod (server address, username, password, port). Kapag
+    naibigay na po ninyo ito, gagana na ang lahat ng nasa itaas nang hindi
+    na kailangang baguhin ang programa.
+</div>
+
+<h3>7.2 — Ang camera sa QR scanner</h3>
+<p>
+    Ang pag-scan gamit ang camera ay gumagana lamang kapag ang website ay
+    naka-<strong>HTTPS</strong> (ang secure na address na may padlock).
+    Panuntunan po ito ng mga browser, hindi namin mababago sa programa.
+    Kapag naka-install na po ang sistema sa tunay na server na may HTTPS,
+    gagana na ito.
+</p>
+<p>
+    Sa ngayon po, gumagana pa rin ang <strong>USB barcode scanner</strong> at
+    ang pag-type ng control number.
+</p>
+
+<h3>7.3 — Ang oras ng opisina sa Contact page</h3>
+<p>
+    Nakalagay po sa Contact Support page ang <strong>“Monday – Thursday,
+    8:00 AM – 5:00 PM”</strong>. Ito po ay kinopya namin nang eksakto mula sa
+    disenyong ibinigay ninyo. Sa tingin po namin ay <em>Monday – Friday</em>
+    ang dapat — pakikumpirma lang po at agad naming aayusin.
+</p>
+
+<!-- =============== 8 =============== -->
+<h2><span class="num">8</span>Mga kailangan naming sagot mula sa inyo</h2>
+
+<p>
+    Para matapos po nang tuluyan ang sistema, kailangan namin ang mga
+    sumusunod na impormasyon. Mas mabuti pong nakasulat (email o chat) para
+    may matukoy tayong sanggunian sa hinaharap.
+</p>
+
+<table>
+    <thead>
+        <tr><th style="width:32%">Kailangan</th><th>Bakit</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Tunay na listahan ng opisina at uri ng dokumento</strong></td>
+            <td>Pansamantala pa po ang nakalagay ngayon. Kailangan namin ang
+                aktwal na listahan, kasama ang code ng bawat opisina — ito po
+                ang gagamitin sa control number.</td>
+        </tr>
+        <tr>
+            <td><strong>Ilang araw ang inaasahang tapusin</strong> sa bawat uri ng dokumento</td>
+            <td>Dito po nakabatay ang “Due soon” at “Overdue” na babala.</td>
+        </tr>
+        <tr>
+            <td><strong>SMTP / email details</strong></td>
+            <td>Para gumana ang password reset, abiso at support ticket
+                (Bahagi 7.1).</td>
+        </tr>
+        <tr>
+            <td><strong>Gaano katagal itatago ang mga file</strong></td>
+            <td>Kailangan po ito ng patakaran sa retention. Halimbawa:
+                ilang taon bago maaaring burahin ang lumang bersyon ng file?</td>
+        </tr>
+        <tr>
+            <td><strong>Saan ilalagay ang sistema</strong> (hosting)</td>
+            <td>Para maihanda namin ang HTTPS, ang awtomatikong backup, at
+                kung saan itatago ang kopya ng backup.</td>
+        </tr>
+        <tr>
+            <td><strong>Sino ang mag-a-approve sa sariling naisumite</strong></td>
+            <td>Pwede po bang aprubahan ng Admin ang dokumentong siya mismo
+                ang nagsumite? May patakaran po kayo dito?</td>
+        </tr>
+    </tbody>
+</table>
+
+<!-- =============== 9 =============== -->
+<h2><span class="num">9</span>Paano po mag-report ng nakitang problema</h2>
+
+<p>
+    Kapag may nakita kayong mali, pakisulat po ang <strong>apat na bagay</strong>
+    na ito. Malaking tulong po ito para agad naming mahanap:
+</p>
+
+<ol class="steps">
+    <li><strong>Anong page?</strong> Halimbawa: “Sa Submit Document.”</li>
+    <li><strong>Anong account ang ginamit?</strong> Halimbawa: “admin@cicto.test.”</li>
+    <li><strong>Ano ang ginawa ninyo, hakbang-hakbang?</strong></li>
+    <li><strong>Ano ang inaasahan ninyo, at ano ang aktwal na nangyari?</strong></li>
+</ol>
+
+<div class="note">
+    <strong>Napakalaking tulong po ang screenshot.</strong> Sa Windows,
+    pindutin ang <code>Windows</code> + <code>Shift</code> + <code>S</code>.
+    Sa cellphone, ang karaniwang screenshot lamang po.
+</div>
+
+<h4>Halimbawa ng magandang report</h4>
+<div class="note" style="border-left-color:#2FA36B">
+    “Sa <strong>Submit Document</strong>, gamit ang <strong>clerk@cicto.test</strong>:
+    pinunan ko ang lahat at naglagay ng PDF, tapos pinindot ko ang Submit.
+    Inaasahan kong may lalabas na control number, pero puti lang ang screen
+    at walang nangyari. Eto po ang screenshot.”
+</div>
+
+<h3>Saan ipapadala</h3>
+<p>
+    Ipadala po ang inyong mga natuklasan sa amin sa pamamagitan ng napagkasunduan
+    nating paraan ng pakikipag-ugnayan. Kung marami po kayong nakita,
+    isang listahan na lang po — hindi na kailangang isa-isang mensahe.
+</p>
+
+<div class="ok">
+    <strong>Salamat po nang marami.</strong> Ang oras pong ginugugol ninyo sa
+    pagsubok na ito ang siyang magsisiguro na tama ang sistema bago pa ito
+    hawakan ng tunay na papeles ng lungsod. Bawat maliit na bagay na
+    mapapansin ninyo ngayon ay isang problemang hindi na mangyayari sa
+    inyong mga kawani sa araw-araw.
+</div>
+
+</body>
+</html>
