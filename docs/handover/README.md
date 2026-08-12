@@ -3,13 +3,17 @@
 | File | What it is |
 |---|---|
 | [`DEPLOYMENT.md`](DEPLOYMENT.md) | Install and operations runbook, for whoever hosts the system. |
-| `CICTO-Testing-Guide.pdf` | The client-facing UAT guide, **in English**. |
-| `CICTO-Gabay-sa-Pagsubok.pdf` | The same guide **in Filipino**, for staff who prefer it. |
+| `CICTO-Testing-Guide.pdf` | The client-facing testing checklist, **in English**. Plain, tick-box, written for someone with no technical background. This is the one to send. |
+| `CICTO-Gabay-sa-Pagsubok.pdf` | An earlier, longer **Filipino** version. Same subject, but written as prose rather than a checklist. |
 | `CICTO-Testing-Guide.html`<br>`CICTO-Gabay-sa-Pagsubok.html` | Sources for the two PDFs. Edit these, never the PDFs. |
 
-Both guides say the same things in the same order, section for section. Send
-whichever suits the audience — or both, since counter staff and department heads
-do not always want the same language.
+**The two are no longer the same document.** The English one was rewritten as a
+plain checklist with tick-boxes and space to write on: fewer words, no jargon,
+and a deliberately unstyled look so it reads as an office handout rather than
+something generated. The Filipino one is still the original prose version.
+
+If the Filipino audience matters, it should be rewritten to match the English
+checklist. Until then, do not describe them as translations of each other.
 
 ## Regenerating a PDF
 
@@ -31,9 +35,9 @@ node docs/qa/html-to-pdf.mjs \
     "CICTO — Gabay sa Pagsubok" "Pahina" "ng"
 ```
 
-**If you edit one, edit the other.** They are separate files by design — a
-translated document that has silently drifted from its original is worse than
-having only one.
+**If you edit one, edit the other** — once they have been brought back into
+line. A translated document that has silently drifted from its original is
+worse than having only one.
 
 ## Before sending either of them
 
@@ -45,6 +49,7 @@ Two things are deliberately blank or provisional:
   so plainly and warn the accounts are replaced before go-live — do not quietly
   delete that warning to make the document look tidier.
 
-§7 lists everything that does not work yet and why; §8 lists the answers still
-needed from the client. Both exist so the client does not spend their afternoon
-reporting known gaps as defects.
+Both documents carry a "Things that do not work yet" section and a "What we need
+from you" section. They exist so the client does not spend an afternoon
+reporting known gaps as defects, and so the outstanding questions are asked
+somewhere the client will actually read.

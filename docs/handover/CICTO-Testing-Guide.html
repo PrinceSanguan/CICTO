@@ -2,655 +2,622 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>CICTO — System Testing Guide</title>
+<title>CICTO Testing Checklist</title>
 <style>
-    @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
-
-    :root {
-        --navy: #151B54;
-        --blue: #3B72C4;
-        --copy: #4A5568;
-        --rule: #D8E3F2;
-        --tint: #EEF4FC;
-        --amber-bg: #FDF3DC;
-        --amber-ink: #7A5B12;
-        --green-bg: #E9F6EE;
-        --green-ink: #1F5136;
-    }
+    @page { size: A4; margin: 20mm 18mm 18mm 18mm; }
 
     * { box-sizing: border-box; }
 
     body {
         margin: 0;
-        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-        font-size: 10.5pt;
-        line-height: 1.55;
-        color: var(--copy);
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 11pt;
+        line-height: 1.5;
+        color: #000;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
 
-    h1, h2, h3, h4 { color: var(--navy); margin: 0; }
-
-    /* ---------- cover ---------- */
-
-    .cover {
-        height: 245mm;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        text-align: center;
-        page-break-after: always;
+    /* Title block. Deliberately plain: this is a work handout, not a brochure. */
+    .title {
+        border-bottom: 3px solid #000;
+        padding-bottom: 8px;
+        margin-bottom: 16px;
     }
-    .cover .mark {
-        width: 78px; height: 78px;
-        margin: 0 auto 26px;
-        border-radius: 50%;
-        border: 6px solid var(--navy);
-        border-bottom-color: #5A9E3C;
-        border-right-color: #5A9E3C;
-    }
-    .cover .brand { font-size: 26pt; font-weight: 800; letter-spacing: -.5px; }
-    .cover .sub { font-size: 11pt; font-weight: 700; color: var(--navy); margin-top: 2px; }
-    .cover h1 { font-size: 21pt; font-weight: 800; margin-top: 34px; line-height: 1.25; }
-    .cover .lede { font-size: 11pt; max-width: 118mm; margin: 14px auto 0; }
-    .cover .meta {
-        margin-top: 40px; padding-top: 16px;
-        border-top: 1px solid var(--rule);
-        font-size: 9.5pt;
-    }
-    .cover .meta strong { color: var(--navy); }
-
-    /* ---------- structure ---------- */
+    .title .org { font-size: 10pt; letter-spacing: 1px; }
+    .title h1 { font-size: 17pt; margin: 2px 0 0; }
+    .title .for { font-size: 10pt; margin-top: 5px; }
 
     h2 {
-        font-size: 14pt; font-weight: 800;
-        margin: 26px 0 4px;
-        padding-bottom: 6px;
-        border-bottom: 2px solid var(--rule);
+        font-size: 12.5pt;
+        margin: 20px 0 6px;
+        padding-bottom: 3px;
+        border-bottom: 1px solid #000;
         page-break-after: avoid;
-    }
-    h2 .num {
-        display: inline-block;
-        min-width: 26px; height: 26px; line-height: 26px;
-        margin-right: 9px;
-        border-radius: 6px;
-        background: var(--blue); color: #fff;
-        font-size: 11pt; text-align: center;
     }
     h3 {
-        font-size: 11.5pt; font-weight: 800;
-        margin: 18px 0 5px;
+        font-size: 11pt;
+        margin: 14px 0 4px;
         page-break-after: avoid;
     }
-    h4 { font-size: 10.5pt; font-weight: 800; margin: 13px 0 3px; }
 
-    p { margin: 0 0 9px; }
-    ul, ol { margin: 0 0 10px; padding-left: 20px; }
-    li { margin-bottom: 4px; }
-    strong { color: var(--navy); }
-    code {
-        font-family: "SF Mono", Menlo, Consolas, monospace;
-        font-size: 9pt;
-        background: #F1F5FA;
-        padding: 1px 4px;
-        border-radius: 3px;
-        color: var(--navy);
+    p { margin: 0 0 8px; }
+    ul { margin: 0 0 8px; padding-left: 18px; }
+    li { margin-bottom: 3px; }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 8px 0 12px;
+        font-size: 10.5pt;
+    }
+    th, td {
+        border: 1px solid #000;
+        padding: 5px 7px;
+        text-align: left;
+        vertical-align: top;
+    }
+    th { background: #E8E8E8; }
+
+    /* Tick-boxes, so the sheet can be worked through on paper. */
+    ol.check { list-style: none; margin: 0 0 8px; padding: 0; }
+    ol.check > li {
+        position: relative;
+        padding-left: 30px;
+        margin-bottom: 6px;
+    }
+    ol.check > li::before {
+        content: "";
+        position: absolute;
+        left: 0; top: 2px;
+        width: 13px; height: 13px;
+        border: 1.5px solid #000;
     }
 
-    /* ---------- tables ---------- */
+    .see {
+        margin: 4px 0 10px 30px;
+        padding-left: 9px;
+        border-left: 3px solid #999;
+        font-size: 10.5pt;
+    }
 
-    table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9.5pt; }
-    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
-    th { background: var(--tint); color: var(--navy); font-weight: 800; }
-    td.role { white-space: nowrap; }
+    .notes {
+        margin: 8px 0 14px;
+        font-size: 10pt;
+    }
+    .notes .line {
+        border-bottom: 1px solid #999;
+        height: 15px;
+        margin-top: 9px;
+    }
 
-    /* ---------- callouts ---------- */
+    .part { page-break-inside: avoid; }
 
-    .note, .warn, .ok {
-        padding: 10px 13px;
-        border-radius: 7px;
-        margin: 10px 0 13px;
-        font-size: 9.8pt;
+    .box {
+        border: 1.5px solid #000;
+        padding: 9px 11px;
+        margin: 10px 0 12px;
+        font-size: 10.5pt;
         page-break-inside: avoid;
     }
-    .note { background: var(--tint); border-left: 4px solid var(--blue); }
-    .warn { background: var(--amber-bg); border-left: 4px solid #D9A520; color: var(--amber-ink); }
-    .warn strong { color: var(--amber-ink); }
-    .ok   { background: var(--green-bg); border-left: 4px solid #2FA36B; color: var(--green-ink); }
-    .ok strong { color: var(--green-ink); }
-
-    .steps { counter-reset: step; padding-left: 0; list-style: none; }
-    .steps > li {
-        counter-increment: step;
-        position: relative;
-        padding-left: 26px;
-        margin-bottom: 7px;
-    }
-    .steps > li::before {
-        content: counter(step);
-        position: absolute; left: 0; top: 1px;
-        width: 18px; height: 18px; line-height: 18px;
-        border-radius: 50%;
-        background: var(--blue); color: #fff;
-        font-size: 8.5pt; font-weight: 700; text-align: center;
-    }
-
-    .expect {
-        margin: 6px 0 0 26px;
-        padding: 7px 11px;
-        background: var(--green-bg);
-        border-radius: 6px;
-        font-size: 9.5pt;
-        color: var(--green-ink);
-    }
-    .expect strong { color: var(--green-ink); }
-
-    .test { page-break-inside: avoid; margin-bottom: 16px; }
 
     .pagebreak { page-break-before: always; }
 </style>
 </head>
 <body>
 
-<!-- =============== COVER =============== -->
-<div class="cover">
-    <div class="mark"></div>
-    <div class="brand">CICTO</div>
-    <div class="sub">Baliwag City</div>
-
-    <h1>Testing Guide for the<br>Document Tracking System</h1>
-
-    <p class="lede">
-        This guide walks you through testing the system before it goes into
-        daily use in your offices. No technical knowledge is needed — just
-        follow the steps.
-    </p>
-
-    <div class="meta">
-        <strong>Prepared for:</strong> City Government of Baliwag<br>
-        <strong>System:</strong> CICTO Document Tracking System<br>
-        <strong>Stage:</strong> User Acceptance Testing (UAT)
+<div class="title">
+    <div class="org">CICTO &nbsp;|&nbsp; CITY GOVERNMENT OF BALIWAG</div>
+    <h1>Document Tracking System: Testing Checklist</h1>
+    <div class="for">
+        Please try each step below and tick the box when you are done.
     </div>
 </div>
 
-<!-- =============== 1 =============== -->
-<h2><span class="num">1</span>What we are doing here</h2>
+<h2>Before you start</h2>
 
-<p>
-    The system is built, and we have tested it thoroughly ourselves. But the
-    test that matters most is <strong>yours</strong> — you are the ones who know
-    how paperwork actually moves through Baliwag, and we do not.
-</p>
+<p>You will need:</p>
+<ul>
+    <li>A computer with Google Chrome or Microsoft Edge.</li>
+    <li>The web address of the system. We sent this to you separately.</li>
+    <li>About one hour. You can stop and continue another day.</li>
+    <li>This printout and a pen.</li>
+</ul>
 
-<p>
-    This guide takes you through every important part of the system. Whenever
-    something looks wrong, behaves oddly, or simply is not clear,
-    <strong>please write it down</strong>. Section 9 explains how to report it
-    so we can act on it quickly.
-</p>
-
-<div class="note">
-    <strong>Important:</strong> You cannot break anything. This is a test system
-    holding sample data, not real city records. Click freely, submit freely, and
-    make mistakes freely — that is what it is for.
+<div class="box">
+    <strong>You cannot break anything.</strong>
+    Everything in this system right now is made-up practice information.
+    It is not real city paperwork. Click anything you like.
 </div>
 
-<h3>How long will this take?</h3>
 <p>
-    Roughly <strong>60 to 90 minutes</strong> to cover everything. You are
-    welcome to split it across several days. It works better with
-    <strong>two or three people</strong> testing rather than one — different
-    people notice different things.
+    <strong>Web address:</strong>
+    _______________________________________________________
 </p>
 
-<!-- =============== 2 =============== -->
-<h2><span class="num">2</span>Getting started</h2>
+<h2>Your practice log-ins</h2>
 
-<h3>System address</h3>
 <p>
-    Open <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong> and go
-    to the address we sent you alongside this guide.
-</p>
-
-<div class="note">
-    <strong>Address:</strong> ______________________________________________<br>
-    <span style="font-size:9pt">
-        (We are sending this separately. If you have not received it, please let
-        us know.)
-    </span>
-</div>
-
-<h3>Test accounts</h3>
-<p>
-    We have prepared five accounts, one for each kind of user.
-    <strong>They all share the same password: <code>password</code></strong>
+    We made five practice accounts. Each one is a different kind of user.
+    <strong>The password for all five is the word: password</strong>
 </p>
 
 <table>
     <thead>
         <tr>
-            <th style="width:38%">Email (used to log in)</th>
-            <th style="width:26%">Type of user</th>
+            <th style="width:36%">Type this to log in</th>
+            <th style="width:28%">Who this pretends to be</th>
             <th>Office</th>
         </tr>
     </thead>
     <tbody>
-        <tr><td><code>clerk@cicto.test</code></td><td class="role">User (Staff)</td><td>Mayor's Office</td></tr>
-        <tr><td><code>admin@cicto.test</code></td><td class="role">Admin</td><td>Mayor's Office</td></tr>
-        <tr><td><code>mto@cicto.test</code></td><td class="role">Admin</td><td>Treasurer's Office</td></tr>
-        <tr><td><code>sb@cicto.test</code></td><td class="role">Admin</td><td>Sangguniang Bayan</td></tr>
-        <tr><td><code>super@cicto.test</code></td><td class="role">Super Admin</td><td>All offices</td></tr>
+        <tr><td>clerk@cicto.test</td><td>Staff member</td><td>Mayor's Office</td></tr>
+        <tr><td>admin@cicto.test</td><td>Office head</td><td>Mayor's Office</td></tr>
+        <tr><td>mto@cicto.test</td><td>Office head</td><td>Treasurer's Office</td></tr>
+        <tr><td>sb@cicto.test</td><td>Office head</td><td>Sangguniang Bayan</td></tr>
+        <tr><td>super@cicto.test</td><td>System manager</td><td>All offices</td></tr>
     </tbody>
 </table>
 
-<div class="warn">
-    <strong>A security note.</strong>
-    The accounts above are <strong>for testing only</strong> and their password
-    is deliberately weak. Before the system goes into real use we will delete
-    every one of them and create proper accounts for your staff, each with its
-    own strong password. Please do not use these accounts with real documents.
+<div class="box">
+    <strong>Please note.</strong>
+    These five log-ins are for practice only, and the password is very easy
+    to guess on purpose. Before the system is used for real, we will delete
+    all five and make a proper account for each of your staff, with their own
+    private password.
 </div>
 
-<h3>What the three kinds of user can do</h3>
+<p>
+    In the system, "Office head" is written as <strong>Admin</strong>, and
+    "System manager" is written as <strong>Super Admin</strong>.
+</p>
+
+<!-- ================= PART 1 ================= -->
+<h2 class="pagebreak">Part 1. Logging in</h2>
+
+<p>Start here. This should take about five minutes.</p>
+
+<ol class="check">
+    <li>Open Chrome and go to the web address at the top of this sheet.</li>
+    <li>Type <strong>clerk@cicto.test</strong> in the Email box.</li>
+    <li>Type <strong>password</strong> in the Password box. Click <strong>Login</strong>.</li>
+</ol>
+<p class="see">You should now be on the Home page.</p>
+
+<ol class="check">
+    <li>Click <strong>Logout</strong> at the top right.</li>
+    <li>Log in again, but this time type the password wrongly on purpose.</li>
+</ol>
+<p class="see">
+    You should see a red message telling you the details are wrong.
+    The screen should not go blank or show anything confusing.
+</p>
+
+<div class="notes">
+    <strong>Anything wrong? Write it here:</strong>
+    <div class="line"></div>
+    <div class="line"></div>
+</div>
+
+<!-- ================= PART 2 ================= -->
+<div class="part">
+<h2>Part 2. Adding a new document</h2>
+
+<p>Log in as <strong>clerk@cicto.test</strong>.</p>
+
+<ol class="check">
+    <li>Click <strong>Track Documents</strong> at the top.</li>
+    <li>Click the <strong>Submit Document</strong> button.</li>
+    <li>Fill in the Title, Document Type, Department and Priority.</li>
+    <li>Do <em>not</em> attach a file yet. Click <strong>Submit</strong>.</li>
+</ol>
+<p class="see">
+    It should refuse, and tell you a file is needed.
+</p>
+
+<ol class="check">
+    <li>Now attach any file from your computer. A PDF or a photo will do.</li>
+    <li>Click <strong>Submit</strong> again.</li>
+</ol>
+<p class="see">
+    You should see a green message with a new number, something like
+    MO-2026-00019. Write that number down, you will need it later.
+</p>
+
+<p><strong>The number you got:</strong> ____________________________</p>
+
+<div class="box">
+    <strong>A question for you.</strong>
+    Right now the system always asks for a file. Is that what you want?
+    Sometimes only paper arrives at the counter and nothing has been scanned
+    yet. If you want to allow that, tell us and we will change it.
+</div>
+
+<div class="notes">
+    <strong>Anything wrong? Write it here:</strong>
+    <div class="line"></div>
+    <div class="line"></div>
+</div>
+</div>
+
+<!-- ================= PART 3 ================= -->
+<div class="part">
+<h2>Part 3. Finding a document</h2>
+
+<ol class="check">
+    <li>Click <strong>Track Documents</strong>.</li>
+    <li>Type the number you wrote down into the search box. Click <strong>Search</strong>.</li>
+    <li>Try it again, but type it in small letters this time.</li>
+</ol>
+<p class="see">
+    It should find the document both times. Big or small letters should not
+    matter.
+</p>
+
+<ol class="check">
+    <li>Use the <strong>Status</strong> drop-down to show only some documents.</li>
+    <li>Click <strong>View</strong> on any document.</li>
+</ol>
+<p class="see">
+    You should see which office has the document now, how long it has been
+    there, and every office it has passed through.
+</p>
+
+<ol class="check">
+    <li>While looking at a document, click <strong>Show QR</strong>
+        or <strong>Print label</strong>.</li>
+</ol>
+<p class="see">
+    A QR square should appear with the document number printed under it.
+    Please check it looks clear enough to stick on a folder.
+</p>
+
+<div class="notes">
+    <strong>Anything wrong? Write it here:</strong>
+    <div class="line"></div>
+    <div class="line"></div>
+</div>
+</div>
+
+<!-- ================= PART 4 ================= -->
+<div class="part">
+<h2>Part 4. Moving a document along</h2>
+
+<p>
+    This is the most important part. Log out, then log in as
+    <strong>admin@cicto.test</strong>.
+</p>
+
+<ol class="check">
+    <li>Open the document you made in Part 2.</li>
+    <li>Click <strong>Received</strong>, then click <strong>Confirm</strong>.</li>
+    <li>Click <strong>Approved</strong>, then click <strong>Confirm</strong>.</li>
+    <li>Click <strong>Completed</strong>, then click <strong>Confirm</strong>.</li>
+</ol>
+<p class="see">
+    After each click you should see a green message, and the bar at the top
+    of the page should move forward one step. At the bottom you should see a
+    list of who did what, and when.
+</p>
+
+<h3>Sending it to another office</h3>
+
+<ol class="check">
+    <li>Open a different document.</li>
+    <li>Click <strong>Send to Another Office</strong>.</li>
+    <li>Choose an office, type a short remark, and confirm.</li>
+    <li>Log out. Log in as <strong>mto@cicto.test</strong>.</li>
+</ol>
+<p class="see">
+    The Treasurer's Office should now see that document in their list.
+</p>
+
+<div class="notes">
+    <strong>Anything wrong? Write it here:</strong>
+    <div class="line"></div>
+    <div class="line"></div>
+</div>
+</div>
+
+<!-- ================= PART 5 ================= -->
+<div class="part">
+<h2>Part 5. Offices should not see each other's papers</h2>
+
+<p>
+    This is the most important safety rule in the system. One office must
+    never see another office's documents.
+</p>
+
+<ol class="check">
+    <li>Log in as <strong>admin@cicto.test</strong> (Mayor's Office).</li>
+    <li>Search for <strong>SB-2026-00001</strong>.</li>
+</ol>
+<p class="see">
+    Nothing should come up. That document belongs to Sangguniang Bayan.
+</p>
+
+<ol class="check">
+    <li>Log out. Log in as <strong>sb@cicto.test</strong>.</li>
+    <li>Look at their Track Documents list.</li>
+</ol>
+<p class="see">
+    They should see only one document, their own. Nothing from the
+    Mayor's Office should appear.
+</p>
+
+<div class="box">
+    <strong>If you can see another office's documents, please tell us straight
+    away.</strong> That would be a serious problem and we would fix it first.
+</div>
+
+<div class="notes">
+    <strong>Anything wrong? Write it here:</strong>
+    <div class="line"></div>
+    <div class="line"></div>
+</div>
+</div>
+
+<!-- ================= PART 6 ================= -->
+<div class="part">
+<h2>Part 6. The office head's own page</h2>
+
+<p>Log in as <strong>admin@cicto.test</strong>.</p>
+
+<ol class="check">
+    <li>On the left, click <strong>Document Management</strong>.</li>
+    <li>Look at the four boxes at the top. <strong>Are the numbers right?</strong></li>
+    <li>Click <strong>Users</strong>. You should see only your own office's staff.</li>
+    <li>Click <strong>Reports</strong>. You should see a chart and a waiting list.</li>
+    <li>Click <strong>Settings</strong>. Change the Date Format and click
+        <strong>Save Changes</strong>.</li>
+    <li>Press F5 to reload the page.</li>
+</ol>
+<p class="see">
+    Your date setting should still be there after reloading.
+</p>
+
+<div class="notes">
+    <strong>Anything wrong? Write it here:</strong>
+    <div class="line"></div>
+    <div class="line"></div>
+</div>
+</div>
+
+<!-- ================= PART 7 ================= -->
+<div class="part">
+<h2 class="pagebreak">Part 7. Reports you can print</h2>
+
+<ol class="check">
+    <li>Click <strong>Reports</strong> in the menu at the top.</li>
+    <li>Look at the four boxes and the charts.</li>
+    <li>Click <strong>Download PDF</strong>. Open the file that downloads.</li>
+    <li>Click <strong>Export Excel</strong>. Open that file too.</li>
+</ol>
+<p class="see">
+    Both files should open properly and the numbers inside should be correct.
+</p>
+
+<div class="box">
+    <strong>Please look at these carefully.</strong>
+    These are the reports you will be handing to your superiors. If a column
+    is missing, or you need different information, now is the best time to
+    tell us. It is much harder to change later.
+</div>
+
+<div class="notes">
+    <strong>What is missing from the reports?</strong>
+    <div class="line"></div>
+    <div class="line"></div>
+</div>
+</div>
+
+<!-- ================= PART 8 ================= -->
+<div class="part">
+<h2>Part 8. The system manager's page</h2>
+
+<p>Log in as <strong>super@cicto.test</strong>.</p>
+
+<ol class="check">
+    <li>On the left, click <strong>Manage Users</strong>.</li>
+    <li>Click <strong>Add New Admin</strong>.</li>
+    <li>Fill in a name, a new email address, choose the role and office,
+        and make up a long password.</li>
+    <li>Click <strong>Create account</strong>.</li>
+    <li>Log out, then try logging in with the account you just made.</li>
+</ol>
+<p class="see">
+    The new account should appear in the list and should be able to log in.
+</p>
+
+<ol class="check">
+    <li>Log back in as super@cicto.test. Click <strong>All Documents</strong>.</li>
+    <li>Check that you can see documents from every office here.</li>
+    <li>Click <strong>Reports &amp; Analytics</strong> to see the charts.</li>
+    <li>Click <strong>System Settings</strong>, then scroll down to the
+        <strong>Security log</strong>.</li>
+</ol>
+<p class="see">
+    The security log should show your own log-in from earlier, and the new
+    account you just made.
+</p>
+
+<div class="box">
+    <strong>Why is there no Delete button?</strong>
+    This is on purpose. Once a document is in the system it should never be
+    wiped out, because its whole history would go with it, and keeping that
+    history is the main reason for having this system at all. Instead there
+    is <strong>Archive</strong>, which puts a document away but keeps the
+    record, and you can bring it back any time.
+</div>
+
+<div class="notes">
+    <strong>Anything wrong? Write it here:</strong>
+    <div class="line"></div>
+    <div class="line"></div>
+</div>
+</div>
+
+<!-- ================= PART 9 ================= -->
+<div class="part">
+<h2>Part 9. On your phone</h2>
+
+<p>
+    Many of your staff will use this on a phone. Open the same web address
+    in your phone's browser and log in.
+</p>
+
+<ol class="check">
+    <li>Open Track Documents.</li>
+    <li>Open a document.</li>
+    <li>Open Submit Document.</li>
+</ol>
+<p class="see">
+    Everything should fit on the screen. You should never have to slide the
+    page sideways to read something.
+</p>
+
+<div class="notes">
+    <strong>Anything wrong? Write it here:</strong>
+    <div class="line"></div>
+    <div class="line"></div>
+</div>
+</div>
+
+<!-- ================= NOT WORKING ================= -->
+<h2>Things that do not work yet</h2>
+
+<p>
+    So you do not waste time on them, here is what we already know is not
+    finished. These are waiting on information from your side. Please do not
+    report these.
+</p>
+
+<h3>1. The system cannot send email yet</h3>
+<p>Because of this:</p>
+<ul>
+    <li><strong>"Forgot Password" does nothing.</strong> No email will arrive.
+        For now, the system manager sets a new password for anyone who
+        forgets theirs.</li>
+    <li><strong>Help messages are saved but not sent.</strong> If someone uses
+        the Submit a Ticket page, the message is kept inside the system.
+        Nobody gets an email about it. The page says so when you use it.</li>
+    <li><strong>Nobody is emailed</strong> when a new document arrives at
+        their office.</li>
+</ul>
+<p>
+    To switch this on we need your email settings from whoever looks after
+    the city's email. Once we have them, all three work straight away and
+    nothing else has to change.
+</p>
+
+<h3>2. Scanning with a phone camera</h3>
+<p>
+    Phone cameras will only scan when the website address is the secure kind
+    (the one with a padlock next to it). That is a rule made by the internet
+    browsers themselves, not something we can switch on. Once the system is
+    installed properly on the city's own address, it will work.
+</p>
+<p>
+    A plug-in barcode scanner works now, and so does typing the number by
+    hand.
+</p>
+
+<h3>3. Office hours on the Contact page</h3>
+<p>
+    The Contact page says <strong>Monday to Thursday, 8:00 AM to 5:00 PM</strong>.
+    We copied that exactly from the design you gave us. We think it should
+    say Monday to Friday. Please confirm and we will fix it.
+</p>
+
+<!-- ================= WHAT WE NEED ================= -->
+<h2>What we need from you</h2>
+
+<p>
+    To finish the system we need the answers below. A written reply is best
+    so we both have something to look back on.
+</p>
+
 <table>
     <thead>
-        <tr><th style="width:24%">Type</th><th>What they can do</th></tr>
+        <tr><th style="width:38%">What we need</th><th>Why we need it</th></tr>
     </thead>
     <tbody>
         <tr>
-            <td class="role"><strong>User</strong><br>(Staff)</td>
-            <td>Register a new document, search for documents, and see where a document has reached.</td>
+            <td>Your real list of offices, and the short code for each one</td>
+            <td>The codes are used in every document number, like the MO in
+                MO-2026-00019.</td>
         </tr>
         <tr>
-            <td class="role"><strong>Admin</strong><br>(Office head)</td>
-            <td>Everything a User can do, plus receiving, approving, rejecting and forwarding documents to other offices. Has a panel with listings and reports — <strong>but only for their own office.</strong></td>
+            <td>Your real list of document types</td>
+            <td>What is in there now is only for practice.</td>
         </tr>
         <tr>
-            <td class="role"><strong>Super Admin</strong><br>(System administrator)</td>
-            <td>Sees <strong>every</strong> office. Only this role can create accounts, view the full security log, and run backups.</td>
+            <td>How many days each type should take</td>
+            <td>The system uses this to warn you when something is running
+                late.</td>
+        </tr>
+        <tr>
+            <td>Your email settings</td>
+            <td>So password resets and messages work. See the section above.</td>
+        </tr>
+        <tr>
+            <td>How long old files should be kept</td>
+            <td>For example, after how many years may an old copy of a file be
+                cleared out?</td>
+        </tr>
+        <tr>
+            <td>Where the system will be installed</td>
+            <td>So we can set up the secure address and the automatic
+                backups.</td>
+        </tr>
+        <tr>
+            <td>Can an office head approve their own document?</td>
+            <td>Do you have a rule about this? We can allow it or block it.</td>
         </tr>
     </tbody>
 </table>
 
-<!-- =============== 3 =============== -->
-<h2 class="pagebreak"><span class="num">3</span>Testing as Staff (User)</h2>
-
-<p>Log in first as <code>clerk@cicto.test</code>.</p>
-
-<div class="test">
-    <h3>3.1 — Logging in</h3>
-    <ol class="steps">
-        <li>Enter the email and password, then press <strong>Login</strong>.</li>
-        <li>Try a wrong password too, so you can see the message.</li>
-    </ol>
-    <div class="expect">
-        <strong>What should happen:</strong> With the right password you land on
-        Home. With the wrong one, a red message appears under the Email field —
-        the screen should not error out or go blank.
-    </div>
-</div>
-
-<div class="test">
-    <h3>3.2 — Registering a new document</h3>
-    <ol class="steps">
-        <li>Press <strong>Track Documents</strong>, then <strong>Submit Document</strong>.</li>
-        <li>Fill in the Title, Document Type, Department and Priority.</li>
-        <li><strong>Deliberately attach no file</strong>, then press Submit.</li>
-        <li>Now attach any PDF or image and press Submit again.</li>
-    </ol>
-    <div class="expect">
-        <strong>What should happen:</strong> Step 3 is refused — a file is
-        required. Step 4 shows a <strong>green message</strong> with a new
-        control number (for example <code>MO-2026-00019</code>). Please write
-        that number down.
-    </div>
-</div>
-
-<div class="note">
-    <strong>A question for you:</strong> Is it right that a file is
-    <em>always</em> required? Sometimes only paper arrives at the counter and
-    nothing has been scanned yet. If you would rather allow registration without
-    a file, tell us and we will change it quickly.
-</div>
-
-<div class="test">
-    <h3>3.3 — Finding a document</h3>
-    <ol class="steps">
-        <li>Go to <strong>Track Documents</strong>.</li>
-        <li>Type a control number into the search box and press <strong>Search</strong>.</li>
-        <li>Try lower case as well — for example <code>mo-2026-00001</code>.</li>
-        <li>Use the <strong>Status</strong> dropdown to filter the list.</li>
-        <li>Press <strong>View</strong> on any document.</li>
-    </ol>
-    <div class="expect">
-        <strong>What should happen:</strong> The document is found regardless of
-        capitalisation. In View you can see which office holds it now, how long
-        it has been there, and every office it has passed through.
-    </div>
-</div>
-
-<div class="test">
-    <h3>3.4 — QR codes</h3>
-    <ol class="steps">
-        <li>Inside a document, press <strong>Show QR</strong> or <strong>Print label</strong>.</li>
-        <li>Check that it is legible and fits the sticker size you intend to use.</li>
-    </ol>
-    <div class="expect">
-        <strong>What should happen:</strong> A QR code appears with the control
-        number printed beneath it, ready to print.
-    </div>
-</div>
-
-<!-- =============== 4 =============== -->
-<h2><span class="num">4</span>Testing as an Admin</h2>
-
-<p>Log out, then log in as <code>admin@cicto.test</code>.</p>
-
-<div class="test">
-    <h3>4.1 — The document workflow (the most important test)</h3>
-    <ol class="steps">
-        <li>Open the document you registered earlier.</li>
-        <li>Press <strong>Received</strong>, then <strong>Confirm</strong>.</li>
-        <li>Press <strong>Approved</strong>, then <strong>Confirm</strong>.</li>
-        <li>Press <strong>Completed</strong>, then <strong>Confirm</strong>.</li>
-    </ol>
-    <div class="expect">
-        <strong>What should happen:</strong> Each step shows a green message and
-        advances the bar at the top: Initiated → Under Review → Approved →
-        Completed. The history below records who did what, and when.
-    </div>
-</div>
-
-<div class="test">
-    <h3>4.2 — Forwarding to another office</h3>
-    <ol class="steps">
-        <li>On a different document, press <strong>Send to Another Office</strong>.</li>
-        <li>Choose an office, add remarks, and Confirm.</li>
-        <li>Log out and log in as the receiving office
-            (for example <code>mto@cicto.test</code>).</li>
-    </ol>
-    <div class="expect">
-        <strong>What should happen:</strong> The receiving office now sees the
-        document in their list.
-    </div>
-</div>
-
-<div class="test">
-    <h3>4.3 — Offices must not see each other's documents</h3>
-    <p style="font-size:9.8pt">
-        This is the most important security rule in the system:
-        <strong>one office must never see another office's paperwork.</strong>
-    </p>
-    <ol class="steps">
-        <li>As <code>admin@cicto.test</code>, search for <code>SB-2026-00001</code>.</li>
-        <li>Log out, then log in as <code>sb@cicto.test</code>.</li>
-        <li>Look at what they can see under Track Documents.</li>
-    </ol>
-    <div class="expect">
-        <strong>What should happen:</strong> Step 1 returns
-        <strong>nothing at all</strong>. In step 3, Sangguniang Bayan sees
-        exactly one document — their own — and nothing from the Mayor's Office.
-    </div>
-    <div class="warn">
-        <strong>If you can see another office's documents, that is a serious
-        defect.</strong> Please tell us immediately.
-    </div>
-</div>
-
-<div class="test">
-    <h3>4.4 — The Admin Panel</h3>
-    <ol class="steps">
-        <li>In the sidebar, press <strong>Document Management</strong>.</li>
-        <li>Look at the four boxes at the top — <strong>are the counts right?</strong></li>
-        <li>Press <strong>Users</strong> — your office's staff are listed.</li>
-        <li>Press <strong>Reports</strong> — a chart plus a list of what is pending.</li>
-        <li>Press <strong>Settings</strong> — change the Date Format, press
-            <strong>Save Changes</strong>, then reload the page.</li>
-    </ol>
-    <div class="expect">
-        <strong>What should happen:</strong> The setting survives the reload.
-        Under Users, only your own office appears.
-    </div>
-</div>
-
-<div class="test">
-    <h3>4.5 — Reports and exports</h3>
-    <ol class="steps">
-        <li>In the top menu, press <strong>Reports</strong>.</li>
-        <li>Look at the four boxes and the charts.</li>
-        <li>Press <strong>Download PDF</strong>, then <strong>Export Excel</strong>.</li>
-        <li>Open both downloaded files.</li>
-    </ol>
-    <div class="expect">
-        <strong>What should happen:</strong> Both the PDF and the Excel file
-        open cleanly, and the figures inside are correct.
-    </div>
-    <div class="note">
-        <strong>Please check these carefully.</strong> These are the reports you
-        will be passing upward. If a column is missing or you need different
-        figures, now is by far the best time to say so.
-    </div>
-</div>
-
-<!-- =============== 5 =============== -->
-<h2 class="pagebreak"><span class="num">5</span>Testing as Super Admin</h2>
-
-<p>Log in as <code>super@cicto.test</code>.</p>
-
-<div class="test">
-    <h3>5.1 — Creating a new account</h3>
-    <ol class="steps">
-        <li>In the sidebar, press <strong>Manage Users</strong>.</li>
-        <li>Press <strong>Add New Admin</strong>.</li>
-        <li>Fill in the name, a new email address, choose the Role and Office,
-            and set a strong password.</li>
-        <li>Press <strong>Create account</strong>.</li>
-        <li>Log out and try logging in with the new account.</li>
-    </ol>
-    <div class="expect">
-        <strong>What should happen:</strong> The new account appears in the list
-        and can log in straight away.
-    </div>
-    <div class="warn">
-        <strong>Note:</strong> Because email is not yet configured (see section
-        7), <strong>no email is sent</strong> to the new member of staff. You
-        will need to give them the password yourself.
-    </div>
-</div>
-
-<div class="test">
-    <h3>5.2 — All Documents</h3>
-    <ol class="steps">
-        <li>Press <strong>All Documents</strong>.</li>
-        <li>Check that you can see documents from <em>every</em> office.</li>
-        <li>Try the search box and the status filter.</li>
-    </ol>
-    <div class="expect">
-        <strong>What should happen:</strong> Only the Super Admin sees
-        everything. Each row offers <strong>View</strong> and
-        <strong>Archive</strong>.
-    </div>
-    <div class="note">
-        <strong>Why is there no “Delete”?</strong> This is deliberate. A
-        registered document should never be destroyed — its entire history goes
-        with it, and preserving that history is the whole reason for having this
-        system. <strong>Archive</strong> does the job instead: the document
-        leaves the working lists but the record remains, and it can be restored
-        at any time.
-    </div>
-</div>
-
-<div class="test">
-    <h3>5.3 — Reports &amp; Analytics and System Settings</h3>
-    <ol class="steps">
-        <li>Press <strong>Reports &amp; Analytics</strong> — three charts.</li>
-        <li>Press <strong>System Settings</strong>.</li>
-        <li>Lower down, find the <strong>Security log</strong> — it records every
-            login, download and account change.</li>
-        <li>Try <strong>Backup</strong>.</li>
-    </ol>
-    <div class="expect">
-        <strong>What should happen:</strong> The security log shows your own
-        login from earlier, and the account you created in 5.1.
-    </div>
-</div>
-
-<!-- =============== 6 =============== -->
-<h2><span class="num">6</span>Testing on a phone</h2>
+<!-- ================= REPORTING ================= -->
+<h2>If something goes wrong, tell us this</h2>
 
 <p>
-    Many of your staff will use this on a phone, so it is worth testing there.
-    Simply open the same address in your phone's browser.
+    The more of these you can tell us, the faster we can fix it. Even two or
+    three is a big help.
 </p>
 
-<ul>
-    <li>Track Documents — each row should become a <strong>card</strong> rather
-        than a wide table.</li>
-    <li>Submit Document — every field should fit on screen.</li>
-    <li>The top menu should collapse into three lines (☰).</li>
-    <li><strong>You should never need to swipe sideways</strong> to read
-        anything.</li>
-</ul>
-
-<div class="expect" style="margin-left:0">
-    <strong>What should happen:</strong> Everything is readable without zooming
-    or scrolling left and right.
-</div>
-
-<!-- =============== 7 =============== -->
-<h2><span class="num">7</span>What does not work yet — and why</h2>
-
-<p>
-    In the interest of being straightforward: a few things
-    <strong>deliberately do not work yet</strong>, because they need information
-    or setup from your side. These are not defects. Please do not spend time
-    reporting them.
-</p>
-
-<h3>7.1 — Email is not configured (the big one)</h3>
-<p>No mail service is connected to the server yet, which means:</p>
-<ul>
-    <li><strong>“Forgot Password” does not work.</strong> No email will arrive.
-        For now, the Super Admin resets the password for anyone who forgets.</li>
-    <li><strong>Support tickets are recorded inside the system only</strong> and
-        are not emailed to anyone. The system says so plainly when you submit
-        one.</li>
-    <li><strong>There are no email notifications</strong> when a new document
-        reaches your office.</li>
-</ul>
-<div class="warn">
-    <strong>What we need from you:</strong> the city's SMTP details (server
-    address, username, password, port). Once we have those, everything above
-    starts working — no change to the software is needed.
-</div>
-
-<h3>7.2 — The camera in the QR scanner</h3>
-<p>
-    Scanning with a device camera only works when the site is served over
-    <strong>HTTPS</strong> (the secure address with a padlock). That is a rule
-    enforced by web browsers, not something we can change in the software. Once
-    the system is installed on a real server with HTTPS, it will work.
-</p>
-<p>
-    In the meantime, <strong>USB barcode scanners</strong> work, and so does
-    typing the control number by hand.
-</p>
-
-<h3>7.3 — Office hours on the Contact page</h3>
-<p>
-    The Contact Support page reads <strong>“Monday – Thursday, 8:00 AM – 5:00
-    PM”</strong>. We copied this exactly from the design you supplied. We suspect
-    it should read <em>Monday – Friday</em> — please confirm and we will correct
-    it immediately.
-</p>
-
-<!-- =============== 8 =============== -->
-<h2><span class="num">8</span>What we still need from you</h2>
-
-<p>
-    To finish the system properly we need the following. Written answers (email
-    or chat) are best, so that both sides have something to refer back to later.
-</p>
-
-<table>
-    <thead>
-        <tr><th style="width:32%">What we need</th><th>Why</th></tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td><strong>The real list of offices and document types</strong></td>
-            <td>What is in the system now is provisional. We need the actual
-                list, including each office's code — that code becomes part of
-                every control number.</td>
-        </tr>
-        <tr>
-            <td><strong>Expected turnaround days</strong> per document type</td>
-            <td>The “Due soon” and “Overdue” warnings are calculated from these.</td>
-        </tr>
-        <tr>
-            <td><strong>SMTP / email details</strong></td>
-            <td>So password resets, notifications and support tickets work
-                (section 7.1).</td>
-        </tr>
-        <tr>
-            <td><strong>How long files should be kept</strong></td>
-            <td>Needed for the retention policy. For example: after how many
-                years may an old version of a file be cleared?</td>
-        </tr>
-        <tr>
-            <td><strong>Where the system will be hosted</strong></td>
-            <td>So we can arrange HTTPS, automated backups, and where the backup
-                copies are stored off-site.</td>
-        </tr>
-        <tr>
-            <td><strong>Who may approve their own submission</strong></td>
-            <td>Can an Admin approve a document they submitted themselves? Do you
-                have a policy on this?</td>
-        </tr>
-    </tbody>
-</table>
-
-<!-- =============== 9 =============== -->
-<h2><span class="num">9</span>How to report a problem</h2>
-
-<p>
-    When you find something wrong, please write down these <strong>four
-    things</strong>. It makes an enormous difference to how fast we can find it:
-</p>
-
-<ol class="steps">
-    <li><strong>Which page?</strong> For example: “On Submit Document.”</li>
-    <li><strong>Which account were you using?</strong> For example: “admin@cicto.test.”</li>
-    <li><strong>What did you do, step by step?</strong></li>
-    <li><strong>What did you expect, and what actually happened?</strong></li>
+<ol class="check">
+    <li><strong>Which page were you on?</strong> For example, "the Submit
+        Document page".</li>
+    <li><strong>Which log-in were you using?</strong> For example,
+        "admin@cicto.test".</li>
+    <li><strong>What did you click, in order?</strong></li>
+    <li><strong>What did you expect, and what happened instead?</strong></li>
 </ol>
 
-<div class="note">
-    <strong>A screenshot helps enormously.</strong> On Windows, press
-    <code>Windows</code> + <code>Shift</code> + <code>S</code>. On a phone, the
-    usual screenshot will do.
-</div>
-
-<h4>An example of a good report</h4>
-<div class="note" style="border-left-color:#2FA36B">
-    “On <strong>Submit Document</strong>, using <strong>clerk@cicto.test</strong>:
-    I filled in everything and attached a PDF, then pressed Submit. I expected a
-    control number to appear, but the screen went blank and nothing happened.
-    Screenshot attached.”
-</div>
-
-<h3>Where to send it</h3>
 <p>
-    Please send your findings to us through the channel we agreed. If you have
-    found several things, a single list is easier than separate messages.
+    <strong>A picture of the screen helps a lot.</strong>
+    On a computer, hold down the Windows key and Shift and press S.
+    On a phone, just take a normal screenshot.
 </p>
 
-<div class="ok">
-    <strong>Thank you.</strong> The time you spend on this testing is what makes
-    sure the system is right before it ever touches a real city document. Every
-    small thing you notice now is a problem your staff will not have to live with
-    every day.
+<h3>An example</h3>
+<div class="box">
+    "On the Submit Document page, logged in as clerk@cicto.test. I filled in
+    everything and attached a PDF, then clicked Submit. I expected to get a
+    document number, but the screen just went white and nothing happened.
+    Picture attached."
+</div>
+
+<p>
+    Send your notes to us the same way we normally talk. If you found several
+    things, one list is easier for everyone than lots of separate messages.
+</p>
+
+<div class="box">
+    <strong>Thank you for doing this.</strong>
+    The time you spend now is what makes sure the system is right before it
+    touches real city paperwork. Anything you notice today is something your
+    staff will not have to put up with every day.
 </div>
 
 </body>
