@@ -292,3 +292,34 @@ Deployment can proceed without these, but the gaps stay open.
 
 Also undefined by the contract and worth settling now: **who installs it**,
 **training** (not in the cost breakdown), and **the warranty window**.
+
+## Practice accounts for client testing
+
+`db:seed` deliberately creates no accounts in production. The five logins named
+in the client testing checklist come from a separate command, run on purpose:
+
+```sh
+php artisan db:seed --force          # offices and document types
+php artisan cicto:demo-data --force  # the five practice logins + sample documents
+```
+
+It prints the credentials table and creates nine sample documents, including
+the Sangguniang Bayan one the checklist's office-isolation test depends on.
+Running it twice changes nothing.
+
+**All five share the password `password`, which is printed in the client's
+documentation.** Anyone who finds the site can sign in as Super Admin. That is
+tolerable while the register holds nothing but practice data and intolerable the
+moment it does not. Before go-live:
+
+```sh
+php artisan cicto:demo-data --remove
+```
+
+That deletes the accounts and every document they raised, including
+soft-deleted ones, and leaves offices and document types alone. The audit record
+that practice accounts once existed survives on purpose.
+
+Real accounts are made with `cicto:create-super-admin` and `cicto:user`, or from
+Manage Users once a Super Admin exists. Both commands work without a terminal:
+on a host with no TTY they generate a password and print it once.
