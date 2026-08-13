@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 
 /**
@@ -84,13 +85,34 @@ class ManageUserCommand extends Command
 
     private function create(string $email): ?User
     {
-        $name = (string) ($this->option('name') ?: $this->ask('Full name'));
-        $password = (string) $this->secret('Password');
+        $interactive = $this->input->isInteractive();
 
-        if ($password !== (string) $this->secret('Confirm password')) {
-            $this->error('The passwords do not match.');
+        $name = (string) ($this->option('name') ?: ($interactive ? $this->ask('Full name') : ''));
+
+        if (! $interactive && $name === '') {
+            $this->error('Without a terminal, --name is required when creating an account.');
 
             return null;
+        }
+
+        /*
+         * Same reasoning as cicto:create-super-admin. A managed hosting panel
+         * runs artisan through a web form with no TTY, where a hidden prompt
+         * reads back empty and the command fails opaquely. With no terminal,
+         * generate the password and print it once.
+         */
+        $generated = ! $interactive;
+
+        if ($generated) {
+            $password = Str::password(24);
+        } else {
+            $password = (string) $this->secret('Password');
+
+            if ($password !== (string) $this->secret('Confirm password')) {
+                $this->error('The passwords do not match.');
+
+                return null;
+            }
         }
 
         $validator = Validator::make(
@@ -127,6 +149,16 @@ class ManageUserCommand extends Command
         ])->save();
 
         $this->info("Created {$user->email}.");
+
+        if ($generated) {
+            $this->newLine();
+            $this->line('  Password: '.$password);
+            $this->newLine();
+            $this->warn('  Give this to them privately and ask them to change it under');
+            $this->warn('  Settings > Security on first sign-in. Then delete this command');
+            $this->warn('  from your panel history -- the password is in the output above.');
+            $this->newLine();
+        }
 
         return $user;
     }
