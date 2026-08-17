@@ -285,7 +285,3 @@ html.cicto-landing {
 html[data-force-light]:has(.cicto-auth) {
     background-color: #2d6fcb; /* --color-brand */
 }
-
-html[data-force-light]:has(.cicto-auth-danger) {
-    background-color: #e8544a;
-}

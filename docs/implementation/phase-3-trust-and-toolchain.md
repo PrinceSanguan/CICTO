@@ -595,6 +595,13 @@ lands on the clerk dashboard rather than being rejected, because refusing the
 mismatch would tell an attacker which addresses belong to admins.
 `AccessControlTest` already pins this.
 
+> **Superseded 2026-08-17.** The client asked for the three chips to go, and
+> because the portal decided nothing there was nothing to unpick: the chips,
+> the prop and the red Super Admin theme were deleted, and the two role URLs now
+> redirect to `/login`. The security model above is intact and still pinned —
+> `AccessControlTest` now asserts the login page ships **no** role hint, which
+> is the same claim stated as an absence. See `00-architecture.md` §3.
+
 ### Verified
 
 - **187 tests green on SQLite, PostgreSQL 17 and MySQL 8**; PHPStan level 7,

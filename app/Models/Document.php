@@ -144,6 +144,21 @@ class Document extends Model
         return $this->hasOne(DocumentMovement::class)->latestOfMany('sequence');
     }
 
+    /**
+     * The routing plan: offices this document is queued to visit next.
+     *
+     * A PLAN, not custody. Deliberately separate from movements() -- see the
+     * document_route_stops migration for why the queue is not stored in the
+     * ledger. Ordered by position, resolved stops included, because the
+     * document page shows the whole route and not just what is left of it.
+     *
+     * @return HasMany<DocumentRouteStop, $this>
+     */
+    public function routeStops(): HasMany
+    {
+        return $this->hasMany(DocumentRouteStop::class)->orderBy('position');
+    }
+
     /** @return HasMany<DocumentFile, $this> */
     public function files(): HasMany
     {

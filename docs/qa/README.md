@@ -71,11 +71,11 @@ register is `FINDINGS.md`; 15 are fixed and ticked, 53 remain.
 
 Alongside it, three things were exercised for real rather than reasoned about:
 
-- **`journeys.sh`** — 59 end-to-end assertions through real HTTP against a clean
-  PostgreSQL database: three portals, role separation, every page, public
+- **`journeys.sh`** — 60 end-to-end assertions through real HTTP against a clean
+  PostgreSQL database: sign-in for all three roles, role separation, every page, public
   routes, bad input, the full register → receive → approve → complete →
   archive → restore lifecycle, all three export formats, and cross-office
-  isolation. All 59 pass.
+  isolation. All 60 pass.
 - **Concurrency** — eight simultaneous transitions on one open leg, and six
   simultaneous archives. Exactly one winner each time, one open leg, unique
   sequences.

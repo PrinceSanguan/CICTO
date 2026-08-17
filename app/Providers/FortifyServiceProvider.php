@@ -71,17 +71,14 @@ class FortifyServiceProvider extends ServiceProvider
      */
     private function configureViews(): void
     {
-        // Spec §3 wants "separate login entry points for User, Admin and Super
-        // Admin". They are three URLs rendering one page with a `portal` prop,
-        // all posting to Fortify's single /login against one guard.
-        //
-        // The portal is presentation only. It never reaches Auth::attempt, the
-        // session, or any authorization decision -- trusting a role posted from
-        // a login form is privilege escalation with extra steps.
+        // ONE login screen for all three roles -- see routes/web.php for what
+        // replaced §3's three portals and why. It carries no role hint at all:
+        // the role is read from the database row after the credentials check,
+        // by RoleAwareLoginResponse. Trusting a role posted from a login form
+        // would be privilege escalation with extra steps.
         Fortify::loginView(fn (Request $request) => Inertia::render('auth/login', [
             'canResetPassword' => Features::enabled(Features::resetPasswords()),
             'status' => $request->session()->get('status'),
-            'portal' => $request->attributes->get('portal', 'user'),
         ]));
 
         Fortify::resetPasswordView(fn (Request $request) => Inertia::render('auth/reset-password', [

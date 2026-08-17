@@ -11,6 +11,7 @@ import {
     StageStepper,
     TrackingMetrics,
 } from '@/components/documents/document-tracking';
+import { OfficeRoutePicker } from '@/components/documents/office-route-picker';
 import { SignaturePad } from '@/components/documents/signature-pad';
 import { ToneBadge } from '@/components/documents/status-badge';
 import InputError from '@/components/input-error';
@@ -57,9 +58,13 @@ export default function ShowDocument({
     const [showQr, setShowQr] = useState(false);
     const [archiveReason, setArchiveReason] = useState('');
 
-    const action = useForm({
+    const action = useForm<{
+        action: string;
+        to_office_ids: number[];
+        remarks: string;
+    }>({
         action: '',
-        to_office_id: '',
+        to_office_ids: [],
         remarks: '',
     });
 
@@ -90,6 +95,15 @@ export default function ShowDocument({
             ...data,
             action: value,
             expected_movement_id: document.expected_movement_id ?? '',
+            /*
+                Destinations belong to a forward and nowhere else. The picker
+                only renders for one, but its value stays in form state, so
+                approving used to post an empty `to_office_ids[]` -- a blank
+                the server then had to read as "no offices" rather than as one
+                unparseable office. It is defended on both sides now; sending
+                nothing is simply the honest payload.
+            */
+            to_office_ids: value === 'forwarded' ? data.to_office_ids : [],
         }));
 
         action.post(
@@ -181,6 +195,46 @@ export default function ShowDocument({
                         />
                     </div>
                 </section>
+
+                {/*
+                    §9's routing plan. Rendered for the whole life of the
+                    document, not just while stops are pending: a five-office
+                    send has to keep LOOKING like a five-office send, including
+                    after a rejection cancelled the tail of it.
+                */}
+                {document.route.length > 0 && (
+                    <section className="rounded-xl bg-white p-6 shadow-xl">
+                        <h3 className="mb-1 text-sm font-semibold">Route</h3>
+                        <p className="mb-3 text-xs text-copy">
+                            Where this document is scheduled to go, in order.
+                        </p>
+
+                        <ol className="grid gap-2">
+                            {document.route.map((stop, index) => (
+                                <li
+                                    key={stop.id}
+                                    className="flex items-center gap-3 rounded-md border border-[#E4EAF2] px-3 py-2"
+                                >
+                                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#E8F0FB] text-xs font-bold text-navy tabular-nums">
+                                        {index + 1}
+                                    </span>
+                                    <span
+                                        className={`min-w-0 flex-1 truncate text-sm font-medium ${
+                                            stop.status === 'cancelled'
+                                                ? 'text-copy line-through'
+                                                : 'text-navy'
+                                        }`}
+                                    >
+                                        {stop.office ?? '—'}
+                                    </span>
+                                    <ToneBadge tone={stop.status_tone}>
+                                        {stop.status_label}
+                                    </ToneBadge>
+                                </li>
+                            ))}
+                        </ol>
+                    </section>
+                )}
 
                 {/* §9 Approval and routing */}
                 {/*
@@ -283,38 +337,20 @@ export default function ShowDocument({
                         {action.data.action && (
                             <div className="space-y-3">
                                 {isForward && (
-                                    <div className="grid gap-2 sm:max-w-sm">
-                                        <label
-                                            htmlFor="to_office_id"
-                                            className="text-sm font-medium"
-                                        >
-                                            Send to
-                                        </label>
-                                        <select
-                                            id="to_office_id"
-                                            value={action.data.to_office_id}
-                                            onChange={(event) =>
+                                    <div className="grid gap-2">
+                                        <OfficeRoutePicker
+                                            offices={offices}
+                                            value={action.data.to_office_ids}
+                                            disabled={action.processing}
+                                            onChange={(next) =>
                                                 action.setData(
-                                                    'to_office_id',
-                                                    event.target.value,
+                                                    'to_office_ids',
+                                                    next,
                                                 )
                                             }
-                                            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                                        >
-                                            <option value="">
-                                                Select an office…
-                                            </option>
-                                            {offices.map((office) => (
-                                                <option
-                                                    key={office.id}
-                                                    value={office.id}
-                                                >
-                                                    {office.name}
-                                                </option>
-                                            ))}
-                                        </select>
+                                        />
                                         <InputError
-                                            message={action.errors.to_office_id}
+                                            message={routeError(action.errors)}
                                         />
                                     </div>
                                 )}
@@ -753,6 +789,24 @@ export default function ShowDocument({
                 </Link>
             </div>
         </>
+    );
+}
+
+/**
+ * Whatever the server said about the destinations, whichever key it used.
+ *
+ * Rules on `to_office_ids.*` -- an office deactivated between opening this page
+ * and pressing Confirm, say -- are reported by Laravel under an indexed key
+ * like `to_office_ids.0`. Reading only the bare key left those invisible, and
+ * an invisible validation error is a button that silently does nothing, which
+ * is exactly the failure the empty-array bug already cost us once.
+ */
+function routeError(errors: Record<string, string>): string | undefined {
+    return (
+        errors.to_office_ids ??
+        Object.entries(errors).find(([key]) =>
+            key.startsWith('to_office_ids.'),
+        )?.[1]
     );
 }
 

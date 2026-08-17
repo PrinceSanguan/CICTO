@@ -187,24 +187,28 @@ class AccessControlTest extends TestCase
         $this->actingAs($user)->get(route('documents.create'))->assertForbidden();
     }
 
-    public function test_the_three_login_entry_points_are_distinguishable(): void
+    public function test_there_is_one_login_screen_and_it_carries_no_role_hint(): void
     {
-        // §3 asks for separate entry points. All three render the same page
-        // against the same guard and POST to the same URL -- only the `portal`
-        // prop differs, which is what makes them presentation and not a second
-        // authentication path.
-        foreach ([
-            'login' => 'user',
-            'login.admin' => 'admin',
-            'login.super-admin' => 'super-admin',
-        ] as $routeName => $expectedPortal) {
-            $this->get(route($routeName))
-                ->assertOk()
-                ->assertInertia(
-                    fn ($page) => $page
-                        ->component('auth/login')
-                        ->where('portal', $expectedPortal),
-                );
+        // §3's three portals were removed at the client's request on
+        // 2026-08-17. They were always one page against one guard posting to
+        // one URL; the `portal` prop only changed the heading and the colour.
+        // Asserting its ABSENCE is the point -- a role hint on the login screen
+        // is the shape a privilege-escalation bug would take here.
+        $this->get(route('login'))
+            ->assertOk()
+            ->assertInertia(
+                fn ($page) => $page
+                    ->component('auth/login')
+                    ->missing('portal'),
+            );
+    }
+
+    public function test_the_old_role_login_urls_redirect_to_the_single_login_screen(): void
+    {
+        // Bookmarked and printed in the pilot notes, so they redirect rather
+        // than 404. See routes/web.php.
+        foreach (['login.admin', 'login.super-admin'] as $routeName) {
+            $this->get(route($routeName))->assertRedirect('/login');
         }
     }
 }

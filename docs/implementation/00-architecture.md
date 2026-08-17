@@ -372,20 +372,27 @@ Three roles, fixed by §2, stored as `users.role` string(32) backed by
 
 ### §3 "separate login entry points"
 
-Three `GET` routes rendering the *same* `auth/login.tsx` with a `portal` prop, all
-POSTing to Fortify's single `/login`, against **one `web` guard.**
+**One** `GET /login`, one page, one `web` guard, one POST target. §3 is satisfied
+after authentication, not before it: `RoleAwareLoginResponse` reads
+`$user->role` from the database row and sends each role to its own home — the
+reading `README.md` has always taken of this section.
 
 > 🔒 **The trap:** a `role` field on the login form must never reach
 > `Auth::attempt()`, the session, or any authorization decision. Two failure modes
 > — privilege escalation (post `role=super_admin` with your own valid password),
 > and account enumeration (a role oracle in the error message, whose natural "fix"
-> is to start trusting the field). **The portal is presentation.** Authorization
-> reads `$user->role` from the database after authentication.
+> is to start trusting the field). Authorization reads `$user->role` from the
+> database after authentication. `AccessControlTest` pins both halves: a posted
+> `role` cannot escalate, and the login page ships no role hint at all.
 
-Portal mismatch is **ignored, not rejected** — a clerk who logs in at
-`/login/admin` lands on the clerk dashboard. Rejecting buys no security and costs
-an enumeration oracle. Confirm this at the Phase 1 demo so it is not filed as a bug
-later.
+**Amended 2026-08-17, at the client's request.** It shipped as three URLs —
+`/login`, `/login/admin`, `/login/super-admin` — rendering the one page with a
+`portal` prop, plus a row of role chips at the foot of the card. The prop only
+changed the heading and the colour; every portal posted to the same `/login`,
+and a mismatch was ignored rather than rejected, so the choice never decided
+anything. The chips were removed and the two URLs now redirect to `/login`
+(kept as redirects because they are bookmarked and printed in the pilot notes).
+Nothing about role detection changed.
 
 ### Post-auth redirect binds four contracts
 

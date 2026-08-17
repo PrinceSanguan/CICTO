@@ -83,6 +83,42 @@ The natural separation-of-duties rule blocks it. In a two-person municipal offic
 that rule blocks real work. Confirm which behaviour is wanted — it is a one-line
 policy change now and a support complaint later.
 
+### A7. Multi-office sending — a route, not three custodies *(confirm in writing)*
+
+On 2026-08-17 the client asked for "an option to select multiple offices at the
+same time instead of sending the document one office at a time." That shipped as
+a **routing list**: one submit, N offices, in the order you pick them. The folder
+goes to the first office now and moves to the next automatically each time it is
+approved, and the document page shows the whole route for the life of the
+document.
+
+**What it is not** is three offices holding the document simultaneously, and the
+reason is not effort. §7 tracks a *physical folder* carrying one printed QR
+label; one folder cannot be on three desks at once, and the public scan page a
+courier reads has exactly one "Currently at" line to answer with. The ledger
+enforces this in the database — `unique(document_id, is_open)`, decision D13 —
+and every figure in §10, §13 and §19 is derived from it. A five-office route
+therefore leaves a trail *indistinguishable* from five forwards typed by hand;
+`RoutingTest::test_a_routed_document_leaves_the_same_trail_as_forwarding_by_hand`
+pins exactly that.
+
+Confirm the reading in writing. Two consequences the client should hear now
+rather than discover in UAT:
+
+1. **Queued offices cannot see the document until it reaches them.** Visibility
+   is derived from the ledger, and no ledger row names them yet. That is
+   deliberate, not a bug — but it will look like one to a tester who ticked five
+   boxes and then asked office 4 to check.
+2. **Deadlines are per document, not per stop.** `documents.due_at` is stamped
+   once at registration and every leg is clamped to it, so a long route hands
+   its later stops a deadline that may already have passed. That is pre-existing
+   behaviour for any long chain; a route just makes long chains easy to create.
+   If the client wants per-stop turnaround, that is a §11 change and a re-quote.
+
+If the answer turns out to be "each office needs its own copy", that is **N
+documents with N control numbers**, not one document in N places — a different
+feature, adjacent to A3's configurable-workflow pricing.
+
 ---
 
 ## Group B — settle before the phase that needs it
@@ -166,12 +202,23 @@ Nothing in the spec prunes anything, and two tables grow without bound:
 Agree a retention policy and a storage quota, or agree explicitly that there is
 none and the client accepts the disk cost.
 
-### B7. Portal mismatch behaviour *(confirm at the Phase 1 demo)*
+### B7. Portal mismatch behaviour *(RESOLVED 2026-08-17 — the portals were removed)*
 
-A clerk who opens `/login/admin` and signs in successfully lands on the **clerk**
-dashboard rather than being rejected. This is deliberate — rejecting would leak
-which accounts are admins. Confirm it at the demo so it is not filed as a bug in
-week two.
+The question was: a clerk who opens `/login/admin` and signs in successfully
+lands on the **clerk** dashboard rather than being rejected. Deliberate —
+rejecting would leak which accounts are admins.
+
+The client answered it by removing the premise. On 2026-08-17 they asked for the
+three "Login as" chips to go and for one login page that works the role out
+afterwards, which is what it always did. There is one entry point now, so there
+is no mismatch to behave one way or the other about. `/login/admin` and
+`/login/super-admin` redirect to `/login`.
+
+**This changes what §3 of the signed contract literally says** — "Separate login
+entry points for User, Admin, and Super Admin". It is satisfied by the post-login
+RBAC redirect, which is how `README.md`'s spec map already read it, but the
+instruction should be confirmed in writing before sign-off so the wording is not
+raised at acceptance.
 
 ---
 

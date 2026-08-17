@@ -5,7 +5,6 @@ import {
     FieldLabel,
     PasswordField,
 } from '@/components/auth/auth-field';
-import { PortalChips } from '@/components/auth/portal-chips';
 import InputError from '@/components/input-error';
 import TextLink from '@/components/text-link';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -14,47 +13,32 @@ import { register } from '@/routes';
 import { store } from '@/routes/login';
 import { request } from '@/routes/password';
 
-type Portal = 'user' | 'admin' | 'super-admin';
-
 type Props = {
     status?: string;
     canResetPassword: boolean;
-    portal?: Portal;
 };
 
 /**
- * Spec §3 asks for "separate login entry points for User, Admin, and Super
- * Admin". They are three URLs rendering this one page against one guard and one
- * POST target -- only the heading and the colour change.
+ * ONE login screen for all three roles.
  *
- * The portal is PRESENTATION ONLY. It is never posted, never reaches
- * Auth::attempt, and never influences authorization: the role is read from the
- * database row after the credentials check. Signing in at /login/admin with a
- * clerk account simply lands you on the clerk dashboard, which is deliberate --
- * rejecting the mismatch would leak which accounts are admins.
+ * §3 originally asked for "separate login entry points for User, Admin and
+ * Super Admin", which shipped as three URLs rendering this page with a
+ * `portal` prop and a row of role chips at the foot of the card. The client
+ * asked for the chips to go on 2026-08-17: the choice was never a choice --
+ * every portal posted to the same /login against the same guard, and the role
+ * is read from the database row after the credentials check either way.
+ *
+ * Nothing about role detection changed with them. RoleAwareLoginResponse still
+ * sends an admin to /admin/dashboard, a super admin to /super-admin/dashboard
+ * and everyone else to /dashboard, for all four ways of becoming
+ * authenticated -- password, two-factor, passkey and registration.
+ *
+ * /login/admin and /login/super-admin now redirect here; see routes/web.php.
  */
-const PORTALS: Record<Portal, { title: string }> = {
-    user: { title: 'Login to Your Account' },
-    admin: { title: 'Admin Login' },
-    'super-admin': { title: 'Super Admin Login' },
-};
-
-export default function Login({
-    status,
-    canResetPassword,
-    portal = 'user',
-}: Props) {
-    const copy = PORTALS[portal] ?? PORTALS.user;
-    const danger = portal === 'super-admin';
-    const isRolePortal = portal !== 'user';
-
+export default function Login({ status, canResetPassword }: Props) {
     return (
         <>
-            <Head title={copy.title} />
-
-            <h1 className="mb-6 text-center text-2xl font-bold text-navy">
-                {copy.title}
-            </h1>
+            <Head title="Login to Your Account" />
 
             {status && (
                 <div
@@ -144,7 +128,6 @@ export default function Login({
                         {/* Narrower and centred, as the supplied form shows. */}
                         <div className="flex justify-center pt-1">
                             <AuthSubmit
-                                danger={danger}
                                 disabled={processing}
                                 data-test="login-button"
                                 className="w-full max-w-[13rem]"
@@ -153,60 +136,36 @@ export default function Login({
                                 Login
                             </AuthSubmit>
                         </div>
-                        {/*
-                            Repeated under the button on the two role portals,
-                            which is where their designs put it. The plain login
-                            screen keeps only the one beside the Password label
-                            and offers the portal chips here instead.
-                        */}
-                        {isRolePortal && canResetPassword && (
-                            <p className="text-center">
-                                <TextLink
-                                    href={request()}
-                                    className="text-sm font-bold text-link no-underline hover:underline"
-                                >
-                                    Forgot Password?
-                                </TextLink>
-                            </p>
-                        )}
                     </>
                 )}
             </Form>
 
-            {/*
-                §3's three entry points, offered from the plain login screen
-                only. Reaching /login/admin FROM /login/admin is not a choice
-                worth showing, and the role designs do not show it.
-            */}
-            {!isRolePortal && (
-                <div className="mt-6">
-                    <PortalChips current={portal} />
-                </div>
-            )}
-
-            {!isRolePortal && (
-                <p className="mt-6 text-center text-sm font-medium text-navy">
-                    Don&rsquo;t have an account?{' '}
-                    <TextLink
-                        href={register()}
-                        className="font-bold text-link no-underline hover:underline"
-                    >
-                        Register
-                    </TextLink>
-                </p>
-            )}
+            <p className="mt-6 text-center text-sm font-medium text-navy">
+                Don&rsquo;t have an account?{' '}
+                <TextLink
+                    href={register()}
+                    className="font-bold text-link no-underline hover:underline"
+                >
+                    Register
+                </TextLink>
+            </p>
         </>
     );
 }
 
 /*
- * Deliberately NO `Login.layout` property.
+ * The heading now belongs to the layout, like every other auth screen.
  *
- * The heading is rendered by the page, because it depends on which of §3's
- * three portals was opened and a static layout object cannot vary per request.
+ * It used to be rendered by the page because the title varied with the portal
+ * and a static layout object cannot vary per request. With one entry point it
+ * does not vary, so the special case is gone.
  *
- * It must be OMITTED rather than set to `{}`. Inertia reads an empty object as
- * "named layouts, none of them" -- Object.values({}).every(...) is vacuously
- * true -- so the layout list comes back empty and the entire auth shell
- * silently disappears, leaving the bare form on the page background.
+ * It must never be set to `{}`. Inertia reads an empty object as "named
+ * layouts, none of them" -- Object.values({}).every(...) is vacuously true --
+ * so the layout list comes back empty and the entire auth shell silently
+ * disappears, leaving the bare form on the page background. There is a test:
+ * tests/Feature/InertiaLayoutContractTest.php.
  */
+Login.layout = {
+    title: 'Login to Your Account',
+};

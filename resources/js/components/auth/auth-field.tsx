@@ -75,12 +75,17 @@ export function PasswordField({
 
     return (
         <div className="relative">
-            <span
+            {/*
+                Drawn exactly like the Mail icon above it -- outline only, no
+                filled navy disc behind it. The disc was the one solid shape on
+                an otherwise flat form, so it read as a button and pulled the
+                eye off the field it was labelling.
+            */}
+            <Lock
                 aria-hidden="true"
-                className="pointer-events-none absolute top-1/2 left-3.5 flex size-7 -translate-y-1/2 items-center justify-center rounded-full bg-navy"
-            >
-                <Lock className="size-3.5 text-white" strokeWidth={2.5} />
-            </span>
+                className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-[#7EA9E0]"
+                strokeWidth={1.75}
+            />
 
             <input
                 type={visible ? 'text' : 'password'}
@@ -129,23 +134,23 @@ export function FieldLabel({
     );
 }
 
+/*
+ * There was a `danger` variant here, red, for the Super Admin login. It went
+ * with the three portals on 2026-08-17 -- one login screen cannot know which
+ * role is signing in -- and an unused variant is a variant nobody maintains.
+ */
 export function AuthSubmit({
     children,
-    danger = false,
     className,
     ...props
-}: ComponentProps<'button'> & { danger?: boolean }) {
+}: ComponentProps<'button'>) {
     return (
         <button
             type="submit"
             className={cn(
                 'flex h-12 w-full items-center justify-center gap-2 rounded-md text-[15px] font-bold text-white',
                 'transition disabled:cursor-not-allowed disabled:opacity-70',
-                // #E0473C gave white text only 4.09:1. #C5372D clears 4.5:1
-                // while still reading as the mockup's red.
-                danger
-                    ? 'bg-[#C5372D] hover:bg-[#AC3027]'
-                    : 'bg-[#3B72C4] hover:bg-[#31629F]',
+                'bg-[#3B72C4] hover:bg-[#31629F]',
                 // Last, so a caller can narrow the width. It has to go through
                 // cn(): spreading className via ...props would REPLACE the base
                 // classes rather than merge with them.

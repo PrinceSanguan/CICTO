@@ -1,3 +1,4 @@
+import { Link } from '@inertiajs/react';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { BrandLogo } from './brand-logo';
@@ -29,21 +30,41 @@ export function SiteNav({ authSlot }: { authSlot: ReactNode }) {
                     aria-label="Main"
                     className="flex flex-1 flex-wrap items-center justify-start gap-x-6 gap-y-2 lg:justify-center lg:gap-x-14"
                 >
-                    {NAV.map((item) => (
-                        <a
-                            key={item.label}
-                            href={item.href}
-                            aria-current={item.current ? 'page' : undefined}
-                            className={cn(
-                                'text-[13px] font-medium whitespace-nowrap transition-opacity hover:opacity-70',
-                                item.current
-                                    ? 'text-link-active'
-                                    : 'text-navy-soft',
-                            )}
-                        >
-                            {item.label}
-                        </a>
-                    ))}
+                    {NAV.map((item) => {
+                        const className = cn(
+                            'text-[13px] font-medium whitespace-nowrap transition-opacity hover:opacity-70',
+                            item.current
+                                ? 'text-link-active'
+                                : 'text-navy-soft',
+                        );
+
+                        /*
+                            An in-page anchor stays a plain <a>: Inertia would
+                            treat "#home" as a visit to a URL rather than a
+                            scroll. The three feature items are real screens, so
+                            they are Inertia visits -- the same as the Login
+                            action beside them, which is what proves the landing
+                            page's `cicto-landing` cleanup runs on the way out.
+                        */
+                        return item.kind === 'anchor' ? (
+                            <a
+                                key={item.label}
+                                href={item.href}
+                                aria-current={item.current ? 'page' : undefined}
+                                className={className}
+                            >
+                                {item.label}
+                            </a>
+                        ) : (
+                            <Link
+                                key={item.label}
+                                href={item.href}
+                                className={className}
+                            >
+                                {item.label}
+                            </Link>
+                        );
+                    })}
                 </nav>
 
                 <div className="flex shrink-0 items-center gap-4">

@@ -10,7 +10,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-use Laravel\Fortify\Contracts\LoginViewResponse;
 
 Route::inertia('/', 'welcome')->name('home');
 
@@ -44,31 +43,31 @@ Route::post('_csp-report', CspReportController::class)
     ->name('security.csp-report');
 
 /*
-| §3 "Separate login entry points for User, Admin, and Super Admin".
+| ONE login entry point.
 |
-| Three URLs, one page, one guard, one POST target. The portal only changes what
-| the page says; it never reaches Auth::attempt, the session, or any
-| authorization decision. Trusting a role posted from a login form would be
+| §3 asked for "separate login entry points for User, Admin, and Super Admin",
+| and they shipped as /login, /login/admin and /login/super-admin -- three URLs
+| rendering one page with a `portal` prop that changed the heading and the
+| colour and nothing else. They all posted to Fortify's single /login against
+| one guard, because trusting a role posted from a login form would be
 | privilege escalation with extra steps.
 |
-| A portal mismatch is IGNORED, not rejected: a clerk who signs in at
-| /login/admin lands on the clerk dashboard. Rejecting them would leak which
-| accounts are admins, and buys nothing -- the role in the database is what
-| authorises, and it already did.
+| The client asked on 2026-08-17 for the three chips at the foot of the login
+| card to go, leaving one login screen that works out the role afterwards. It
+| already did: App\Http\Responses\RoleAwareLoginResponse reads the role from the
+| database row and sends the user to their own panel, for all four ways of
+| becoming authenticated. Removing the portals removed a choice that never
+| decided anything.
+|
+| The two URLs stay as redirects rather than 404s. They have been in front of
+| the client since Phase 1 and are bookmarked, printed in the pilot notes and
+| hit by docs/qa/journeys.sh; a redirect costs one line and cannot be the thing
+| that goes wrong at 21:00 on handover night.
+|
+| Fortify owns GET /login itself, so it is not declared here.
 */
-$portalLogin = function (string $portal) {
-    return function (Request $request) use ($portal) {
-        // Read back by the Fortify::loginView closure and passed to the page as
-        // a presentational prop only.
-        $request->attributes->set('portal', $portal);
-
-        return app(LoginViewResponse::class);
-    };
-};
-
-// Fortify already owns GET /login for the default portal.
-Route::get('login/admin', $portalLogin('admin'))->middleware('guest')->name('login.admin');
-Route::get('login/super-admin', $portalLogin('super-admin'))->middleware('guest')->name('login.super-admin');
+Route::redirect('login/admin', '/login')->name('login.admin');
+Route::redirect('login/super-admin', '/login')->name('login.super-admin');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');

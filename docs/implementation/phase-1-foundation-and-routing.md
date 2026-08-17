@@ -299,6 +299,11 @@ one outer transaction, so a failed upload never burns a control number.
 one `web` guard. See the security trap in `00-architecture.md` §7 — the portal is
 presentation only.
 
+> **Superseded 2026-08-17.** The client asked for one login page; the chips were
+> removed and `/login/admin` and `/login/super-admin` now redirect to `/login`.
+> §3 is met by the post-login RBAC redirect, which never changed. See
+> `00-architecture.md` §3 and `client-questions.md` B7.
+
 **Bind `RoleAwareLoginResponse` to all four contracts** in
 `FortifyServiceProvider::register()`: `LoginResponse`, `TwoFactorLoginResponse`,
 `PasskeyLoginResponse`, `RegisterResponse`. This also fixes a live bug — passkey

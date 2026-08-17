@@ -44,6 +44,16 @@ login() {
 # get <who> <path>
 get() { curl -s -b "$(jar_for "$1")" -o /dev/null -w '%{http_code}' "$B$2"; }
 
+# lands <who> <path> -> where a redirect actually points. "" for anyone means a
+# guest with no cookie jar, which is how a bookmark arrives.
+lands() {
+  if [ -n "$1" ]; then
+    curl -s -b "$(jar_for "$1")" -o /dev/null -w '%{redirect_url}' "$B$2"
+  else
+    curl -s -o /dev/null -w '%{redirect_url}' "$B$2"
+  fi
+}
+
 # post <who> <path> [curl args...]
 post() {
   local who=$1 path=$2; shift 2
@@ -65,12 +75,17 @@ print(json.dumps(json.loads(m.group(1))['props']) if m else '{}')
 "
 }
 
-say "1. Authentication — the three portals"
+say "1. Authentication — one login screen, three roles"
 expect "clerk signs in"       302 "$(login clerk clerk@cicto.test)"
 expect "admin signs in"       302 "$(login admin admin@cicto.test)"
 expect "super admin signs in" 302 "$(login super super@cicto.test)"
-# The guest middleware bounces a signed-in user away from a login page.
-expect "signed-in user redirected off /login/admin" 302 "$(get admin /login/admin)"
+# The role portals were removed on 2026-08-17; their URLs now redirect to /login.
+# Assert the TARGET, not just "a 302" -- the old portal routes answered 302 too,
+# by bouncing a signed-in visitor off a login page, so a bare status check here
+# passes just as happily against the behaviour this replaced.
+expect "/login/admin redirects to the single login screen" "$B/login" "$(lands admin /login/admin)"
+# And from a bookmark, with no session at all, which is the case that matters.
+expect "a bookmarked /login/super-admin lands there too" "$B/login" "$(lands '' /login/super-admin)"
 # A POST with no CSRF token is a 419, which is the framework working.
 expect "CSRF-less login POST refused"      419 "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$B/login" --data-urlencode 'email=admin@cicto.test' --data-urlencode 'password=wrong')"
 

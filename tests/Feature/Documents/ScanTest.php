@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Documents;
 
+use App\Actions\Documents\TransitionDocument;
+use App\Enums\MovementAction;
 use App\Models\DocumentScan;
 use App\Services\QrCodeRenderer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -39,6 +41,53 @@ class ScanTest extends TestCase
                 ->missing('document.description')
                 ->missing('document.remarks'),
         );
+
+        /*
+         * The page must render the field the controller actually sends.
+         *
+         * It read `document.resting_office` -- declared in its Props type but
+         * never in the payload -- so every public scan printed "Not yet
+         * recorded" under "Currently at" for the whole of UAT, while the
+         * assertion above stayed green because it checks the PROP, not what the
+         * component reads. Asserting the source too is what would have caught it.
+         */
+        $source = (string) file_get_contents(resource_path('js/pages/documents/scan-public.tsx'));
+
+        $this->assertStringContainsString('document.current_office', $source);
+        $this->assertStringNotContainsString('document.resting_office', $source);
+    }
+
+    public function test_a_finished_document_still_names_the_office_that_handled_it(): void
+    {
+        // openMovement is null once a document is terminal, so this field used
+        // to go blank under a heading that reads "Last handled by" -- the one
+        // moment a courier most needs an office name.
+        $office = $this->office('MTO', 'Treasury');
+        $document = $this->registerDocument($office, $this->staff($office));
+
+        app(TransitionDocument::class)->handle(
+            document: $document,
+            action: MovementAction::Received,
+            actor: $this->admin($office),
+        );
+        app(TransitionDocument::class)->handle(
+            document: $document,
+            action: MovementAction::Approved,
+            actor: $this->admin($office),
+        );
+        app(TransitionDocument::class)->handle(
+            document: $document,
+            action: MovementAction::Completed,
+            actor: $this->admin($office),
+        );
+
+        $this->assertNull($document->fresh()->openMovement);
+
+        $this->get("/s/{$document->qr_token}")
+            ->assertOk()
+            ->assertInertia(
+                fn ($page) => $page->where('document.current_office', 'Treasury'),
+            );
     }
 
     public function test_the_scan_payload_never_contains_the_document_title(): void

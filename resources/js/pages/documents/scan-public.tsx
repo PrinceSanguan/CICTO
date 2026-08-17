@@ -8,7 +8,6 @@ type Props = {
         status_label: string;
         status_tone: Tone;
         current_office: string | null;
-        resting_office: string | null;
         updated_at: string | null;
         is_complete: boolean;
     };
@@ -54,8 +53,17 @@ export default function ScanPublic({ document }: Props) {
                                     ? 'Last handled by'
                                     : 'Currently at'}
                             </dt>
+                            {/*
+                                `current_office`, which is what ScanController
+                                actually sends. This read `resting_office` --
+                                declared in Props but never in the payload -- so
+                                every public scan printed "Not yet recorded"
+                                under "Currently at". ScanTest asserted the prop
+                                name rather than the rendered value, so the
+                                suite stayed green through all of UAT.
+                            */}
                             <dd className="mt-1 font-medium">
-                                {document.resting_office ?? 'Not yet recorded'}
+                                {document.current_office ?? 'Not yet recorded'}
                             </dd>
                         </div>
 

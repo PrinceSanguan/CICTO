@@ -1,4 +1,3 @@
-import { usePage } from '@inertiajs/react';
 import { useEffect } from 'react';
 import { AuthScene, AuthWelcome } from '@/components/auth/auth-scene';
 import { CictoLockup } from '@/components/auth/cicto-lockup';
@@ -13,21 +12,16 @@ import type { AuthLayoutProps } from '@/types';
  * are the only pages an unauthenticated visitor ever sees and they have to look
  * like one system. The starter kit's centred dark card was replaced wholesale.
  *
- * The Super Admin portal is RED. That is not decoration -- §3 gives that role
- * system-wide access across every office, and someone who reaches that URL by
- * accident should be able to tell before they type a password.
+ * It used to paint itself RED behind the Super Admin login, to warn whoever
+ * reached that URL by accident. That went with the portals themselves on
+ * 2026-08-17: there is one login screen now, and it cannot know which role is
+ * about to sign in -- nothing does, until after the credentials check.
  */
 export default function AuthSimpleLayout({
     children,
     title,
     description,
 }: AuthLayoutProps) {
-    // Read from the page rather than threaded through props: `portal` is a
-    // server prop on the login pages, and the layout is mounted by Inertia
-    // without seeing them.
-    const portal = (usePage().props as { portal?: string }).portal;
-    const danger = portal === 'super-admin';
-
     // The client's auth design has no dark variant, and these screens are shown
     // before anyone has an account, let alone an appearance preference.
     //
@@ -57,11 +51,7 @@ export default function AuthSimpleLayout({
         <div
             // overflow-x only: clipping the Y axis made the tallest form
             // (Register) unreachable below its own height.
-            className={`cicto-auth relative flex min-h-svh flex-col overflow-x-hidden ${
-                danger
-                    ? 'cicto-auth-danger bg-linear-to-b/srgb from-[#E8544A] to-[#F7C9C4]'
-                    : 'bg-linear-to-b/srgb from-brand to-brand-soft'
-            }`}
+            className="cicto-auth relative flex min-h-svh flex-col overflow-x-hidden bg-linear-to-b/srgb from-brand to-brand-soft"
         >
             {/*
                 The pale ground band the figure stands on. Sits behind
@@ -86,9 +76,13 @@ export default function AuthSimpleLayout({
 
                         {/*
                             Rendered only when a page supplies one. The login
-                            screen omits it and renders its own heading, because
-                            its title depends on which of §3's three portals was
-                            opened and this static layout prop cannot vary.
+                            screen used to omit it and render its own heading,
+                            because the title varied with §3's three portals and
+                            a static layout prop cannot. With one login screen it
+                            no longer varies, so login passes a title like every
+                            other page here. The two-factor challenge is the one
+                            page left with none, deliberately: it renders its own
+                            centred block and a heading above it would repeat it.
                         */}
                         {title && (
                             <div className="mt-8 text-center">

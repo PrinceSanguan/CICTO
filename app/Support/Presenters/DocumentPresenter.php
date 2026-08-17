@@ -6,6 +6,7 @@ use App\Models\Document;
 use App\Models\DocumentComment;
 use App\Models\DocumentFile;
 use App\Models\DocumentMovement;
+use App\Models\DocumentRouteStop;
 use App\Models\DocumentSignature;
 use App\Models\User;
 use App\Support\Deadlines;
@@ -21,6 +22,32 @@ use App\Support\DocumentWorkflow;
 class DocumentPresenter
 {
     /**
+     * §9's routing plan, in visiting order.
+     *
+     * Every stop is returned, resolved ones included, so the page can show what
+     * the route WAS after a rejection cancelled the rest of it -- a route that
+     * silently emptied itself would look like the send never happened.
+     *
+     * Returns an empty list for a document sent one office at a time, which is
+     * how the panel knows not to render at all.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function route(Document $document): array
+    {
+        return array_values($document->routeStops
+            ->map(fn (DocumentRouteStop $stop): array => [
+                'id' => $stop->id,
+                'position' => $stop->position,
+                'office' => $stop->office->name,
+                'status' => $stop->status->value,
+                'status_label' => $stop->status->label(),
+                'status_tone' => $stop->status->tone(),
+            ])
+            ->all());
+    }
+
+    /**
      * Where the document is, or -- once it is finished -- where it finished.
      *
      * The open leg answers this while the document is moving. After the last
@@ -30,7 +57,7 @@ class DocumentPresenter
      * and never routed, so the column is only ever blank when the register
      * genuinely has no office to name.
      */
-    private function restingOffice(Document $document, ?DocumentMovement $leg): string
+    public function restingOffice(Document $document, ?DocumentMovement $leg): string
     {
         // Branching on the foreign key rather than nullsafe-chaining the
         // relation: to_office_id is nullable in the schema but larastan reads
@@ -121,6 +148,17 @@ class DocumentPresenter
                     fn ($action) => $viewer->can('act', [$document, $action]),
                 ),
             )),
+
+            /*
+             * §9's routing plan: the offices this document is queued to visit.
+             *
+             * ADDITIVE, and deliberately a sibling of `tracking` rather than a
+             * field inside it. `tracking` answers "where is the folder", which
+             * is still exactly one office; this answers "where is it going",
+             * which is a different question with a different cardinality.
+             * Nothing already reading `tracking` changes shape.
+             */
+            'route' => $this->route($document),
 
             'expected_movement_id' => $leg?->id,
             'can' => [

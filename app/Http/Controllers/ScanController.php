@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Document;
 use App\Models\DocumentScan;
 use App\Support\Deadlines;
+use App\Support\Presenters\DocumentPresenter;
 use App\Support\QrToken;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,6 +22,8 @@ use Inertia\Response;
  */
 class ScanController extends Controller
 {
+    public function __construct(private readonly DocumentPresenter $presenter) {}
+
     /**
      * The staff-facing scan console: a focused input that a USB keyboard-wedge
      * scanner types into, plus an optional camera reader.
@@ -82,7 +85,19 @@ class ScanController extends Controller
                 // both reading "Pending" would render in different colours on
                 // a page a member of the public sees.
                 'status_tone' => $document->status->publicTone(),
-                'current_office' => $document->openMovement?->toOffice?->name,
+                /*
+                 * The same helper the staff pages use, so the two screens can
+                 * never name different offices for the same folder.
+                 *
+                 * It falls back to the last closed leg, which matters here more
+                 * than anywhere: openMovement is null on a finished document,
+                 * and this field's own heading turns into "Last handled by"
+                 * for exactly that case.
+                 */
+                'current_office' => $this->presenter->restingOffice(
+                    $document,
+                    $document->openMovement,
+                ),
                 'updated_at' => $document->updated_at?->toIso8601String(),
                 'is_complete' => $document->status->isTerminal(),
             ],

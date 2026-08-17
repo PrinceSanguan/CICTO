@@ -48,6 +48,52 @@ class TransitionDocumentRequest extends FormRequest
     }
 
     /**
+     * Fold the single-office alias into the list, so rules() and everything
+     * downstream see one shape.
+     *
+     * Only when `to_office_ids` is absent: a client that sends both meant the
+     * list, and letting the scalar win would silently drop the extra offices.
+     */
+    protected function prepareForValidation(): void
+    {
+        $ids = $this->input('to_office_ids');
+
+        if ($ids === null) {
+            $single = $this->input('to_office_id');
+
+            if ($single !== null && $single !== '') {
+                $this->usedScalarAlias = true;
+                $ids = [$single];
+            }
+        }
+
+        /*
+         * Blanks are not destinations.
+         *
+         * The document page keeps `to_office_ids` in its form state for every
+         * action, so approving, rejecting or completing posts the field with
+         * one empty element -- `to_office_ids[]=`. Left alone that fails
+         * `integer` and refuses the action, with the error on a field the user
+         * cannot even see, because the office picker only renders for a
+         * forward. Stripping empties here means one shape reaches rules() no
+         * matter which button was pressed.
+         */
+        $ids = array_values(array_filter(
+            (array) ($ids ?? []),
+            static fn ($id): bool => $id !== null && $id !== '',
+        ));
+
+        $this->merge(['to_office_ids' => $ids === [] ? null : $ids]);
+    }
+
+    /**
+     * Whether this submission arrived as the old single `to_office_id`. Errors
+     * are mirrored back onto that key when it did, so a caller only ever sees
+     * the field name it actually sent.
+     */
+    private bool $usedScalarAlias = false;
+
+    /**
      * @return array<string, mixed>
      */
     public function rules(): array
@@ -55,12 +101,28 @@ class TransitionDocumentRequest extends FormRequest
         return [
             'action' => ['required', Rule::enum(MovementAction::class)],
 
-            // Required when forwarding; ignored otherwise.
-            'to_office_id' => [
+            /*
+             * §9 forwarding, to one office or to several in one submit.
+             *
+             * `to_office_ids` is the real field: an ORDERED list of
+             * destinations, first one now and the rest queued. `to_office_id`
+             * survives as a scalar alias because it is what every existing
+             * test, and any tab left open across the deploy, still posts.
+             * prepareForValidation() folds the alias into the array so there is
+             * exactly one shape below this line.
+             */
+            'to_office_ids' => [
                 'nullable',
-                'integer',
-                Rule::exists('offices', 'id')->where('is_active', true),
+                'array',
+                'max:20',
+                // `required` already refuses null and the empty array, so there
+                // is no `min:1` here to fire on every non-forward action.
                 Rule::requiredIf(fn () => $this->input('action') === MovementAction::Forwarded->value),
+            ],
+            'to_office_ids.*' => [
+                'integer',
+                'distinct',
+                Rule::exists('offices', 'id')->where('is_active', true),
             ],
 
             // The open leg the form was rendered from. TransitionDocument
@@ -88,11 +150,40 @@ class TransitionDocumentRequest extends FormRequest
             if ($action === MovementAction::Forwarded) {
                 $document = $this->route('document');
                 $leg = $document instanceof Document ? $document->openMovement : null;
+                $destinations = array_map('intval', (array) $this->input('to_office_ids', []));
 
-                if ($leg !== null && (int) $this->input('to_office_id') === $leg->to_office_id) {
-                    $validator->errors()->add('to_office_id', 'This document is already at that office.');
+                // Only the FIRST stop can be "already at that office" -- it is
+                // the one the folder moves to now. A later stop naming the
+                // current holder would be a legitimate round trip (out to
+                // Budget, back here to sign), so it is not refused here; the
+                // picker simply does not offer the current holder at all.
+                if ($leg !== null && ($destinations[0] ?? null) === $leg->to_office_id) {
+                    $this->addDestinationError($validator, 'This document is already at that office.');
+                }
+
+                // 'distinct' catches repeats, but its message names an index the
+                // picker never shows. This is the sentence a person can act on.
+                if (count($destinations) !== count(array_unique($destinations))) {
+                    $this->addDestinationError($validator, 'Each office can only appear once in the route.');
                 }
             }
         });
+    }
+
+    /**
+     * Report a destination problem on the key the CALLER used.
+     *
+     * `to_office_ids` is the real field and the picker reads it. The scalar
+     * `to_office_id` is mirrored only when the submission arrived that way, so
+     * a single-office client -- an old tab, an existing test -- still gets its
+     * error back under the name it posted.
+     */
+    private function addDestinationError(Validator $validator, string $message): void
+    {
+        $validator->errors()->add('to_office_ids', $message);
+
+        if ($this->usedScalarAlias) {
+            $validator->errors()->add('to_office_id', $message);
+        }
     }
 }

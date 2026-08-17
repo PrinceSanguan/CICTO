@@ -130,6 +130,7 @@ class DocumentController extends Controller
             // DocumentCommentPolicy::view() reads $comment->document, which
             // lazy-loaded once per comment before this was here.
             'comments.document',
+            'routeStops.office:id,name',
         ]);
 
         return Inertia::render('documents/show', [
@@ -143,8 +144,16 @@ class DocumentController extends Controller
                 (int) $document->files->max('version'),
             ),
             'comments' => $this->presenter->comments($document->comments, $user),
+            /*
+             * Everywhere the folder can be sent, minus where it already is.
+             *
+             * Read through the relation's QUERY rather than the loaded model:
+             * openMovement is null on a completed or rejected document, and
+             * `$document->openMovement->to_office_id` warned and fell through
+             * to 0 for those -- right answer, by luck rather than by design.
+             */
             'offices' => Office::query()->active()->ordered()
-                ->whereKeyNot($document->openMovement->to_office_id ?? 0)
+                ->whereKeyNot($document->openMovement()->value('to_office_id') ?? 0)
                 ->get(['id', 'name']),
         ]);
     }

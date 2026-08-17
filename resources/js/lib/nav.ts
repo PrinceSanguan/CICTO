@@ -2,6 +2,7 @@ import {
     Archive as ArchiveIcon,
     BarChart3,
     Bell,
+    Crown,
     FileSearch,
     Files,
     FolderOpen,
@@ -9,6 +10,7 @@ import {
     LifeBuoy,
     ScanLine,
     Settings,
+    ShieldCheck,
     SlidersHorizontal,
     TrendingUp,
     UserCog,
@@ -199,4 +201,34 @@ const PANEL_NAV: Record<Role, NavItem[]> = {
 
 export function panelNavFor(role: Role | null | undefined): NavItem[] {
     return PANEL_NAV[role ?? 'user'] ?? PANEL_NAV.user;
+}
+
+/**
+ * The way BACK into a role's panel from the clerk shell.
+ *
+ * The panel sidebar's lockup links Home, so an admin can always leave the
+ * panel -- but nothing led back. §4's main navigation is Home, Track Documents,
+ * Reports and Help for everybody, so /admin/dashboard was reachable only by
+ * signing in again or typing the URL. The client asked where it had gone.
+ *
+ * Kept OUT of `mainNav` deliberately. Those four labels are contract acceptance
+ * criteria and a fifth entry would change the set §4 names; AppTopNav renders
+ * this as its own button beside Logout instead, which is both truer to the
+ * spec and harder to miss than one more link in a row of four.
+ *
+ * Null for a plain user, who has no panel. Hiding it is presentation only --
+ * EnsureRole still answers 403 to anyone who types the URL.
+ */
+const PANEL_HOME: Record<Role, NavItem | null> = {
+    user: null,
+    admin: { title: 'Admin Panel', href: admin.dashboard(), icon: ShieldCheck },
+    super_admin: {
+        title: 'Super Admin Panel',
+        href: superAdmin.dashboard(),
+        icon: Crown,
+    },
+};
+
+export function panelHomeFor(role: Role | null | undefined): NavItem | null {
+    return PANEL_HOME[role ?? 'user'] ?? null;
 }

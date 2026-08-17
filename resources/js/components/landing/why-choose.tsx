@@ -1,13 +1,16 @@
 import { WHY } from './content';
 import { FeatureGlyph } from './icons';
 
-/** Centred heading over a 2x2 card grid, on the same surface as the panel above. */
+/**
+ * Centred heading over a 2x2 card grid, on the same surface as the panel above.
+ *
+ * No `id="reports"` here any more. The nav's Reports item used to scroll to this
+ * block, which is a "Why Choose CICTO" pitch and not a report; it now opens the
+ * actual Reports screen. Nothing else linked here.
+ */
 export function WhyChoose() {
     return (
-        <section
-            id="reports"
-            className="scroll-mt-20 bg-surface pt-16 lg:pt-24"
-        >
+        <section className="scroll-mt-20 bg-surface pt-16 lg:pt-24">
             <div className="mx-auto max-w-7xl px-6">
                 <h2 className="text-center text-[clamp(1.4rem,2.6vw,2rem)] leading-tight font-bold text-balance text-navy">
                     {WHY.heading}

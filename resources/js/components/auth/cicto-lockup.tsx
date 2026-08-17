@@ -16,11 +16,28 @@ import { cn } from '@/lib/utils';
  */
 const MARK_FRACTION = 0.67;
 
-export function CictoLockup({ className }: { className?: string }) {
+/**
+ * `markClassName` and `wordmarkClassName` exist for the one caller that has to
+ * shrink the mark and drop the words without redrawing the lockup: the panel
+ * sidebar, collapsed to its 3rem icon rail. Both default to nothing, so every
+ * other caller is unaffected.
+ */
+export function CictoLockup({
+    className,
+    markClassName,
+    wordmarkClassName,
+}: {
+    className?: string;
+    markClassName?: string;
+    wordmarkClassName?: string;
+}) {
     return (
         <div className={cn('flex items-center gap-3', className)}>
             <div
-                className="relative aspect-square w-14 shrink-0 overflow-hidden"
+                className={cn(
+                    'relative aspect-square w-14 shrink-0 overflow-hidden',
+                    markClassName,
+                )}
                 aria-hidden="true"
             >
                 <img
@@ -31,7 +48,7 @@ export function CictoLockup({ className }: { className?: string }) {
                 />
             </div>
 
-            <div className="leading-none">
+            <div className={cn('leading-none', wordmarkClassName)}>
                 <span className="block text-3xl font-extrabold tracking-tight text-navy">
                     CICTO
                 </span>

@@ -28,7 +28,8 @@ use Laravel\Fortify\Contracts\TwoFactorLoginResponse as TwoFactorLoginResponseCo
  * destinationFor() below.
  *
  * The role is read from the database record, never from anything the login form
- * posted. The three /login/* URLs differ only in presentation.
+ * posted. Since 2026-08-17 there is one login screen and it carries no role
+ * hint at all, which makes this class the whole of §3's "separate entry points".
  */
 class RoleAwareLoginResponse implements LoginResponseContract, RegisterResponseContract, TwoFactorLoginResponseContract
 {

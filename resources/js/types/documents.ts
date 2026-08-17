@@ -42,6 +42,16 @@ export type DocumentAction = {
     requires_remarks: boolean;
 };
 
+/** One office on a document's routing plan. Mirrors App\Enums\RouteStopStatus. */
+export type RouteStop = {
+    id: number;
+    position: number;
+    office: string | null;
+    status: 'pending' | 'visited' | 'cancelled';
+    status_label: string;
+    status_tone: Tone;
+};
+
 export type DocumentDetail = DocumentListItem & {
     description: string | null;
     remarks: string | null;
@@ -49,6 +59,14 @@ export type DocumentDetail = DocumentListItem & {
     created_by: string | null;
     completed_at: string | null;
     tracking: DocumentTracking;
+    /**
+     * §9's routing plan, in visiting order. Empty for a document sent one
+     * office at a time.
+     *
+     * A sibling of `tracking`, not part of it: `tracking` says where the folder
+     * IS, which is always one office, and this says where it is GOING.
+     */
+    route: RouteStop[];
     available_actions: DocumentAction[];
     /** The open leg the page was rendered from -- posted back to defeat double-submits. */
     expected_movement_id: number | null;
