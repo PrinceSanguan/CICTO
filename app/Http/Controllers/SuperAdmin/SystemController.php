@@ -5,12 +5,14 @@ namespace App\Http\Controllers\SuperAdmin;
 use App\Enums\MovementAction;
 use App\Enums\SecurityEventType;
 use App\Http\Controllers\Controller;
+use App\Models\AppSetting;
 use App\Models\BackupRun;
 use App\Models\Document;
 use App\Models\SecurityEvent;
 use App\Services\Backup\BackupService;
 use App\Support\DocumentWorkflow;
 use App\Support\Reporting\AdminTrend;
+use App\Support\SystemSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -112,6 +114,78 @@ class SystemController extends Controller
                 'versionsEnabled' => (bool) config('cicto.retention.versions.enabled'),
                 'securityEvents' => (int) config('cicto.retention.security_events.after_days'),
             ],
+
+            /*
+             * Client question A6, made the client's decision rather than ours.
+             *
+             * `chosen` is reported separately from `allowSelfApproval` because
+             * "off because nobody has decided" and "off because the LGU decided
+             * off" look identical on screen and are not the same thing. The
+             * screen says which it is.
+             */
+            'workflow' => [
+                'allowSelfApproval' => SystemSettings::allowSelfApproval(),
+                'chosen' => SystemSettings::selfApprovalWasChosen(),
+            ],
+        ]);
+    }
+
+    /**
+     * §2 "Super Admin ... configures system settings", for the one setting the
+     * client asked to be able to change themselves.
+     *
+     * Stored in app_settings rather than written back to .env: a setting that
+     * needs a deployment to change is not a setting the client controls, which
+     * is what "they can allow or block it" asks for. config/cicto.php stays the
+     * boot default for a fresh installation.
+     */
+    public function updateWorkflow(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'allow_self_approval' => ['required', 'boolean'],
+        ]);
+
+        $allow = (bool) $validated['allow_self_approval'];
+
+        // Read before writing, so the security log records transitions rather
+        // than clicks. A double-tap on the checkbox is not a change of policy,
+        // and a §21 log padded with identical entries is one nobody reads when
+        // a real change needs finding.
+        $changed = SystemSettings::allowSelfApproval() !== $allow
+            || ! SystemSettings::selfApprovalWasChosen();
+
+        /*
+         * The 'bool' third argument is load-bearing. AppSetting::put casts the
+         * value to a string before encrypting it, so false becomes '' -- and
+         * with the default value_type of 'string', typedValue() would hand back
+         * '' rather than false. '' is not null, so AppSetting::get would not
+         * fall through to the config default either, and the setting would read
+         * as an empty string forever.
+         */
+        AppSetting::put(
+            SystemSettings::ALLOW_SELF_APPROVAL,
+            $allow,
+            'bool',
+            'workflow',
+            false,
+            'Allow self-approval',
+        );
+
+        if ($changed) {
+            SecurityEvent::log(
+                SecurityEventType::SettingChanged,
+                $allow
+                    ? 'Self-approval turned ON: an office head may now approve and sign their own submissions.'
+                    : 'Self-approval turned OFF: an office head may no longer approve or sign their own submissions.',
+                $request->user(),
+            );
+        }
+
+        return back()->with('toast', [
+            'type' => 'success',
+            'message' => $allow
+                ? 'Office heads can now approve their own documents.'
+                : 'Office heads can no longer approve their own documents.',
         ]);
     }
 

@@ -136,10 +136,34 @@ class BackupService
             'path' => $relative,
         ])->save();
 
-        // Ensure the directory exists, then dump to the real filesystem path --
-        // a dumper writes with fopen/proc_open, not through Flysystem.
-        Storage::disk($disk)->makeDirectory('/');
-        $absolute = Storage::disk($disk)->path($relative);
+        /*
+         * A dumper writes with fopen/proc_open and ZipArchive needs a real
+         * path, so the work always happens on a local filesystem -- but the
+         * DESTINATION no longer has to be one.
+         *
+         * When the backups disk is remote (Laravel Object Storage, S3), the
+         * artifact is built in a local staging directory and streamed up
+         * afterwards. That is what makes "off-site backup" achievable at all on
+         * a container platform, where the local disk is wiped by every deploy
+         * and is sized at roughly 512MB per 1GB of RAM.
+         *
+         * When the disk is local, nothing changes: the work happens at the
+         * final path and there is no second copy.
+         */
+        $remote = config("filesystems.disks.{$disk}.driver") !== 'local';
+
+        if ($remote) {
+            $workDir = storage_path('app/backup-staging');
+
+            if (! is_dir($workDir) && ! @mkdir($workDir, 0755, true) && ! is_dir($workDir)) {
+                throw new RuntimeException("Could not create the backup staging directory at {$workDir}.");
+            }
+        } else {
+            Storage::disk($disk)->makeDirectory('/');
+            $workDir = rtrim(Storage::disk($disk)->path(''), '/');
+        }
+
+        $absolute = $workDir.'/'.$relative;
 
         try {
             $bytes = $dumper->dump($absolute);
@@ -153,16 +177,27 @@ class BackupService
                 // the two can never be separated in transit or restored out of
                 // step with each other.
                 $archive = "cicto-{$stamp}-{$suffix}.zip";
-                $bytes = $this->archive($absolute, Storage::disk($disk)->path($archive));
+                $bytes = $this->archive($absolute, $workDir.'/'.$archive);
 
                 @unlink($absolute);
                 $relative = $archive;
                 $run->forceFill(['path' => $relative])->save();
-                $absolute = Storage::disk($disk)->path($relative);
+                $absolute = $workDir.'/'.$relative;
             }
 
+            // Checksum the bytes we actually built, before they move anywhere.
             $checksum = hash_file('sha256', $absolute);
+
+            if ($remote) {
+                $this->publish($disk, $relative, $absolute);
+            }
         } catch (Throwable $e) {
+            // Staging is scratch space on a disk that may be small; a failed
+            // run must not leave a part-built archive filling it up.
+            if ($remote && is_file($absolute)) {
+                @unlink($absolute);
+            }
+
             $this->recordFailure($run, $e, $triggeredBy);
 
             throw $e;
@@ -248,12 +283,57 @@ class BackupService
     }
 
     /**
+     * Stream a finished artifact onto a remote backups disk, then drop the
+     * local staging copy.
+     *
+     * writeStream rather than put(file_get_contents()): a database dump plus
+     * every uploaded document does not belong in PHP's memory, and on the
+     * container platforms this exists for the memory limit is the tight
+     * constraint.
+     *
+     * The staging file is removed only after the upload is confirmed present.
+     * Failing here throws, which lands in the caller's catch and marks the run
+     * Failed -- correct, because a backup nobody can reach is not a backup.
+     */
+    private function publish(string $disk, string $relative, string $absolute): void
+    {
+        $handle = fopen($absolute, 'rb');
+
+        if ($handle === false) {
+            throw new RuntimeException("Could not read the staged backup at {$absolute}.");
+        }
+
+        try {
+            Storage::disk($disk)->writeStream($relative, $handle);
+        } finally {
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
+        }
+
+        if (! Storage::disk($disk)->exists($relative)) {
+            throw new RuntimeException("The backup did not arrive on the {$disk} disk.");
+        }
+
+        @unlink($absolute);
+    }
+
+    /**
      * Whether uploaded documents can be folded into the backup.
      *
      * Needs ZipArchive and a local documents disk. Shared hosting sometimes
      * lacks the extension, and a remote disk cannot be walked cheaply -- in
      * either case the backup falls back to database-only and says so, rather
      * than pretending the files are covered.
+     *
+     * WHAT COVERS THE DOCUMENTS WHEN THIS IS FALSE. On object storage the bytes
+     * are not in the archive, and the operator has to know what is protecting
+     * them instead: the bucket's own durability, plus whatever versioning or
+     * lifecycle policy is set on it. That guards against hardware loss. It does
+     * NOT guard against a file being deleted or overwritten -- for that the
+     * bucket needs object versioning turned on, which is a setting outside this
+     * application. Say so in writing before sign-off; it is listed as a known
+     * limit in docs/handover/DEPLOYMENT.md.
      */
     public function canArchiveFiles(): bool
     {

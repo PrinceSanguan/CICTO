@@ -52,14 +52,14 @@ class AdminUserController extends Controller
                 fn ($q) => $q->where('users.office_id', $viewer->office_id),
             )
             ->when($search !== '', function ($q) use ($search) {
-                $term = '%'.str_replace(['%', '_'], ['\%', '\_'], mb_strtolower($search)).'%';
+                $term = User::likeTerm($search);
 
                 // lower() on both sides and an explicit ESCAPE: neither the
                 // collation nor the default escape character is guaranteed to
                 // be the same across SQLite, MySQL and PostgreSQL.
                 $q->where(function ($inner) use ($term) {
-                    $inner->whereRaw("lower(users.name) like ? escape '\'", [$term])
-                        ->orWhereRaw("lower(users.email) like ? escape '\'", [$term]);
+                    $inner->whereRaw("lower(users.name) like ? escape '!'", [$term])
+                        ->orWhereRaw("lower(users.email) like ? escape '!'", [$term]);
                 });
             })
             ->when($role !== null, fn ($q) => $q->where('users.role', $role))

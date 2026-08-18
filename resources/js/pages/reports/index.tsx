@@ -42,7 +42,12 @@ type ActivityRow = {
     actions: number;
     approvals: number;
 };
-type OfficeRow = { office: string; legs: number; average_minutes: number };
+type OfficeRow = {
+    id: number;
+    office: string;
+    legs: number;
+    average_minutes: number;
+};
 
 type Props = {
     summary: {
@@ -266,7 +271,7 @@ export default function ReportsIndex({
                                     </TableRow>
                                 )}
                                 {officePerformance.map((row) => (
-                                    <TableRow key={row.office}>
+                                    <TableRow key={row.id}>
                                         <TableCell>{row.office}</TableCell>
                                         <TableCell className="text-right">
                                             {row.legs}

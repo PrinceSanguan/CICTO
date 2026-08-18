@@ -44,14 +44,20 @@ class DatabaseSeeder extends Seeder
         // every screen showed a name from one department beside documents from
         // another -- which reads as a bug in the office scoping when it is only
         // a label.
-        $mo = Office::query()->where('code', 'MO')->first();
-        $mto = Office::query()->where('code', 'MTO')->first();
+        //
+        // OCM and TREA are the client's real codes for the Mayor's Office and
+        // the Treasurer (DTS-Questions.docx, 2026-08-18). firstOrFail rather
+        // than first: a missing office used to silently produce an Admin with
+        // no office_id, which DocumentBuilder::visibleTo scopes very
+        // differently, and nothing said so.
+        $ocm = Office::query()->where('code', 'OCM')->firstOrFail();
+        $trea = Office::query()->where('code', 'TREA')->firstOrFail();
 
         $accounts = [
             ['Super Admin', 'super@cicto.test', Role::SuperAdmin, null, 'System Administrator'],
-            ['MO Admin', 'admin@cicto.test', Role::Admin, $mo, 'Department Head'],
-            ['MTO Admin', 'mto@cicto.test', Role::Admin, $mto, 'Treasurer'],
-            ['MO Clerk', 'clerk@cicto.test', Role::User, $mo, 'Administrative Aide'],
+            ['OCM Admin', 'admin@cicto.test', Role::Admin, $ocm, 'Department Head'],
+            ['TREA Admin', 'mto@cicto.test', Role::Admin, $trea, 'Treasurer'],
+            ['OCM Clerk', 'clerk@cicto.test', Role::User, $ocm, 'Administrative Aide'],
         ];
 
         foreach ($accounts as [$name, $email, $role, $office, $position]) {

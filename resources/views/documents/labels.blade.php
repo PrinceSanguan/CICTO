@@ -49,7 +49,12 @@
            resolving reliably on mid-range phones under office fluorescents. */
         .label svg { width: 24mm; height: 24mm; display: block; }
 
-        .cn { font: 700 11pt/1.1 ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .02em; }
+        /* overflow-wrap because .label clips (overflow: hidden) and the real
+           office codes include hyphenated ones -- CENRO-SS-2026-00042 is 19
+           monospace characters against roughly 38mm of text column. Wrapping
+           onto a second line costs nothing here: the row is 37mm tall and the
+           QR beside it is 24mm. */
+        .cn { font: 700 11pt/1.1 ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .02em; overflow-wrap: anywhere; }
         .meta { font-size: 7pt; line-height: 1.35; color: #333; margin-top: 1mm; }
         .priority { font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
 

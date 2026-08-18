@@ -30,14 +30,14 @@ class SuperAdminUserController extends Controller
         $users = User::query()
             ->with('office:id,code,name')
             ->when($search !== '', function ($query) use ($search) {
-                $term = '%'.str_replace(['%', '_'], ['\%', '\_'], mb_strtolower($search)).'%';
+                $term = User::likeTerm($search);
 
                 // lower() on both sides and an explicit ESCAPE: neither the
                 // collation nor the default escape character is the same across
                 // SQLite, MySQL and PostgreSQL.
                 $query->where(function ($inner) use ($term) {
-                    $inner->whereRaw("lower(users.name) like ? escape '\'", [$term])
-                        ->orWhereRaw("lower(users.email) like ? escape '\'", [$term]);
+                    $inner->whereRaw("lower(users.name) like ? escape '!'", [$term])
+                        ->orWhereRaw("lower(users.email) like ? escape '!'", [$term]);
                 });
             })
             // Nulls last on every driver: an account that has never signed in

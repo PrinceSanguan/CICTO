@@ -9,6 +9,7 @@ use App\Models\Document;
 use App\Models\DocumentSignature;
 use App\Models\User;
 use App\Support\DocumentWorkflow;
+use App\Support\SystemSettings;
 
 /**
  * Row-level authorization for documents.
@@ -137,10 +138,11 @@ class DocumentPolicy
 
             // Client question A6: separation of duties. Blocking self-approval
             // is the safe default; in a two-person municipal office it may
-            // block real work, so it is switchable rather than hard-coded.
+            // block real work, so it is switchable rather than hard-coded --
+            // by a Super Admin at runtime, not only at deploy time.
             $selfApproval = $document->created_by_id === $user->id;
 
-            if ($selfApproval && ! config('cicto.workflow.allow_self_approval', false)) {
+            if ($selfApproval && ! SystemSettings::allowSelfApproval()) {
                 return false;
             }
         }
@@ -175,9 +177,10 @@ class DocumentPolicy
             return false;
         }
 
-        // Same separation-of-duties switch as approval (client question A6).
+        // Same separation-of-duties switch as approval (client question A6),
+        // read through the same helper so the two rules cannot drift apart.
         if ($document->created_by_id === $user->id
-            && ! config('cicto.workflow.allow_self_approval', false)) {
+            && ! SystemSettings::allowSelfApproval()) {
             return false;
         }
 

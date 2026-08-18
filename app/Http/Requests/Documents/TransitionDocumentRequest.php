@@ -135,6 +135,25 @@ class TransitionDocumentRequest extends FormRequest
         ];
     }
 
+    /**
+     * Without this the array rule renders its own key: "The selected
+     * to_office_ids.0 is invalid." show.tsx deliberately hunts for those
+     * indexed keys so the message reaches the user, and the case it exists for
+     * -- an office deactivated between opening the page and pressing Confirm --
+     * is exactly what a re-seed onto the client's real office list causes. The
+     * refusal is right; the sentence was unreadable.
+     *
+     * @return array<string, string>
+     */
+    public function attributes(): array
+    {
+        return [
+            'to_office_id' => 'destination office',
+            'to_office_ids' => 'destination office',
+            'to_office_ids.*' => 'destination office',
+        ];
+    }
+
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {

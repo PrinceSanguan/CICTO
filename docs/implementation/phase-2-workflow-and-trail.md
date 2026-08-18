@@ -114,10 +114,21 @@ The React button set is generated from `DocumentWorkflow::allowed($status)` — 
 same const map that guards the server. A button that is not in the map does not
 render, and a request for an action not in the map throws. One source of truth.
 
-> **Client question A6** — can an Admin approve a document they submitted
-> themselves? The natural separation-of-duties rule blocks it; in a two-person
-> municipal office that blocks real work. One line in `DocumentPolicy::approve()`,
-> and a support complaint if you guess wrong.
+> **Client question A6** *(answered 2026-08-18 — it became a setting, not a rule)*.
+> Can an Admin approve a document they submitted themselves? The natural
+> separation-of-duties rule blocks it; in a two-person municipal office that blocks
+> real work. The client's note reads "they can allow or block it naman daw" — they
+> expect to make this call themselves, and to change it later. So it did not ship as
+> one line in `DocumentPolicy::approve()`. It shipped as a **Super Admin toggle** on
+> `/super-admin/settings`, stored in `app_settings` under the key
+> `workflow.allow_self_approval` and resolved by
+> `App\Support\SystemSettings::allowSelfApproval()`, which falls back to
+> `config('cicto.workflow.allow_self_approval')` when no row exists.
+> `DocumentPolicy` consults that one method. Blocking self-approval remains the
+> shipped default, and flipping the toggle writes a `SecurityEvent`.
+>
+> **Still open: which way the LGU wants it set.** That is the whole remainder of A6,
+> and it is now a click during handover rather than a deployment.
 
 ---
 
@@ -204,9 +215,13 @@ pollute the custody timeline.
 ### Where the date comes from
 
 `documents.due_at` = registration time + `document_types.turnaround_days`, in
-**calendar days** (D18), clamped to end-of-business. Written **once**, inside the
-registration transaction, and immutable thereafter except by a Super Admin
-override — so the window quoted to a citizen never silently shifts.
+**calendar days** (D18), clamped to end-of-business — which is now **18:00**, raised
+from 17:00 on 2026-08-18 because the client confirmed the working day runs 7:00 AM to
+6:00 PM. The hour lives in `cicto.deadlines.business_end_hour`, with the same value
+repeated as the inline fallback in `App\Support\Deadlines`; change both or neither.
+Written **once**, inside the registration transaction, and immutable thereafter
+except by a Super Admin override — so the window quoted to a citizen never silently
+shifts.
 
 `document_movements.due_at` is the per-leg office SLA, written by
 `TransitionDocument` on every open-leg insert and clamped to never exceed the
@@ -221,6 +236,16 @@ wants it, it is a config delta map defaulting to zero, agreed in writing.
 > holidays table seeded every year — and an unseeded table *silently* falls back to
 > calendar days and reports wrong SLAs, which is worse than not offering it. Tell
 > the client plainly: calendar days now, working days as a separate quote.
+>
+> **That conversation got harder on 2026-08-18.** The client confirmed the week is
+> **Monday to Thursday**, 7:00 AM to 6:00 PM — the four-day week on the supplied
+> design was real, not a typo for Friday. Calendar days therefore run the clock
+> straight through a three-day weekend: a 3-day turnaround filed on a Thursday falls
+> due on **Sunday**, with the counter shut since Thursday evening and nobody back
+> until Monday. Raising `business_end_hour` to 18 does not touch this. It sets the
+> hour a deadline lands on; it cannot say which days exist. Say it out loud before
+> sign-off, rather than letting it arrive as an overdue badge nobody could have
+> acted on.
 
 ### Overdue is a predicate, not a flag
 
@@ -259,9 +284,21 @@ percentage of turnaround would need a per-row computed comparison.
 > that type. The first build used 3 days against a 3-day MEMO turnaround and
 > every memo was born amber.
 >
-> Keep the threshold below the shortest real turnaround. This is a live
-> dependency on client question **A4** — the real `turnaround_days` values decide
-> whether 2 is the right number.
+> Keep the threshold below the shortest real turnaround. This is a live dependency
+> on client question **A4**, and the 2026-08-18 answer made it *more* live, not
+> less. The client supplied the 43 real document types but not their turnaround
+> days — that half of A4 went to the City Archive and Records Office and has not
+> come back — so `DocumentTypeSeeder` seeds `turnaround_days` **NULL** on every row
+> and `App\Support\Deadlines` falls back to
+> `cicto.deadlines.default_turnaround_days`, **3 calendar days**
+> (`CICTO_DEFAULT_TURNAROUND_DAYS`), for all 43 of them.
+>
+> So state it plainly: right now every type carries a uniform 3-day turnaround
+> against a 2-day warning window, which means **every document in the system goes
+> amber roughly one day after registration** and the badge separates nothing from
+> nothing. That is not a bug to fix in code — it is the provisional SLA showing
+> through, and it clears the day ARO returns real per-type numbers. Until then, do
+> not let anyone read the amber count as a workload signal.
 
 One `Deadlines` class emits both the SQL boundary and the PHP comparison, and a
 `dueState` accessor gives the badge its value with no extra query — so the list
@@ -346,7 +383,10 @@ question **B3**.
 
 ## Exit criteria
 
-- [ ] **A6 answered in writing** — self-approval allowed or blocked
+- [ ] **A6 set in writing** — the mechanism shipped 2026-08-18 as the Super Admin
+      toggle `workflow.allow_self_approval`, defaulting to blocked. What is still
+      needed is the LGU stating which way they want it, so the toggle is set
+      deliberately rather than left at our default by accident
 - [ ] **B3 answered** — email in scope, or §12 acknowledged as in-app only
 - [ ] The three-account walkthrough runs end to end without touching the database
       by hand

@@ -115,6 +115,8 @@ class HostCheckCommand extends Command
         $rows = [];
 
         foreach (['documents', 'backups'] as $disk) {
+            $driver = (string) config("filesystems.disks.{$disk}.driver");
+
             try {
                 $probe = 'host-check-'.bin2hex(random_bytes(4));
                 Storage::disk($disk)->put($probe, 'ok');
@@ -123,16 +125,34 @@ class HostCheckCommand extends Command
 
                 $rows[] = [
                     "Disk: {$disk}",
-                    $readable ? 'OK' : 'NO',
+                    ($readable ? 'OK' : 'NO').' '.$driver,
                     'Uploads or backups cannot be written',
                 ];
             } catch (Throwable $e) {
                 $rows[] = [
                     "Disk: {$disk}",
-                    'NO',
+                    'NO '.$driver,
                     mb_substr($e->getMessage(), 0, 60),
                 ];
             }
+        }
+
+        /*
+         * The one storage failure that reports OK and still loses everything.
+         *
+         * A local disk is correct on a VPS and fatal on a container platform,
+         * where the filesystem is reset by every deploy and each replica has
+         * its own. The write probe above passes either way -- it writes and
+         * reads back inside one request -- so nothing else in this command
+         * would ever notice. Name it here, because this is the command the
+         * runbook tells an operator to run before committing to a host.
+         */
+        if (config('filesystems.disks.documents.driver') === 'local') {
+            $rows[] = [
+                'Documents durable?',
+                'CHECK',
+                'Local disk: fine on a VPS, TOTAL LOSS on Laravel Cloud or any container host',
+            ];
         }
 
         return $rows;

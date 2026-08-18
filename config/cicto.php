@@ -28,25 +28,58 @@ return [
     | turnaround: it keeps the "approaching deadline" predicate a single bound
     | datetime instead of a per-row computed comparison.
     |
-    | KNOWN INTERACTION, and it needs a decision from the client (question A4):
-    | any document type whose turnaround_days is <= this value is flagged "due
-    | soon" from the moment it is registered, which makes the badge meaningless
-    | for that type. Keep this number BELOW the shortest real turnaround. A
-    | per-type warning window would need date arithmetic across two columns,
-    | which is not portable between PostgreSQL and MySQL without branching --
-    | out of scope for a PHP 500 line item.
+    | KNOWN INTERACTION, and it still needs a decision from the client
+    | (question A4): any document type whose turnaround_days is <= this value is
+    | flagged "due soon" from the moment it is registered, which makes the badge
+    | meaningless for that type. Keep this number BELOW the shortest real
+    | turnaround. A per-type warning window would need date arithmetic across
+    | two columns, which is not portable between PostgreSQL and MySQL without
+    | branching -- out of scope for a PHP 500 line item.
+    |
+    | AS OF 2026-08-18 default_turnaround_days is the ONLY turnaround in the
+    | system. The client supplied the real document types but answered "how many
+    | days should each take?" with "ARO" -- the records office, who had not been
+    | asked yet -- so DocumentTypeSeeder seeds turnaround_days NULL on every row
+    | rather than inventing numbers, and Deadlines::dueAt falls back to the
+    | value below for all of them. Every document therefore carries the same
+    | provisional SLA. Raise CICTO_DEFAULT_TURNAROUND_DAYS if 3 days makes the
+    | overdue counts noise; the per-type numbers land in DocumentTypeSeeder when
+    | ARO answers.
+    |
+    | MEASURED CONSEQUENCE of one shared turnaround, so nobody reads it as a
+    | fault: two documents filed on the same day get a byte-identical due_at
+    | whatever their type, so the backlog does not degrade gradually -- it goes
+    | from nothing flagged, to every open document amber on one morning, to
+    | every one red two mornings later, and the 08:00 sweep mails that whole set
+    | and then repeats the overdue reminder daily until each is closed. Nothing
+    | here is wrong; it is what a placeholder SLA looks like at scale. Raising
+    | this value staggers nothing -- due_at is stamped at registration and never
+    | recomputed, so it only affects documents registered after the change.
     |
     | Calendar days, not working days. A working-day engine needs a holidays
     | table reseeded every year (Philippine holidays move by proclamation), and
     | an unseeded table silently falls back to calendar days and reports wrong
     | SLAs -- worse than not offering the feature. See docs/implementation D18.
     |
+    | business_end_hour is 18 because the client confirmed on 2026-08-18 that
+    | the counter works Monday to Thursday, 7:00 AM to 6:00 PM. It exists so a
+    | deadline lands at the close of business rather than at 03:00, where it
+    | would read as overdue to someone who had the whole working day. There is
+    | no business_start_hour because nothing needs one -- deadlines are always
+    | measured to a close, never from an open.
+    |
+    | Note what this key CANNOT express: a four-day working week. Deadlines are
+    | calendar days (D18), so a 3-day turnaround filed on Thursday still falls
+    | due on Sunday with the counter shut Friday to Sunday. Making the clock
+    | skip non-working days is the holidays-table feature above, and it is out
+    | of scope for §11 as priced.
+    |
     */
 
     'deadlines' => [
         'approaching_days' => (int) env('CICTO_APPROACHING_DAYS', 2),
         'default_turnaround_days' => (int) env('CICTO_DEFAULT_TURNAROUND_DAYS', 3),
-        'business_end_hour' => (int) env('CICTO_BUSINESS_END_HOUR', 17),
+        'business_end_hour' => (int) env('CICTO_BUSINESS_END_HOUR', 18),
     ],
 
     /*
@@ -58,6 +91,14 @@ return [
     | document they submitted themselves? Separation of duties says no; a
     | two-person municipal office says that blocks real work. Default to the
     | safe reading and let the client flip it.
+    |
+    | THIS IS THE BOOT DEFAULT ONLY. On 2026-08-18 the client's note against A6
+    | read "they can allow or block it" -- i.e. the decision is theirs to make
+    | and change, not ours to bake into a deployment. A Super Admin can now
+    | override this from the settings screen; the override is stored in
+    | app_settings under `workflow.allow_self_approval` and is what
+    | DocumentPolicy actually reads. This value decides the answer only until
+    | somebody sets it there. See App\Support\SystemSettings.
     |
     */
 
@@ -127,12 +168,29 @@ return [
     | office will actually be asked for. Only the intermediate drafts go, and
     | only after the document is finished.
     |
+    | 1095 days is three years, which is the FLOOR the client gave in a chat
+    | message on 2026-08-18 -- "3 to 5 years po minimum archive ng files", with
+    | past records also held on their cloud server. Note the source: the answer
+    | sheet they sent the same day says only "ARO" against this question, so the
+    | exact figure is still that office's to give.
+    | The floor is used rather than the ceiling because this number decides what
+    | gets destroyed, and the previous default -- 180 days -- was six times more
+    | aggressive than anything the client has ever agreed to. Raise it to 1825
+    | if ARO says five years. Pruning is still off either way.
+    |
+    | Deliberately NOT changed to match: scans.retention_days above. That one
+    | covers IP addresses and user agents in the scan log, which are personal
+    | information under RA 10173 and are published as a 180-day promise on the
+    | privacy notice. Keeping personal data for three years to match a file
+    | retention policy would be a step backwards, and would silently rewrite a
+    | statement the public has already been shown.
+    |
     */
 
     'retention' => [
         'versions' => [
             'enabled' => (bool) env('CICTO_PRUNE_VERSIONS_ENABLED', false),
-            'after_days' => (int) env('CICTO_VERSION_RETENTION_DAYS', 180),
+            'after_days' => (int) env('CICTO_VERSION_RETENTION_DAYS', 1095),
             'keep_first' => true,
             'keep_current' => true,
         ],
@@ -229,18 +287,27 @@ return [
      * remain env-overridable because a support number is exactly the sort of
      * thing that changes without a deployment.
      *
-     * `hours` reads "Monday - Thursday" because that is what the supplied
-     * design says. Flagged to the client as a likely typo for Friday -- a
-     * published counter that closes a day early is a complaint, so this is
-     * copied verbatim rather than silently corrected.
+     * `hours` read "Monday - Thursday" on the supplied design and were flagged
+     * back to the client as a likely typo for Friday. CONFIRMED NOT A TYPO on
+     * 2026-08-18: the counter really does work Monday to Thursday, and the
+     * times are 7:00 AM to 6:00 PM rather than the 8:00 to 5:00 the design
+     * carried. Do not "fix" the Thursday.
+     *
+     * cicto.deadlines.business_end_hour is the machine-readable half of the
+     * same fact and must move with it.
+     *
+     * `office` is the client's own name for themselves, from the office list
+     * they supplied on the same day (code CICTO). It is printed on every
+     * signature certificate and every exported register, so it is the full
+     * official name rather than a convenient short one.
      */
     'support' => [
-        'office' => env('CICTO_SUPPORT_OFFICE', 'Municipal Information Technology Office'),
+        'office' => env('CICTO_SUPPORT_OFFICE', 'Office of the City Mayor - City Information and Communications Technology Office'),
         'email' => env('CICTO_SUPPORT_EMAIL', 'cicto@baliwag.gov.ph'),
         'phone' => env('CICTO_SUPPORT_PHONE', '(044) 798 0391'),
         'address' => env('CICTO_SUPPORT_ADDRESS', 'Baliuag, Philippines, 3006'),
         'hours' => env('CICTO_SUPPORT_HOURS', 'Monday - Thursday'),
-        'hours_detail' => env('CICTO_SUPPORT_HOURS_DETAIL', '8:00 AM - 5:00 PM'),
+        'hours_detail' => env('CICTO_SUPPORT_HOURS_DETAIL', '7:00 AM - 6:00 PM'),
         'response_window' => env('CICTO_SUPPORT_RESPONSE_WINDOW', '24-48 hours'),
     ],
 

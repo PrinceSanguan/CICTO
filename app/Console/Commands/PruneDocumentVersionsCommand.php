@@ -37,8 +37,31 @@ class PruneDocumentVersionsCommand extends Command
     public function handle(): int
     {
         $config = config('cicto.retention.versions');
-        $days = (int) ($this->option('days') ?? $config['after_days']);
         $force = (bool) $this->option('force');
+
+        /*
+         * `--days=` with nothing after it, or `--days=soon`, both cast to 0 --
+         * a cutoff of "now", which selects every finished document ever. The
+         * retention window is three years now (the client's floor), so an
+         * operator who wants to see what a shorter window would reclaim is far
+         * more likely to reach for this flag than they were at 180 days.
+         * Refusing beats a silent full sweep.
+         */
+        $override = $this->option('days');
+
+        if ($override !== null && filter_var($override, FILTER_VALIDATE_INT) === false) {
+            $this->error('--days must be a whole number of days.');
+
+            return self::FAILURE;
+        }
+
+        $days = (int) ($override ?? $config['after_days']);
+
+        if ($days < 1) {
+            $this->error('--days must be at least 1. A window of 0 would purge every finished document.');
+
+            return self::FAILURE;
+        }
 
         if (! $config['enabled']) {
             $this->warn('Version pruning is disabled (CICTO_PRUNE_VERSIONS_ENABLED=false).');

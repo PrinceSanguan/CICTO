@@ -10,6 +10,7 @@ import { PanelHeading } from '@/components/admin/panel-heading';
 import { StatusPill } from '@/components/documents/status-pill';
 import Heading from '@/components/heading';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import {
     Table,
@@ -70,6 +71,10 @@ type Props = {
         versionsEnabled: boolean;
         securityEvents: number;
     };
+    workflow: {
+        allowSelfApproval: boolean;
+        chosen: boolean;
+    };
     pending: {
         id: number;
         control_number: string;
@@ -87,6 +92,7 @@ export default function SystemSettings({
     backups,
     securityEvents,
     retention,
+    workflow,
     pending,
 }: Props) {
     const [restoringId, setRestoringId] = useState<number | null>(null);
@@ -334,7 +340,14 @@ export default function SystemSettings({
                 </section>
 
                 <section id="preferences" className="rounded-xl border p-4">
-                    <h3 className="mb-2 text-sm font-semibold">Retention</h3>
+                    <SelfApproval
+                        allowed={workflow.allowSelfApproval}
+                        chosen={workflow.chosen}
+                    />
+
+                    <h3 className="mt-6 mb-2 text-sm font-semibold">
+                        Retention
+                    </h3>
                     <ul className="space-y-1 text-sm text-muted-foreground">
                         <li>
                             Scan records: {retention.scans} days —{' '}
@@ -543,6 +556,73 @@ function SystemControl({ rows }: { rows: Props['pending'] }) {
                 ))}
             </ul>
         </section>
+    );
+}
+
+/**
+ * Client question A6, as a switch rather than a deployment.
+ *
+ * The client's answer was that they should be able to allow or block this
+ * themselves, so it lives here instead of in .env. Blocking is the safe reading
+ * and stays the default; a two-person office where the head is also the only
+ * submitter needs it on or nothing ever gets approved.
+ *
+ * The banner distinguishes "off because nobody has chosen" from "off because
+ * the LGU chose off" — on screen those are the same switch position, and only
+ * one of them is still an open question in the handover.
+ */
+function SelfApproval({
+    allowed,
+    chosen,
+}: {
+    allowed: boolean;
+    chosen: boolean;
+}) {
+    const [saving, setSaving] = useState(false);
+
+    return (
+        <div>
+            <h3 className="mb-2 text-sm font-semibold">Approvals</h3>
+
+            <label className="flex items-start gap-3 text-sm">
+                <Checkbox
+                    id="allow-self-approval"
+                    className="mt-0.5 size-5"
+                    checked={allowed}
+                    disabled={saving}
+                    onCheckedChange={(next) => {
+                        setSaving(true);
+                        router.post(
+                            superAdmin.settings.workflow.url(),
+                            { allow_self_approval: next === true },
+                            {
+                                preserveScroll: true,
+                                onFinish: () => setSaving(false),
+                            },
+                        );
+                    }}
+                />
+                <span>
+                    <span className="font-medium">
+                        Let an office head approve and sign documents they
+                        submitted themselves
+                    </span>
+                    <span className="mt-1 block text-muted-foreground">
+                        Off means two different people must submit and approve —
+                        the usual separation of duties. Turn it on only where
+                        one person is genuinely both, or their work will stop at
+                        their own desk.
+                    </span>
+                </span>
+            </label>
+
+            {!chosen && (
+                <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+                    Nobody has chosen yet — this is the value the system was
+                    installed with. Setting it either way records the decision.
+                </p>
+            )}
+        </div>
     );
 }
 

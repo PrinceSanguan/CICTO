@@ -103,7 +103,25 @@ class ReportController extends Controller
                         ->get(),
                     'summary' => $this->stats->summary($user),
                     'generatedFor' => $user,
-                    'office' => config('cicto.support.office'),
+
+                    /*
+                     * The office whose register this IS, not the office that
+                     * maintains the software. Every row here is scoped to what
+                     * $user can see, so headline it with their office; a Super
+                     * Admin sees every office, and the heading says so.
+                     *
+                     * This used to print cicto.support.office. That was merely
+                     * odd while the value read "Municipal Information
+                     * Technology Office"; once it became the client's real name
+                     * for themselves it starts "Office of the City Mayor - ",
+                     * so the Treasurer's own register came out headed with the
+                     * Mayor's office.
+                     */
+                    // Branched on the FK: office_id is unambiguously int|null
+                    // (a Super Admin has none), while static analysis resolves
+                    // the relation itself as non-null.
+                    'office' => $user->office_id === null ? 'All offices' : $user->office->name,
+                    'systemOwner' => config('cicto.support.office'),
                 ],
                 "cicto-documents-{$stamp}.pdf",
             );

@@ -54,8 +54,12 @@ and cannot be discovered in week two:
   document type? A configurable workflow engine is several times PHP 1,200 and is
   a §5 re-quote, not an absorbed revision.
 
-Also useful now: **A4** (real office list, codes, document types, turnaround days),
-**A5** (who creates accounts), **A6** (can an Admin approve their own submission).
+Also useful now: **A4** — *answered 2026-08-18 for the office list, the codes and
+the document types; the turnaround days went to the City Archive and Records Office
+and are still out* — **A5** (who creates accounts), and **A6**, which came back as a
+decision the LGU makes for itself rather than a rule we pick: it shipped as a Super
+Admin toggle, described in
+[`phase-2-workflow-and-trail.md`](phase-2-workflow-and-trail.md) §2.
 
 ---
 
@@ -265,7 +269,15 @@ There is no separate per-office state to keep in sync.
 
 ### 6. Control numbers
 
-Format `{OFFICE}-{YYYY}-{NNNNN}` → `MPDO-2026-00042`.
+Format `{OFFICE}-{YYYY}-{NNNNN}` → `OCM-2026-00042`.
+
+`{OFFICE}` is the client's own office alias, supplied 2026-08-18 and seeded straight
+into `offices.code` — OCM, SP, TREA, ARO, CICTO and 48 more. Every code has to stay
+at or under 29 characters, because `documents.control_number` is `varchar(40)` and
+the year and the five-digit sequence claim the rest; `ReferenceDataTest` is what
+enforces that, since offices have no admin screen and no form request. The retired
+placeholder codes are deactivated by the seeder, never deleted: control numbers
+already printed on paper point at them.
 
 `AllocateControlNumber` (see `00-architecture.md` §6) is the only writer of
 `document_number_sequences`, using `lockForUpdate()` inside the registration

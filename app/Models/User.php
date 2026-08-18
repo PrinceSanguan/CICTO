@@ -206,4 +206,31 @@ class User extends Authenticatable implements PasskeyUser
     {
         $query->where('users.office_id', $officeId);
     }
+
+    /**
+     * A lowercased LIKE term for the user search, with the metacharacters
+     * neutralised, for use with `escape '!'`.
+     *
+     * THE ESCAPE CHARACTER IS '!' AND NOT A BACKSLASH, ON PURPOSE.
+     * `"... escape '\'"` in a PHP double-quoted string is not an escape
+     * sequence, so the two characters survive and the emitted SQL literal is
+     * `'\'`. PostgreSQL and SQLite read that as a one-character string holding
+     * a backslash and accept it; MySQL treats a backslash inside a string
+     * literal as an escape by default, so the literal never closes and the
+     * statement dies with a 1064 syntax error. That is a 500 on the user-search
+     * box for every MySQL/MariaDB deployment. `!` needs no escaping in any of
+     * the three, so the same SQL is valid everywhere.
+     *
+     * Both controllers that search users share this so the escaping and the
+     * ESCAPE clause can never drift apart -- they already had two copies of the
+     * broken version.
+     */
+    public static function likeTerm(string $search): string
+    {
+        // The escape character itself must be escaped first, or escaping the
+        // wildcards would then re-escape the marks this line just added.
+        $escaped = str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower($search));
+
+        return '%'.$escaped.'%';
+    }
 }

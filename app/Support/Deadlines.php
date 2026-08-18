@@ -60,7 +60,7 @@ final class Deadlines
     public static function dueAt(?DocumentType $type, ?CarbonInterface $from = null): CarbonInterface
     {
         $days = $type->turnaround_days ?? self::defaultTurnaroundDays();
-        $endHour = (int) config('cicto.deadlines.business_end_hour', 17);
+        $endHour = (int) config('cicto.deadlines.business_end_hour', 18);
 
         return ($from ?? self::now())
             ->addDays(max(1, $days))

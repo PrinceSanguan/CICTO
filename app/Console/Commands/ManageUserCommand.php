@@ -76,7 +76,12 @@ class ManageUserCommand extends Command
             $user->role->value,
             // Branched on the FK: office_id is unambiguously int|null, while
             // static analysis resolves the relation itself as non-null.
-            $user->office_id === null ? 'none' : $user->office->code,
+            // "active" below describes the ACCOUNT. Say so about the office
+            // separately, or an operator auditing accounts after a re-seed
+            // reads "office MPDO, active" and cannot tell MPDO is dead.
+            $user->office_id === null
+                ? 'none'
+                : $user->office->code.($user->office->is_active ? '' : ' (INACTIVE)'),
             $user->is_active ? 'active' : 'CLOSED',
         ));
 
@@ -209,13 +214,32 @@ class ManageUserCommand extends Command
             $this->error(sprintf(
                 'No office with code "%s". Known codes: %s',
                 $code,
-                Office::query()->orderBy('code')->pluck('code')->implode(', '),
+                // Active only. The retired placeholder codes still exist so old
+                // control numbers resolve, but offering them here is how a
+                // stranded account gets "fixed" into another dead office.
+                Office::query()->active()->orderBy('code')->pluck('code')->implode(', '),
             ));
 
             return false;
         }
 
         $user->forceFill(['office_id' => $office->id])->save();
+
+        /*
+         * Assigning into a deactivated office is allowed -- it is occasionally
+         * what you want while sorting out a migration -- but it must not be
+         * silent. A user in an inactive office cannot file anything: their
+         * office is not offered on the Submit form and the request is refused.
+         * This command is what the deployment runbook points at for fixing
+         * exactly that, so it is the last place that should do it quietly.
+         */
+        if (! $office->is_active) {
+            $this->warn(sprintf(
+                'Office %s is INACTIVE. %s cannot submit documents until they are moved to an active office.',
+                $office->code,
+                $user->email,
+            ));
+        }
 
         return true;
     }

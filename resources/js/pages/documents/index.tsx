@@ -4,21 +4,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { DocumentCards } from '@/components/documents/document-cards';
 import { StatusPill } from '@/components/documents/status-pill';
 import documents from '@/routes/documents';
-import type {
-    DocumentFilters,
-    DocumentListItem,
-    IdNameOption,
-    Paginated,
-    SelectOption,
-} from '@/types';
+import type { DocumentFilters, DocumentListItem, Paginated } from '@/types';
 
 type Props = {
     documents: Paginated<DocumentListItem>;
     filters: DocumentFilters;
     statuses: { value: string; label: string; statuses: string[] }[];
-    priorities: SelectOption[];
-    offices: IdNameOption[];
-    documentTypes: IdNameOption[];
 };
 
 /** §8 Track Documents: search by control number, filter by status. */

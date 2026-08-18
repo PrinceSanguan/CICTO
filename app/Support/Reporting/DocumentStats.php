@@ -329,16 +329,22 @@ class DocumentStats
     /**
      * Average dwell per office, in whole minutes.
      *
-     * @return array<int, array{office: string, legs: int, average_minutes: int}>
+     * office_id comes back alongside the name because two offices can legally
+     * share a name -- OfficeSeeder ships CSWDO and CSWD that way, and its
+     * docblock invites the client to activate the second. The id is already in
+     * the GROUP BY, so selecting it costs nothing and gives the report a key
+     * that is actually unique.
+     *
+     * @return array<int, array{id: int, office: string, legs: int, average_minutes: int}>
      */
     public function officePerformance(User $user): array
     {
         $visible = Document::query()->visibleTo($user)->select('documents.id');
 
         $select = match (DB::connection()->getDriverName()) {
-            'sqlite' => 'offices.name as office_name, count(*) as legs, avg((julianday(document_movements.departed_at) - julianday(document_movements.arrived_at)) * 1440) as avg_minutes',
-            'pgsql' => 'offices.name as office_name, count(*) as legs, avg(extract(epoch from (document_movements.departed_at - document_movements.arrived_at)) / 60) as avg_minutes',
-            default => 'offices.name as office_name, count(*) as legs, avg(timestampdiff(minute, document_movements.arrived_at, document_movements.departed_at)) as avg_minutes',
+            'sqlite' => 'offices.id as office_id, offices.name as office_name, count(*) as legs, avg((julianday(document_movements.departed_at) - julianday(document_movements.arrived_at)) * 1440) as avg_minutes',
+            'pgsql' => 'offices.id as office_id, offices.name as office_name, count(*) as legs, avg(extract(epoch from (document_movements.departed_at - document_movements.arrived_at)) / 60) as avg_minutes',
+            default => 'offices.id as office_id, offices.name as office_name, count(*) as legs, avg(timestampdiff(minute, document_movements.arrived_at, document_movements.departed_at)) as avg_minutes',
         };
 
         return DocumentMovement::query()
@@ -354,6 +360,7 @@ class DocumentStats
             ->orderByDesc('avg_minutes')
             ->get()
             ->map(fn ($r) => [
+                'id' => (int) $r->office_id,
                 'office' => (string) $r->office_name,
                 'legs' => (int) $r->legs,
                 'average_minutes' => (int) round((float) $r->avg_minutes),

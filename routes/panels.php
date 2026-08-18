@@ -51,4 +51,5 @@ Route::middleware(['auth', 'verified', EnsureRole::using(Role::SuperAdmin)])
         Route::post('settings/backup', [SystemController::class, 'backup'])->name('settings.backup');
         Route::post('settings/backups/{run}/restored', [SystemController::class, 'recordRestore'])->name('settings.backup.restored');
         Route::post('settings/verify-signatures', [SystemController::class, 'verifySignatures'])->name('settings.verify-signatures');
+        Route::post('settings/workflow', [SystemController::class, 'updateWorkflow'])->name('settings.workflow');
     });

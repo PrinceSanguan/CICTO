@@ -293,8 +293,16 @@ payment and says nothing about who installs it — settle that.
       them is a Phase 1 or Phase 3 assumption being cashed
 - [ ] Verify `CICTO_SCAN_BASE_URL` emits `https://` on the real host **before** any
       label is printed at volume
-- [ ] Seed real reference data — offices, codes, document types, turnaround days
-      (client question **A4**)
+- [x] Seed real reference data — offices, codes and document types. Done
+      2026-08-18: `OfficeSeeder` carries the client's 53 offices with their own
+      aliases as the codes, `DocumentTypeSeeder` the 43 real types. Retired
+      placeholder codes are deactivated, never deleted, because existing documents
+      and control numbers reference them
+- [ ] Seed real **turnaround days** — still open, the remaining half of client
+      question **A4**. Every type is seeded `turnaround_days` NULL and falls back to
+      the provisional 3-day default, so no type has its own SLA yet. There is no
+      admin screen for document types: the real numbers are a seeder edit and a
+      deploy, not a settings change
 - [ ] Create the real Super Admin account; remove every demo account
 - [ ] `APP_DEBUG=false`, `APP_ENV=production`, config and route caches warm
 - [ ] `APP_KEY` escrowed per the Phase 3 procedure
@@ -522,6 +530,19 @@ a command.
 
 ### Still open — and not ours to close
 
-The six client questions in §10 of the runbook (**A4, B1, B2, B3, B4, B6**)
-remain unanswered, and three contract gaps are still undefined: **who installs
-it**, **training** (not in the cost breakdown), and **the warranty window**.
+Of the six client questions in §10 of the runbook, **B1, B3 and B4 remain
+unanswered.** Three moved on 2026-08-18 without closing:
+
+- **A4** supplied the 53 offices with their aliases and the 43 document types, but
+  not the turnaround days — that part went to the City Archive and Records Office,
+  so every type is seeded NULL against a provisional 3-day default
+- **B2** named the host, a cloud server, but not cron, `proc_open`, the dump
+  binaries, the off-site destination, or who tests the restore
+- **B6** gave a floor — "3 to 5 years minimum" — rather than a figure. Seeded as
+  1095 days; the pruner is still disabled
+
+**A6** also moved, and it is no longer ours to close: self-approval is a Super Admin
+toggle now, defaulting to blocked, and the LGU sets it themselves.
+
+Three contract gaps are still undefined: **who installs it**, **training** (not in
+the cost breakdown), and **the warranty window**.

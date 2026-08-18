@@ -34,6 +34,8 @@
     {{ $office }} &middot; generated {{ now()->format('d F Y, g:i A') }}
     by {{ $generatedFor->name }}
     &middot; {{ $documents->count() }} document(s)
+    <br>
+    <span class="muted">{{ $systemOwner }} &middot; CICTO Document Tracking System</span>
 </p>
 
 <table class="summary">

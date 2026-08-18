@@ -63,13 +63,23 @@ class DocumentController extends Controller
             ->withQueryString()
             ->through(fn (Document $document) => $this->presenter->listItem($document));
 
+        /*
+         * Deliberately does NOT ship offices/documentTypes/priorities.
+         *
+         * Track Documents filters by status and by search term; it has never
+         * rendered an office or type picker, and documents/index.tsx destructures
+         * only documents, filters and statuses. Those three unread props cost two
+         * queries and about 5 KB on every full navigation -- roughly a quarter of
+         * the payload -- and the client's real reference lists made that five
+         * times worse than the placeholder ones did. IndexDocumentRequest still
+         * accepts office and type filters from the query string, so a bookmarked
+         * or hand-written URL keeps working; the day a picker is added, add the
+         * props back beside it.
+         */
         return Inertia::render('documents/index', [
             'documents' => $documents,
             'filters' => $request->filters(),
             'statuses' => DocumentStatus::publicOptions(),
-            'priorities' => $this->priorityOptions(),
-            'offices' => Office::query()->active()->ordered()->get(['id', 'name']),
-            'documentTypes' => DocumentType::query()->active()->ordered()->get(['id', 'name']),
         ]);
     }
 
@@ -80,12 +90,30 @@ class DocumentController extends Controller
     {
         $this->authorize('create', Document::class);
 
+        $offices = Office::query()->active()->ordered()->get(['id', 'code', 'name']);
+
+        /*
+         * Only pre-select the user's office if it is still on the list.
+         *
+         * A <select> asked to default to a value none of its <option>s carry
+         * does not stay blank -- the browser selects the first selectable
+         * option instead. For a user whose office has been deactivated (which
+         * happens the moment an installation re-seeds onto the client's real
+         * office list) that silently pre-fills SOMEBODY ELSE'S department, and
+         * the form submits happily: a document filed under the wrong office,
+         * with that office's prefix burned into a control number that is then
+         * printed on a label. Sending null instead leaves the disabled
+         * "Select Department" placeholder showing, so the field is visibly
+         * unanswered and the required attribute stops the submit.
+         */
+        $userOfficeId = request()->user()?->office_id;
+
         return Inertia::render('documents/create', [
-            'offices' => Office::query()->active()->ordered()->get(['id', 'code', 'name']),
+            'offices' => $offices,
             'documentTypes' => DocumentType::query()->active()->ordered()
                 ->get(['id', 'name', 'turnaround_days']),
             'priorities' => $this->priorityOptions(),
-            'defaultOfficeId' => request()->user()?->office_id,
+            'defaultOfficeId' => $offices->contains('id', $userOfficeId) ? $userOfficeId : null,
         ]);
     }
 

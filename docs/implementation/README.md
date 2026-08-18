@@ -134,8 +134,10 @@ do not map one-to-one, so this is where the unpriced sections land.
 
 ## Starting point
 
-This repository is a **Laravel Chisel starter kit with zero domain code**. What
-exists today:
+**This section records where the build began, not where it stands.** The repository
+started as a **Laravel Chisel starter kit with zero domain code**; the offices,
+document types, ledger, panels, seeders and help content described in the phase
+documents are in the tree now. What the starter kit gave us:
 
 - Laravel 13 · PHP 8.3 · Inertia 3 · React 19 · Tailwind 4 · TypeScript · Vite ·
   Wayfinder (typed routes) · shadcn/ui (new-york, neutral)
@@ -146,7 +148,7 @@ exists today:
 - `routes/web.php` contains exactly two routes: the landing page and an empty
   `dashboard`
 
-Everything in the 20-item cost breakdown is greenfield.
+Everything in the 20-item cost breakdown was greenfield.
 
 ## Repository hygiene to fix in Phase 1
 

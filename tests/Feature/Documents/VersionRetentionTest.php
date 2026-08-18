@@ -24,6 +24,26 @@ class VersionRetentionTest extends TestCase
 {
     use BuildsDocuments, RefreshDatabase;
 
+    /**
+     * The window these tests exercise, pinned rather than inherited.
+     *
+     * cicto.retention.versions.after_days is the CLIENT'S number and it is
+     * still moving -- 1095 today, 1825 if ARO comes back with five years. These
+     * tests are about the pruner's rules (never the first version, never the
+     * current one, never a signed one, never an open document), not about the
+     * client's retention policy, and every one of them stops proving anything
+     * the moment the window grows past the fixture's age. Pinning it here means
+     * raising the shipped figure cannot silently turn this file green-and-empty.
+     */
+    private const WINDOW_DAYS = 180;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['cicto.retention.versions.after_days' => self::WINDOW_DAYS]);
+    }
+
     /** A completed document with the given file contents as successive versions. */
     private function completedWithVersions(array $contents): Document
     {
@@ -60,7 +80,7 @@ class VersionRetentionTest extends TestCase
             );
         }
 
-        $document->forceFill(['completed_at' => now()->subYear()])->save();
+        $document->forceFill(['completed_at' => now()->subDays(self::WINDOW_DAYS * 2)])->save();
 
         return $document->refresh();
     }
@@ -142,7 +162,7 @@ class VersionRetentionTest extends TestCase
                 expectedMovementId: $document->openMovement?->id,
             );
         }
-        $document->forceFill(['completed_at' => now()->subYear()])->save();
+        $document->forceFill(['completed_at' => now()->subDays(self::WINDOW_DAYS * 2)])->save();
 
         $this->artisan('cicto:prune-versions --force')->assertSuccessful();
 
@@ -198,7 +218,7 @@ class VersionRetentionTest extends TestCase
                 expectedMovementId: $document->openMovement?->id,
             );
         }
-        $document->forceFill(['completed_at' => now()->subYear()])->save();
+        $document->forceFill(['completed_at' => now()->subDays(self::WINDOW_DAYS * 2)])->save();
 
         $this->artisan('cicto:prune-versions --force')->assertSuccessful();
 

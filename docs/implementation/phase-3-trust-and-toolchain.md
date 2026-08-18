@@ -57,11 +57,21 @@ migration inside 24 months.
 > `node_modules/`) break the app *before* the disk quota does, and the symptom is
 > baffling — sessions failing to write.
 
-Recommended retention, **pending client question B6**: keep v1 and the current
-version forever; purge intermediate versions 180 days after the document reaches
-Completed or Rejected, keeping the metadata row with `purged_at` set and returning
-410 on download. Ship the pruner `--dry-run` by default and **disabled** until B6
-is answered and an off-site backup exists (D-note in `00-architecture.md` §10).
+Recommended retention, **B6 answered on 2026-08-18 as a floor rather than a
+figure**: keep v1 and the current version forever; purge intermediate versions
+**1095 days — three years —** after the document reaches Completed or Rejected,
+keeping the metadata row with `purged_at` set and returning 410 on download.
+
+The number is the client's, not ours. They said "3 to 5 years po minimum archive ng
+files" and added that past records are also kept on their cloud server, so
+`cicto.retention.versions.after_days` moved from 180 to 1095 — the bottom of the
+range they named, because the floor is the only part of it we were told. The exact
+figure sits with the City Archive and Records Office.
+
+Ship the pruner `--dry-run` by default and **disabled** until that exact figure
+arrives in writing and an off-site backup exists (D-note in `00-architecture.md`
+§10). A chat message naming a range is progress; it is not sign-off to delete a
+municipal record.
 
 Store the `disk` name per file row now, so moving to S3 later is a backfill
 command rather than a refactor.
@@ -236,7 +246,11 @@ Minimum viable compliance:
 
 - A short **privacy notice** page stating what is collected, why, and how long
 - **180-day retention** on `document_scans`, enforced by a scheduled prune and
-  stated in the notice
+  stated in the notice. This is `cicto.scans.retention_days`, and it is deliberately
+  **not** the file-retention number: B6 moved document *versions* to 1095 days on
+  2026-08-18, but these rows are `ip_address` and `user_agent`, and 180 days is
+  already published as a promise on the public privacy notice. Do not "harmonise"
+  the two — stretching this one is a step backwards for the data subject
 - A named contact for data subjects — the LGU's Data Protection Officer, not the
   developer
 
@@ -262,6 +276,15 @@ we cannot afford and a notification stack we do not need. One first-party
 reading a runbook rather than package documentation.
 
 ### Decision tree — from the host probe
+
+**B2 is half answered.** On 2026-08-18 the client said the system will be installed
+on a **Cloud Server**. That retires the worst case — this is not shared cPanel with a
+200k inode cap — and it makes HTTPS achievable, which is the precondition A1's camera
+scanning was blocked on. It closes none of the four rows below: nobody has yet said
+whether cron runs, whether `proc_open` is enabled, whether `pg_dump`/`mysqldump` are
+installed at a version at or above the server's, where off-site copies go, or who
+tests the restore. No hostname and no TLS certificate have been named either, so A1
+is not closed by this. Run the probe on the real box.
 
 | Question | Yes | No → fallback |
 | --- | --- | --- |
@@ -367,9 +390,12 @@ monitoring, nor a tested disaster-recovery SLA. Raise both — see **B2**.
 ## Exit criteria
 
 - [ ] **B1 answered** — the signature paragraph sent and a reply kept
-- [ ] **B2 answered** — host probe run, decision tree resolved, off-site settled
+- [ ] **B2 answered** — the host is a cloud server (2026-08-18); host probe still to
+      run on it, decision tree still to resolve, off-site still to settle
 - [ ] **B4 answered** — real `.xlsx` or CSV
-- [ ] **B6 answered** — retention agreed, before any pruner is enabled
+- [ ] **B6 answered** — figure provisional (3–5 years per the client, seeded as
+      1095 days; ARO to confirm the exact number). The pruner stays disabled until
+      they do
 - [ ] `local` disk flipped to `serve => false`
 - [ ] Signature Certificate prints correctly **on the real host**
 - [ ] All four §19 report artifacts exist, including User Activity

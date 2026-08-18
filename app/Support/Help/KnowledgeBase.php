@@ -56,7 +56,7 @@ final class KnowledgeBase
                     // Number, so both names appear once and then only the real
                     // one is used.
                     'Enter the **control number** — the tracking number printed on your receipt when the document was submitted — in the search box.',
-                    'Press **Search**. Searching is case-insensitive, so `mo-2026-00001` finds `MO-2026-00001`, and you can search by title instead.',
+                    'Press **Search**. Searching is case-insensitive, so `ocm-2026-00001` finds `OCM-2026-00001`, and you can search by title instead.',
                     'Your document\'s status and current processing stage appear in the list.',
                     'Click **View** on the row to see where the document is now, how long it has been there, and every office it has passed through.',
                 ],

@@ -94,8 +94,24 @@ noise and break the one-open-leg invariant.
 | D15 | `APP_TIMEZONE=Asia/Manila`, set **before** any production data exists | UTC storage + conversion on read | Month bucketing then needs no `AT TIME ZONE`/`CONVERT_TZ`. Changing it later retroactively shifts every historical report |
 | D16 | Archive is an **explicit `->active()` scope on list views only** — never a global scope | `#[ScopedBy]` / a `notArchived` global scope | A global scope would silently drop archived documents out of monthly volume, status distribution, processing trend, exports and the "total documents" widget — undercounting completed work, the exact opposite of §20's "retrieved later". Consistent with D3 |
 | D17 | Overdue is a **query predicate**, never a stored flag column | a `is_overdue` boolean + a cron that sets it | Works with no cron at all, which matters because LGU shared hosting may not have one. Cron is then needed only to *notify* about overdue, not to *know* it |
-| D18 | **Calendar days**, not working days | a `holidays` table | Philippine holidays change annually by proclamation. An unseeded table silently falls back to calendar days and reports wrong SLAs — a worse failure than simply not offering the feature. Confirm with the client |
+| D18 | **Calendar days**, not working days | a `holidays` table | Philippine holidays change annually by proclamation. An unseeded table silently falls back to calendar days and reports wrong SLAs — a worse failure than simply not offering the feature. The client's 2026-08-18 office-hours answer informs this without changing it — see the note below |
 | D19 | One narrow `security_events` table is permitted — see the amendment below | a general-purpose activity log | |
+
+### Note on D18 — the confirmed office hours make the simplification visible
+
+*(2026-08-18)* The client confirmed the working week: **Monday to Thursday, 7:00 AM
+to 6:00 PM.** The "Monday - Thursday" on the supplied design was not a typo for
+Friday; the four-day week is real. Only the times were wrong, so
+`cicto.deadlines.business_end_hour` moved from 17 to 18 and
+`cicto.support.hours_detail` now reads `'7:00 AM - 6:00 PM'`.
+
+**D18 stands.** The answer does not change the decision — it makes the cost of the
+decision easier to see. Calendar days do not know the counter is shut: a 3-day
+turnaround filed on a Thursday falls due on **Sunday**, three days into a weekend
+that starts on Friday, and the badge turns amber for a queue nobody is standing at.
+`business_end_hour` cannot rescue that. It clamps the *hour* a deadline lands on; it
+cannot express which *days* exist. A working-day engine is still the separate quote
+it always was, and this is the sentence to read out before sign-off.
 
 ### Amendment to D1 — the one permitted second table
 
@@ -298,14 +314,17 @@ never user input, so there is no injection surface.
 **Branch only where standard SQL cannot.** Minute arithmetic has no portable form,
 so `minutesBetween()` branches. Date bucketing does, so `yearMonth()` does not.
 
-### Worked example — `MPDO-2026-00042`
+### Worked example — `PDC-2026-00042`
+
+Real office codes, from the client's list of 2026-08-18: PDC is the City Planning
+and Development Coordinator, TREA the City Treasurer, OCM the City Mayor.
 
 | seq | from | to | action | arrived_at | departed_at | dwell |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | — | MPDO | registered | 03 Aug 09:12 | 03 Aug 15:40 | 6h 28m |
-| 2 | MPDO | MTO | forwarded | 03 Aug 15:41 | 06 Aug 11:05 | 2d 19h 24m |
-| 3 | MTO | MTO | approved | 06 Aug 11:05 | 06 Aug 11:06 | 1m |
-| 4 | MTO | MAYOR | forwarded | 06 Aug 11:06 | *(null)* | open — 3d 4h so far |
+| 1 | — | PDC | registered | 03 Aug 09:12 | 03 Aug 15:40 | 6h 28m |
+| 2 | PDC | TREA | forwarded | 03 Aug 15:41 | 06 Aug 11:05 | 2d 19h 24m |
+| 3 | TREA | TREA | approved | 06 Aug 11:05 | 06 Aug 11:06 | 1m |
+| 4 | TREA | OCM | forwarded | 06 Aug 11:06 | *(null)* | open — 3d 4h so far |
 
 Total elapsed is `movements.first()->arrived_at → now()`. Per-office totals are a
 `groupBy('to_office_id')`.
@@ -509,7 +528,22 @@ So without cron the only casualty is the *push* half of §12 — and that is the
 thing to state plainly to the client rather than discover at handover.
 
 **Retention: do not unilaterally commit to a number.** Two designs independently
-proposed 180-day deletion. Client question **B6** has not been answered, and
-deleting a municipal record on a developer's assumption is not a decision to make
-quietly. Ship pruning commands `--dry-run` by default and **disabled** until B6 is
-answered in writing and an off-site backup is confirmed to exist.
+proposed 180-day deletion. That was always a developer's assumption about a
+municipal record, which is not a decision to make quietly — and on 2026-08-18 the
+client replaced it with one of their own. Client question **B6** now has a *floor*,
+not a figure: "3 to 5 years po minimum archive ng files", with the note that past
+records are also kept on their cloud server. So
+`cicto.retention.versions.after_days` moved from 180 days to **1095** — three years,
+the bottom of the range they named. The exact number sits with the City Archive and
+Records Office and has not come back.
+
+`cicto.scans.retention_days` stays at **180 days**, deliberately. It is not the same
+number and must not be made to match: those rows carry `ip_address` and
+`user_agent` — personal data under RA 10173 — and 180 days is already published as a
+promise on the public privacy notice. Stretching it to a file-retention figure would
+be a step backwards for the data subject, which is the opposite of what a retention
+policy is for.
+
+Pruning commands still ship `--dry-run` by default and **disabled**. A figure in a
+chat message is not written sign-off, and no off-site backup has been confirmed to
+exist.

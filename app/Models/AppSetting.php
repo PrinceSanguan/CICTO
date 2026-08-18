@@ -85,19 +85,29 @@ class AppSetting extends Model
         return static::all_cached()[$key] ?? $default;
     }
 
+    /**
+     * updateOrCreate, not firstOrNew + save.
+     *
+     * setting_key is the primary key, so two requests writing the same setting
+     * for the FIRST time both read "no row" and both INSERT -- and the loser
+     * gets a unique-constraint 500 on what is only a settings save. SQLite
+     * serialises writers and hides this; PostgreSQL, which this project
+     * deploys on, does not.
+     */
     public static function put(string $key, mixed $value, string $type = 'string', string $group = 'general', bool $secret = false, ?string $label = null): self
     {
-        $setting = static::query()->firstOrNew(['setting_key' => $key]);
+        $existing = static::query()->find($key);
 
-        $setting->forceFill([
-            'setting_value' => $value === null ? null : (string) (is_array($value) ? json_encode($value) : $value),
-            'value_type' => $type,
-            'group_name' => $group,
-            'is_secret' => $secret,
-            'label' => $label ?? $setting->label,
-        ])->save();
-
-        return $setting;
+        return static::query()->updateOrCreate(
+            ['setting_key' => $key],
+            [
+                'setting_value' => $value === null ? null : (string) (is_array($value) ? json_encode($value) : $value),
+                'value_type' => $type,
+                'group_name' => $group,
+                'is_secret' => $secret,
+                'label' => $label ?? $existing?->label,
+            ],
+        );
     }
 
     public function typedValue(): mixed

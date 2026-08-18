@@ -91,6 +91,41 @@ class PanelScreensTest extends TestCase
             });
     }
 
+    /**
+     * The office admin's user search had no test at all, and it carries the
+     * same hand-written LIKE + ESCAPE clause as the super admin's. That clause
+     * used to be `escape '\'`, which MySQL rejects outright as an unterminated
+     * string literal -- so this screen was a 500 on every MySQL deployment and
+     * nothing here noticed.
+     */
+    public function test_the_admin_user_search_finds_people_and_treats_wildcards_as_text(): void
+    {
+        $office = $this->office('OCM', 'Office of the City Mayor');
+        $admin = $this->admin($office);
+        $clerk = $this->staff($office);
+
+        $this->actingAs($admin)
+            ->get(route('admin.users.index', ['q' => $clerk->email]))
+            ->assertSuccessful()
+            ->assertInertia(function ($page) use ($clerk) {
+                $emails = collect($page->toArray()['props']['users']['data'])->pluck('email');
+
+                $this->assertSame([$clerk->email], $emails->all());
+            });
+
+        // A wildcard is a character somebody typed, not an instruction.
+        $this->actingAs($admin)
+            ->get(route('admin.users.index', ['q' => '%']))
+            ->assertSuccessful()
+            ->assertInertia(function ($page) {
+                $this->assertSame(
+                    [],
+                    collect($page->toArray()['props']['users']['data'])->pluck('email')->all(),
+                    'A bare % matched every user instead of being treated as text.',
+                );
+            });
+    }
+
     public function test_a_plain_user_cannot_reach_the_panel(): void
     {
         $user = $this->staff($this->office('MO', "Mayor's Office"));

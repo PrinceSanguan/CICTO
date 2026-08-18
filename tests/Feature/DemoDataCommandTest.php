@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\Role;
 use App\Models\Document;
 use App\Models\Office;
 use App\Models\User;
@@ -57,7 +58,7 @@ class DemoDataCommandTest extends TestCase
 
     /**
      * The checklist asks the client to confirm the Mayor's Office cannot see
-     * SB-2026-00001. Without that document the most important test on the sheet
+     * SP-2026-00001. Without that document the most important test on the sheet
      * cannot be run at all.
      */
     public function test_it_creates_the_document_the_isolation_test_depends_on(): void
@@ -67,18 +68,47 @@ class DemoDataCommandTest extends TestCase
         $secret = Document::query()->where('title', 'Other office secret')->first();
 
         $this->assertNotNull($secret);
-        $this->assertSame('SB-2026-00001', $secret->control_number);
+        $this->assertSame('SP-2026-00001', $secret->control_number);
 
-        $mo = User::query()->where('email', 'admin@cicto.test')->firstOrFail();
-        $sb = User::query()->where('email', 'sb@cicto.test')->firstOrFail();
+        $ocm = User::query()->where('email', 'admin@cicto.test')->firstOrFail();
+        $sp = User::query()->where('email', 'sb@cicto.test')->firstOrFail();
 
         $this->assertFalse(
-            Document::query()->visibleTo($mo)->whereKey($secret->id)->exists(),
-            'The Mayor\'s Office can see the Sangguniang Bayan document.',
+            Document::query()->visibleTo($ocm)->whereKey($secret->id)->exists(),
+            'The Mayor\'s Office can see the Sangguniang Panlungsod document.',
         );
 
         $this->assertTrue(
-            Document::query()->visibleTo($sb)->whereKey($secret->id)->exists(),
+            Document::query()->visibleTo($sp)->whereKey($secret->id)->exists(),
+        );
+    }
+
+    /**
+     * The demo data names offices by code, and the seeder that supplies those
+     * codes is the client's real list. When they diverged the command reported
+     * success and quietly created nothing -- which is how a checklist arrives
+     * on a client's desk describing accounts that do not exist.
+     */
+    public function test_every_office_the_demo_data_names_exists_in_the_seeded_list(): void
+    {
+        $this->artisan('cicto:demo-data')->assertSuccessful();
+
+        $this->assertSame(
+            5,
+            User::query()->count(),
+            'An account was skipped, which means a demo office code is not in OfficeSeeder.',
+        );
+
+        $this->assertSame(
+            9,
+            Document::query()->count(),
+            'A sample document was skipped, which means a demo office code is not in OfficeSeeder.',
+        );
+
+        $this->assertSame(
+            0,
+            User::query()->whereNull('office_id')->where('role', '!=', Role::SuperAdmin->value)->count(),
+            'A practice account landed with no office, which scopes every list differently.',
         );
     }
 

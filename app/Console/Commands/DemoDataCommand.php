@@ -46,31 +46,37 @@ class DemoDataCommand extends Command
      */
     private const ACCOUNTS = [
         ['name' => 'Super Admin', 'email' => 'super@cicto.test', 'role' => Role::SuperAdmin, 'office' => null, 'position' => 'System Administrator'],
-        ['name' => 'MO Admin', 'email' => 'admin@cicto.test', 'role' => Role::Admin, 'office' => 'MO', 'position' => 'Department Head'],
-        ['name' => 'MTO Admin', 'email' => 'mto@cicto.test', 'role' => Role::Admin, 'office' => 'MTO', 'position' => 'Treasurer'],
-        ['name' => 'SB Admin', 'email' => 'sb@cicto.test', 'role' => Role::Admin, 'office' => 'SB', 'position' => 'Board Secretary'],
-        ['name' => 'MO Clerk', 'email' => 'clerk@cicto.test', 'role' => Role::User, 'office' => 'MO', 'position' => 'Administrative Aide'],
+        ['name' => 'OCM Admin', 'email' => 'admin@cicto.test', 'role' => Role::Admin, 'office' => 'OCM', 'position' => 'Department Head'],
+        ['name' => 'TREA Admin', 'email' => 'mto@cicto.test', 'role' => Role::Admin, 'office' => 'TREA', 'position' => 'Treasurer'],
+        ['name' => 'SP Admin', 'email' => 'sb@cicto.test', 'role' => Role::Admin, 'office' => 'SP', 'position' => 'Board Secretary'],
+        ['name' => 'OCM Clerk', 'email' => 'clerk@cicto.test', 'role' => Role::User, 'office' => 'OCM', 'position' => 'Administrative Aide'],
     ];
 
     /**
      * Sample documents.
      *
-     * The Sangguniang Bayan one is load-bearing: the checklist asks the client
-     * to confirm the Mayor's Office cannot see it, which is the single most
-     * important thing they can verify. Without it that test cannot be run.
+     * The Sangguniang Panlungsod one is load-bearing: the checklist asks the
+     * client to confirm the Mayor's Office cannot see it, which is the single
+     * most important thing they can verify. Without it that test cannot be run.
      *
-     * @var list<array{title: string, office: string, by: string, priority: DocumentPriority}>
+     * The `type` codes are the client's own, from DocumentTypeSeeder. They used
+     * to be absent, and every sample document then got whichever type had the
+     * lowest id -- nine folders all classified the same way, which makes the
+     * "filter by document type" step on the checklist prove nothing. A missing
+     * code falls back to the first active type rather than failing the run.
+     *
+     * @var list<array{title: string, office: string, by: string, type: string, priority: DocumentPriority}>
      */
     private const DOCUMENTS = [
-        ['title' => 'Barangay drainage clearance', 'office' => 'MO', 'by' => 'clerk@cicto.test', 'priority' => DocumentPriority::Normal],
-        ['title' => 'Purchase order for laptops', 'office' => 'MO', 'by' => 'clerk@cicto.test', 'priority' => DocumentPriority::High],
-        ['title' => 'Payroll adjustment request', 'office' => 'MO', 'by' => 'clerk@cicto.test', 'priority' => DocumentPriority::Normal],
-        ['title' => 'Fire safety inspection', 'office' => 'MO', 'by' => 'clerk@cicto.test', 'priority' => DocumentPriority::Urgent],
-        ['title' => 'Scholarship endorsement', 'office' => 'MO', 'by' => 'clerk@cicto.test', 'priority' => DocumentPriority::Normal],
-        ['title' => 'Water line repair', 'office' => 'MO', 'by' => 'clerk@cicto.test', 'priority' => DocumentPriority::High],
-        ['title' => 'Business permit renewal', 'office' => 'MTO', 'by' => 'mto@cicto.test', 'priority' => DocumentPriority::Normal],
-        ['title' => 'Statement of receipts', 'office' => 'MTO', 'by' => 'mto@cicto.test', 'priority' => DocumentPriority::Normal],
-        ['title' => 'Other office secret', 'office' => 'SB', 'by' => 'sb@cicto.test', 'priority' => DocumentPriority::Normal],
+        ['title' => 'Barangay drainage clearance', 'office' => 'OCM', 'by' => 'clerk@cicto.test', 'type' => 'MAYORS-CLEARANCE', 'priority' => DocumentPriority::Normal],
+        ['title' => 'Purchase order for laptops', 'office' => 'OCM', 'by' => 'clerk@cicto.test', 'type' => 'PO', 'priority' => DocumentPriority::High],
+        ['title' => 'Payroll adjustment request', 'office' => 'OCM', 'by' => 'clerk@cicto.test', 'type' => 'PAYROLL', 'priority' => DocumentPriority::Normal],
+        ['title' => 'Fire safety inspection', 'office' => 'OCM', 'by' => 'clerk@cicto.test', 'type' => 'REQUEST', 'priority' => DocumentPriority::Urgent],
+        ['title' => 'Scholarship endorsement', 'office' => 'OCM', 'by' => 'clerk@cicto.test', 'type' => 'ENDORSEMENT', 'priority' => DocumentPriority::Normal],
+        ['title' => 'Water line repair', 'office' => 'OCM', 'by' => 'clerk@cicto.test', 'type' => 'REQUEST', 'priority' => DocumentPriority::High],
+        ['title' => 'Business permit renewal', 'office' => 'TREA', 'by' => 'mto@cicto.test', 'type' => 'BUSINESS-PERMIT', 'priority' => DocumentPriority::Normal],
+        ['title' => 'Statement of receipts', 'office' => 'TREA', 'by' => 'mto@cicto.test', 'type' => 'CERTIFICATION', 'priority' => DocumentPriority::Normal],
+        ['title' => 'Other office secret', 'office' => 'SP', 'by' => 'sb@cicto.test', 'type' => 'CONFIDENTIAL', 'priority' => DocumentPriority::Normal],
     ];
 
     public function handle(RegisterDocument $register): int
@@ -184,14 +190,25 @@ class DemoDataCommand extends Command
 
     private function createDocuments(RegisterDocument $register): int
     {
-        $type = DocumentType::query()->where('is_active', true)->orderBy('id')->firstOrFail();
+        $fallbackType = DocumentType::query()->where('is_active', true)->orderBy('id')->firstOrFail();
+        $types = DocumentType::query()->where('is_active', true)->pluck('id', 'code');
         $made = 0;
 
         foreach (self::DOCUMENTS as $document) {
             $office = Office::query()->where('code', $document['office'])->first();
             $creator = User::query()->where('email', $document['by'])->first();
 
+            // Say so. This used to `continue` in silence, so renaming an office
+            // code in the seeder quietly produced a run that reported success
+            // and created nothing -- including the isolation-test document the
+            // client's checklist depends on.
             if ($office === null || $creator === null) {
+                $this->warn(sprintf(
+                    'Skipped "%s": %s does not exist.',
+                    $document['title'],
+                    $office === null ? "office {$document['office']}" : "account {$document['by']}",
+                ));
+
                 continue;
             }
 
@@ -208,7 +225,7 @@ class DemoDataCommand extends Command
 
             $register->handle(
                 title: $document['title'],
-                documentTypeId: $type->id,
+                documentTypeId: (int) ($types[$document['type']] ?? $fallbackType->id),
                 priority: $document['priority'],
                 originatingOffice: $office,
                 creator: $creator,

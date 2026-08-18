@@ -236,10 +236,10 @@
         </tr>
     </thead>
     <tbody>
-        <tr><td><code>clerk@cicto.test</code></td><td class="role">User (Kawani)</td><td>Mayor's Office</td></tr>
-        <tr><td><code>admin@cicto.test</code></td><td class="role">Admin</td><td>Mayor's Office</td></tr>
-        <tr><td><code>mto@cicto.test</code></td><td class="role">Admin</td><td>Treasurer's Office</td></tr>
-        <tr><td><code>sb@cicto.test</code></td><td class="role">Admin</td><td>Sangguniang Bayan</td></tr>
+        <tr><td><code>clerk@cicto.test</code></td><td class="role">User (Kawani)</td><td>Office of the City Mayor</td></tr>
+        <tr><td><code>admin@cicto.test</code></td><td class="role">Admin</td><td>Office of the City Mayor</td></tr>
+        <tr><td><code>mto@cicto.test</code></td><td class="role">Admin</td><td>Office of the City Treasurer</td></tr>
+        <tr><td><code>sb@cicto.test</code></td><td class="role">Admin</td><td>Office of the Sangguniang Panlungsod</td></tr>
         <tr><td><code>super@cicto.test</code></td><td class="role">Super Admin</td><td>Lahat ng opisina</td></tr>
     </tbody>
 </table>
@@ -304,7 +304,7 @@
         <strong>Dapat mangyari:</strong> Sa hakbang 3, tatanggihan po ito —
         kailangan talaga ng file. Sa hakbang 4, may lalabas na
         <strong>berdeng mensahe</strong> na may bagong control number
-        (halimbawa <code>MO-2026-00019</code>). Isulat po ninyo ang numerong iyon.
+        (halimbawa <code>OCM-2026-00007</code>). Isulat po ninyo ang numerong iyon.
     </div>
 </div>
 
@@ -320,7 +320,7 @@
     <ol class="steps">
         <li>Pumunta sa <strong>Track Documents</strong>.</li>
         <li>I-type ang control number sa search box, pindutin ang <strong>Search</strong>.</li>
-        <li>Subukan din pong maliit na letra — halimbawa <code>mo-2026-00001</code>.</li>
+        <li>Subukan din pong maliit na letra — halimbawa <code>ocm-2026-00001</code>.</li>
         <li>Subukan ang <strong>Status</strong> na dropdown para salain ang listahan.</li>
         <li>Pindutin ang <strong>View</strong> sa isang dokumento.</li>
     </ol>
@@ -369,9 +369,12 @@
     <h3>4.2 — Pagpapasa sa ibang opisina</h3>
     <ol class="steps">
         <li>Sa ibang dokumento, pindutin ang <strong>Send to Another Office</strong>.</li>
-        <li>Pumili ng ibang opisina, maglagay ng remarks, tapos Confirm.</li>
-        <li>Mag-log out at mag-log in gamit ang account ng opisinang pinadalhan
-            (halimbawa <code>mto@cicto.test</code>).</li>
+        <li>Piliin po ang <strong>Office of the City Treasurer</strong>, maglagay
+            ng remarks, tapos Confirm. (May 51 opisina po sa listahan, pero
+            dalawa lang ang may pansubok na account — ito po ang isa, kaya ito
+            po ang piliin.)</li>
+        <li>Mag-log out at mag-log in gamit ang <code>mto@cicto.test</code>, ang
+            account ng Office of the City Treasurer.</li>
     </ol>
     <div class="expect">
         <strong>Dapat mangyari:</strong> Makikita na ng bagong opisina ang
@@ -387,14 +390,16 @@
         opisina.</strong>
     </p>
     <ol class="steps">
-        <li>Bilang <code>admin@cicto.test</code>, hanapin ang <code>SB-2026-00001</code>.</li>
+        <li>Bilang <code>admin@cicto.test</code> (Office of the City Mayor),
+            hanapin ang <code>SP-2026-00001</code>.</li>
         <li>Mag-log out, tapos mag-log in bilang <code>sb@cicto.test</code>.</li>
         <li>Tingnan kung ano ang nakikita nila sa Track Documents.</li>
     </ol>
     <div class="expect">
         <strong>Dapat mangyari:</strong> Sa hakbang 1, <strong>wala pong dapat
         lumabas</strong>. Sa hakbang 3, isang dokumento lamang ang makikita ng
-        Sangguniang Bayan — ang sa kanila — at wala ni isa sa Mayor's Office.
+        Office of the Sangguniang Panlungsod — ang sa kanila — at wala ni isa
+        sa Office of the City Mayor.
     </div>
     <div class="warn">
         <strong>Kung may nakita kayong papeles ng ibang opisina, ito po ay
@@ -566,57 +571,124 @@
     ang pag-type ng control number.
 </p>
 
-<h3>7.3 — Ang oras ng opisina sa Contact page</h3>
+<h3>7.3 — Ang oras ng opisina sa Contact page (naitama na po)</h3>
 <p>
-    Nakalagay po sa Contact Support page ang <strong>“Monday – Thursday,
-    8:00 AM – 5:00 PM”</strong>. Ito po ay kinopya namin nang eksakto mula sa
-    disenyong ibinigay ninyo. Sa tingin po namin ay <em>Monday – Friday</em>
-    ang dapat — pakikumpirma lang po at agad naming aayusin.
+    Tapos na po ang bahaging ito. Nakalagay na po ngayon sa Contact Support
+    page ang <strong>“Monday – Thursday, 7:00 AM – 6:00 PM”</strong> — ito po
+    ang kinumpirma ninyo noong <strong>Agosto 18, 2026</strong>. Wala na po
+    kayong kailangang ipasya rito.
+</p>
+<p>
+    Dati po kasing <em>8:00 AM – 5:00 PM</em> ang nakasulat, kinopya namin
+    nang eksakto mula sa disenyong ibinigay ninyo, at inakala pa naming mali
+    ang “Thursday” at dapat ay “Friday”. Hindi po pala mali: totoo pong apat
+    na araw ang linggo ninyo, ang oras lamang po ang mali. Pakitingnan na
+    lang po ang Contact page at pakisabi kung tama na ang nakikita ninyo
+    doon.
 </p>
 
 <!-- =============== 8 =============== -->
 <h2><span class="num">8</span>Mga kailangan naming sagot mula sa inyo</h2>
 
 <p>
-    Para matapos po nang tuluyan ang sistema, kailangan namin ang mga
-    sumusunod na impormasyon. Mas mabuti pong nakasulat (email o chat) para
-    may matukoy tayong sanggunian sa hinaharap.
+    Narito po ang katayuan ng bawat isa sa mga hinihingi naming impormasyon,
+    sa <strong>Agosto 18, 2026</strong>. Maraming salamat po sa mga listahang
+    ipinadala ninyo — dalawa po rito ang tapos na, at isa ay naging setting
+    na kayo mismo ang makakapagtakda. Mas mabuti pa rin pong nakasulat (email
+    o chat) ang mga natitirang sagot para may matukoy tayong sanggunian sa
+    hinaharap.
 </p>
 
 <table>
     <thead>
-        <tr><th style="width:32%">Kailangan</th><th>Bakit</th></tr>
+        <tr><th style="width:30%">Kailangan</th><th>Katayuan ngayon</th></tr>
     </thead>
     <tbody>
         <tr>
-            <td><strong>Tunay na listahan ng opisina at uri ng dokumento</strong></td>
-            <td>Pansamantala pa po ang nakalagay ngayon. Kailangan namin ang
-                aktwal na listahan, kasama ang code ng bawat opisina — ito po
-                ang gagamitin sa control number.</td>
+            <td><strong>Tunay na listahan ng opisina at ang code ng bawat isa</strong></td>
+            <td><strong>Natanggap na po noong Agosto 18, 2026.</strong>
+                Nakapasok na po sa sistema ang 53 opisina at ang code ng bawat
+                isa. Ang code po ang simula ng bawat control number, tulad ng
+                <code>OCM</code> sa <code>OCM-2026-00007</code>. May tatlong
+                bagay lang po kaming kinailangang ipasya para sa inyo —
+                pakitingnan po at pakisabi kung may mali:
+                <ul>
+                    <li>Dalawang beses pong nakalista ang City Social Welfare
+                        and Development Officer, bilang <strong>CSWDO</strong>
+                        at bilang <strong>CSWD</strong>. Inilagay po namin
+                        pareho para walang ibang opisinang makakuha ng code na
+                        iyon, ngunit <strong>naka-off po muna ang CSWD</strong>
+                        hanggang sabihin ninyong ginagamit din talaga ito.</li>
+                    <li>Ang <strong>“CEEAO / BIPU”</strong> po ay naging
+                        <strong>CEEAO</strong> sa sistema. Hindi po kasi
+                        maaaring may slash (<code>/</code>) sa control number:
+                        naililimbag po ito sa papel at ginagamit din sa web
+                        address.</li>
+                    <li>Karaniwang pagkakasulat po ang ginamit namin sa
+                        pangalan ng opisina, tulad ng “Office of the City
+                        Mayor”, hindi ang pagkakasulat sa file na ipinadala
+                        ninyo.</li>
+                </ul>
+            </td>
+        </tr>
+        <tr>
+            <td><strong>Tunay na listahan ng uri ng dokumento</strong></td>
+            <td><strong>Natanggap na po noong Agosto 18, 2026.</strong>
+                Napalitan na po ng 43 uri na ipinadala ninyo ang mga
+                pansamantalang nakalagay noon.</td>
         </tr>
         <tr>
             <td><strong>Ilang araw ang inaasahang tapusin</strong> sa bawat uri ng dokumento</td>
-            <td>Dito po nakabatay ang “Due soon” at “Overdue” na babala.</td>
+            <td><strong>Kailangan pa rin po namin ito.</strong> Ang sagot po
+                ninyo ay <strong>ARO</strong> — ang City Archive and Records
+                Office po ang makakasagot nito, at itatanong ninyo raw po sa
+                kanila. Habang wala pa po, <strong>pare-parehong tatlong
+                araw</strong> ang deadline na ibinibigay sa lahat ng dokumento,
+                anuman ang uri nito. Lumalabas pa rin po ang “Due soon” at
+                “Overdue”, ngunit pansamantala lamang po ang petsang
+                pinagbabatayan ng mga ito hanggang dumating ang tunay na
+                bilang.</td>
         </tr>
         <tr>
             <td><strong>SMTP / email details</strong></td>
-            <td>Para gumana ang password reset, abiso at support ticket
-                (Bahagi 7.1).</td>
+            <td><strong>Kailangan pa rin po namin ito.</strong> Wala pa pong
+                maipapadalang email hangga't wala nito (Bahagi 7.1).</td>
         </tr>
         <tr>
             <td><strong>Gaano katagal itatago ang mga file</strong></td>
-            <td>Kailangan po ito ng patakaran sa retention. Halimbawa:
-                ilang taon bago maaaring burahin ang lumang bersyon ng file?</td>
+            <td><strong>Nasagot na po, may isang bilang na lang na
+                hinihintay.</strong> Ang sabi po ninyo ay <strong>tatlo
+                hanggang limang taon</strong> ang pinakamababa, at nakatago rin
+                naman po ang mga lumang record sa inyong cloud server. Itinakda
+                po namin ang sistema sa pinakamababa, <strong>tatlong
+                taon</strong>, at babaguhin po namin ito kapag naibigay na ng
+                City Archive and Records Office ang eksaktong bilang. Wala pa
+                rin pong awtomatikong nabubura habang hinihintay: <strong>naka-off
+                po ang pagbura</strong>, at mananatili pong naka-off hanggang
+                may nakasulat kayong kumpirmasyon na gusto ninyong paganahin
+                ito.</td>
         </tr>
         <tr>
             <td><strong>Saan ilalagay ang sistema</strong> (hosting)</td>
-            <td>Para maihanda namin ang HTTPS, ang awtomatikong backup, at
-                kung saan itatago ang kopya ng backup.</td>
+            <td><strong>Nasagot na po: Cloud Server.</strong> Tatlong bagay na
+                lang po tungkol sa server na iyon ang kulang. Ang <strong>web
+                address</strong> na gagamitin, para mailagay ang HTTPS (ang
+                padlock) — ito rin po ang hinihintay ng pag-scan gamit ang
+                camera. Kung <strong>kaya pong magpatakbo ng naka-iskedyul na
+                gawain</strong>, dahil iyon po ang kailangan ng gabi-gabing
+                backup at ng pagtingin sa mga overdue. At <strong>saan itatago
+                ang kopyang nasa labas ng server</strong>, dahil ang backup na
+                nasa iisang makina lang ay hindi po tunay na backup.</td>
         </tr>
         <tr>
             <td><strong>Sino ang mag-a-approve sa sariling naisumite</strong></td>
-            <td>Pwede po bang aprubahan ng Admin ang dokumentong siya mismo
-                ang nagsumite? May patakaran po kayo dito?</td>
+            <td><strong>Hindi na po ninyo ito kailangang ipadala sa amin —
+                kayo na po ang makakapagtakda.</strong> Isang switch na po ito
+                sa <strong>System Settings</strong>. Sa ngayon po ay
+                <strong>hindi pinapayagan</strong> na aprubahan ng Admin ang
+                dokumentong siya mismo ang nagsumite, at kayang buksan ito ng
+                Super Admin anumang oras nang hindi na kailangang lumapit sa
+                amin.</td>
         </tr>
     </tbody>
 </table>

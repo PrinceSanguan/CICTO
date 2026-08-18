@@ -51,6 +51,59 @@ class BackupAndSecurityTest extends TestCase
         Storage::disk('backups')->assertExists($run->path);
     }
 
+    /**
+     * The off-site destination, which is the whole point of §22.
+     *
+     * A dumper writes with fopen/proc_open and ZipArchive needs a real path, so
+     * the artifact is always BUILT locally -- but on Laravel Cloud, or any
+     * container host, the local disk is wiped by the next deploy and is sized
+     * at roughly 512MB per 1GB of RAM. A backup that only ever lands there is
+     * not a backup. This proves the artifact reaches a non-local disk and that
+     * the staging copy does not linger.
+     */
+    public function test_a_backup_reaches_a_remote_disk_and_leaves_no_staging_copy(): void
+    {
+        // A fake disk whose driver is not 'local' is exactly the branch object
+        // storage takes, without needing a bucket to test against.
+        Storage::fake('backups');
+        config(['filesystems.disks.backups.driver' => 's3']);
+
+        $run = app(BackupService::class)->run($this->superAdmin());
+
+        $this->assertSame(BackupStatus::Completed, $run->status);
+        $this->assertSame('backups', $run->disk);
+        $this->assertNotNull($run->path);
+        $this->assertGreaterThan(0, $run->size_bytes);
+
+        Storage::disk('backups')->assertExists($run->path);
+        $this->assertTrue($run->exists_on_disk());
+
+        // The checksum must describe the bytes that actually arrived.
+        $this->assertSame(
+            hash('sha256', Storage::disk('backups')->get($run->path)),
+            $run->checksum_sha256,
+        );
+
+        // Staging is scratch space, not a second copy nobody prunes.
+        $this->assertFileDoesNotExist(storage_path('app/backup-staging/'.$run->path));
+    }
+
+    public function test_a_remote_backup_disk_does_not_claim_to_include_documents(): void
+    {
+        // Documents in object storage are not walked into the archive, and the
+        // run must say 'database' rather than 'full' so nobody restores it
+        // expecting the files to be inside.
+        Storage::fake('backups');
+        Storage::fake('documents');
+        config(['filesystems.disks.documents.driver' => 's3']);
+
+        $this->assertFalse(app(BackupService::class)->canArchiveFiles());
+
+        $run = app(BackupService::class)->run($this->superAdmin());
+
+        $this->assertSame('database', $run->kind);
+    }
+
     public function test_the_php_dumper_orders_tables_by_dependency_not_alphabetically(): void
     {
         Storage::fake('backups');

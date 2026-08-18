@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Concerns\BuildsDocuments;
 use Tests\TestCase;
 
@@ -216,5 +217,48 @@ class ManageUsersTest extends TestCase
 
                 $this->assertSame([$target->email], $emails->all());
             });
+    }
+
+    /**
+     * The user search runs raw SQL with an explicit ESCAPE clause, and it used
+     * to spell that clause `escape '\'` -- which PostgreSQL and SQLite accept
+     * as a one-character string and MySQL reads as an unterminated literal,
+     * failing with a 1064 syntax error. The only way to catch that here is to
+     * exercise the search on a driver that is not SQLite, which CI does; what
+     * this test can do is make sure a search that hits the escaping path runs
+     * at all, on whatever driver it is given.
+     *
+     * @param  string  $needle  a term containing a LIKE metacharacter
+     */
+    #[DataProvider('metacharacterTerms')]
+    public function test_the_search_survives_like_metacharacters(string $needle): void
+    {
+        $office = $this->office('OCM', 'Office of the City Mayor');
+        $this->staff($office);
+
+        $this->actingAs($this->superAdmin())
+            ->get(route('super-admin.users.index', ['q' => $needle]))
+            ->assertSuccessful()
+            ->assertInertia(function ($page) use ($needle) {
+                // The point is not what comes back, it is that a wildcard is
+                // treated as text: none of these appear in a seeded email.
+                $this->assertSame(
+                    [],
+                    collect($page->toArray()['props']['users']['data'])->pluck('email')->all(),
+                    "Searching for [{$needle}] matched rows it should not have.",
+                );
+            });
+    }
+
+    /** @return array<string, array{string}> */
+    public static function metacharacterTerms(): array
+    {
+        return [
+            'percent wildcard' => ['%'],
+            'underscore wildcard' => ['_'],
+            'the escape character itself' => ['!'],
+            'backslash' => ['\\'],
+            'a wildcard inside a word' => ['a%b'],
+        ];
     }
 }
