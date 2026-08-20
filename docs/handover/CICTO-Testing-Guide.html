@@ -433,16 +433,49 @@
     The new account should appear in the list and should be able to log in.
 </p>
 
+<p>
+    <strong>Now try setting a password for somebody</strong> &mdash; this is the
+    part that replaces "Forgot Password", so it is worth testing properly.
+</p>
+
 <ol class="check">
-    <li>Log back in as super@cicto.test. Click <strong>All Documents</strong>.</li>
+    <li>Log back in as super@cicto.test and go to <strong>Manage Users</strong>.</li>
+    <li>Find the account you just made and click <strong>Set password</strong>
+        on its row.</li>
+    <li>Read what the panel says will happen. Type <em>your own</em> password in
+        the box that asks for it, then a new password for them, twice.</li>
+    <li>Click <strong>Set password</strong>.</li>
+    <li>Log out and log in as that account using the <em>new</em> password.</li>
+    <li>Log out again and try the <em>old</em> password.</li>
+</ol>
+<p class="see">
+    The new password works. The old one does not. The message at the top reminds
+    you to give them the password yourself, because nothing is emailed.
+</p>
+
+<ol class="check">
+    <li>Log back in as <strong>super@cicto.test</strong> and return to
+        <strong>Manage Users</strong>.</li>
+    <li>Look at your own row in the list.</li>
+</ol>
+<p class="see">
+    There is no <strong>Set password</strong> button on your own row. That is on
+    purpose &mdash; you change your own password under Settings, where it asks
+    for your current one first.
+</p>
+
+<ol class="check">
+    <li>Still as super@cicto.test, click <strong>All Documents</strong>.</li>
     <li>Check that you can see documents from every office here.</li>
     <li>Click <strong>Reports &amp; Analytics</strong> to see the charts.</li>
     <li>Click <strong>System Settings</strong>, then scroll down to the
         <strong>Security log</strong>.</li>
 </ol>
 <p class="see">
-    The security log should show your own log-in from earlier, and the new
-    account you just made.
+    The security log should show your own log-in from earlier, the new account
+    you just made, and the password you set for it &mdash; that last line names
+    you, the account it was for, and how many devices were signed out. Every
+    password an administrator sets is recorded this way.
 </p>
 
 <div class="box">
@@ -496,23 +529,46 @@
     report these.
 </p>
 
-<h3>1. The system cannot send email yet</h3>
-<p>Because of this:</p>
+<h3>1. The system does not send email</h3>
+<p>
+    You told us on 20 August that CICTO cannot give out email settings for
+    this system. That is a fine answer and nothing is waiting on it any more
+    &mdash; we have built the alternative you asked for instead. What it means
+    day to day:
+</p>
 <ul>
-    <li><strong>"Forgot Password" does nothing.</strong> No email will arrive.
-        For now, the system manager sets a new password for anyone who
-        forgets theirs.</li>
+    <li><strong>"Forgot Password" tells people to ask you.</strong> The page no
+        longer asks for an email address, because no email can be sent. It says
+        plainly that the server cannot send email and that an administrator will
+        set a new password.</li>
+    <li><strong>You set the new password yourself, from the system.</strong> Go
+        to <em>Manage Users</em>, find the person, and press <strong>Set
+        password</strong>. You will be asked for your own password first, then
+        theirs twice. Tell them the new password in person or over the phone
+        &mdash; the system never emails it to anybody. Please test this one; it
+        is new.</li>
     <li><strong>Help messages are saved but not sent.</strong> If someone uses
         the Submit a Ticket page, the message is kept inside the system.
         Nobody gets an email about it. The page says so when you use it.</li>
     <li><strong>Nobody is emailed</strong> when a new document arrives at
-        their office.</li>
+        their office. The bell inside the system still tells them.</li>
 </ul>
 <p>
-    To switch this on we need your email settings from whoever looks after
-    the city's email. Once we have them, all three work straight away and
-    nothing else has to change.
+    If the city ever does set up an email account for this system, tell us and
+    we will connect it. Nothing here has to be undone first.
 </p>
+
+<h3>1a. Two things to know before you set someone's password</h3>
+<ul>
+    <li><strong>They get signed out everywhere.</strong> If they are signed in
+        on a phone and a desk computer, both stop working straight away. Warn
+        them, or they will ring you about it.</li>
+    <li><strong>There is a tick box for a stolen account.</strong> If somebody
+        has simply forgotten their password, leave it alone. Tick it only if you
+        think another person has got into their account, or if they have lost
+        the phone they use for their security codes. It removes those extra
+        security methods so they can set them up again from scratch.</li>
+</ul>
 
 <h3>2. Scanning with a phone camera</h3>
 <p>
@@ -595,8 +651,11 @@
         </tr>
         <tr>
             <td>Your email settings</td>
-            <td><strong>Still needed.</strong> Nothing is sent until we have
-                them. See the section above.</td>
+            <td><strong>Answered, and nothing further is needed.</strong> You
+                said CICTO cannot give out email settings, and asked us to build
+                a way for an administrator to set someone's password instead.
+                That is built and is on the Manage Users page. See the section
+                above.</td>
         </tr>
         <tr>
             <td>How long old files should be kept</td>

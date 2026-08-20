@@ -27,7 +27,7 @@ must perform, and it is the step that punishes being skipped.
 | **A cron entry** *(ANSWERED 2026-08-18 — Cloud runs the scheduler)* | Deadline warnings, overdue notices, nightly signature verification and backups all hang off `schedule:run` | Settled. Laravel Cloud runs the Laravel scheduler as a per-environment compute setting, so it is off until somebody switches it on. Do not add a crontab — §1.2 |
 | **Durable storage for the documents** *(NEW, and the dangerous one)* | Laravel Cloud's filesystem is ephemeral and per-replica: a local documents disk there is emptied by the next deploy while the `document_files` rows still point at the missing bytes | No fallback, and no error either — it fails silently. Attach a private bucket and set `CICTO_DOCUMENTS_DRIVER=s3` **before the first real upload**. §1.1 |
 | **`proc_open` enabled** | `pg_dump`/`mysqldump` need it | Still unconfirmed on Cloud, and not blocking: `PhpDumper` takes over automatically and produces a data-only dump, so restore then needs `migrate` first. Probe it on the real environment and write down which dumper you got, because it changes the restore procedure |
-| **SMTP credentials** | Password resets, notifications and support tickets | Still unanswered (**B3**), and untouched by the hosting answer. Password reset is unusable. Say this in writing before go-live |
+| **SMTP credentials** *(ANSWERED 2026-08-20 — CICTO will not supply them)* | Password resets, notifications and support tickets | **Closed against us, and no longer blocking.** CICTO will not provide email credentials or configuration, and recommends an external service (Google SMTP) if the LGU wants one. "Forgot password" therefore refuses rather than pretending, and a Super Admin sets passwords from Manage Users instead — that is the module CICTO asked for in its place. §3 carries the SMTP block for a deployment that does stand one up |
 
 The remaining thing B2 asked — **where the off-site backup goes** — is answered
 too: Laravel Cloud Object Storage, which is S3-compatible and offered in
@@ -218,6 +218,31 @@ DB_PASSWORD=<generated>
 SESSION_DRIVER=database
 SESSION_SECURE_COOKIE=true      # ONLY once HTTPS is confirmed
 
+# Outgoing mail. CICTO answered B3 on 2026-08-20: they will not supply email
+# credentials or configuration, and recommend an external service. So this ships
+# as `log` and nothing leaves the server. Leave it that way unless the LGU has
+# actually stood a service up -- the application is honest about the absence
+# (Forgot Password refuses and names the administrator) and dishonest about
+# nothing, which is the safe state.
+MAIL_MAILER=log
+MAIL_LOG_CHANNEL=mail           # keeps rendered messages out of the shared log
+
+# If they DO stand up Google SMTP, these six move together — EDIT THEM IN PLACE
+# rather than appending a second block. dotenv takes the LAST assignment of a
+# duplicated key, so a half-pasted block leaves MAIL_MAILER=smtp pointing at the
+# placeholder host: a mailer the application believes works, minting reset
+# tokens that go nowhere. That is the exact state B3's guard exists to prevent.
+#   MAIL_MAILER=smtp
+#   MAIL_HOST=smtp.gmail.com
+#   MAIL_PORT=587               # 587 = STARTTLS, leave MAIL_SCHEME unset
+#   MAIL_USERNAME=<the gmail account>
+#   MAIL_PASSWORD=<16-character App Password, NOT the account password>
+#   MAIL_FROM_ADDRESS=<the same gmail account>
+# The last line is the one that gets missed: Google rejects a From address that
+# is not the account it authenticated, and the connection reports healthy while
+# every message bounces. `cicto:host-check` checks it, and §9 asks you to prove
+# a reset link actually arrives rather than that the config looks right.
+
 # Printed onto paper. Get it right before any label is issued at volume.
 CICTO_SCAN_BASE_URL=https://cicto.example.gov.ph
 
@@ -366,8 +391,12 @@ php artisan cicto:create-super-admin      # prompts; creates the real account
 
 ### Creating the real staff accounts
 
-There is **no user-management screen yet** — Manage Users is a routed
-placeholder. Accounts are created and assigned from the console:
+Two of these have a screen now and the rest do not. **Manage Users**
+(`/super-admin/users`, Super Admin only) creates an account and sets a password
+for an existing one. **Role, office and active state are still console-only** —
+those are the three operations an attacker wants and an LGU auditor asks about,
+and putting them behind SSH rather than a session is the cheapest defence
+available.
 
 ```bash
 php artisan cicto:user clerk@baliwag.gov.ph --name="Maria Santos" --role=user --office=OCM
@@ -380,11 +409,64 @@ php artisan cicto:user someone@baliwag.gov.ph --deactivate        # close, never
 
 Run it with no options to see an account's current role, office and state.
 
-> **Say this to the client.** Until the Manage Users screen is built, every
-> staffing change — a new clerk, a transfer, someone leaving — needs somebody
-> with server access. That is fine for go-live and unsustainable as a permanent
-> arrangement. It is the enforcement half of feature #11 delivered without the
-> administration half, and the screen is not costed anywhere.
+#### When somebody forgets their password
+
+Client question **B3**, answered 2026-08-20: there are no SMTP credentials, so
+there is no reset link. The Forgot Password page says so and points at you.
+
+**Ordinarily, from the screen.** Manage Users → the person's row → **Set
+password**. You confirm your own password, type theirs, and hand it to them.
+They are signed out on every device they were signed in on, so tell them that
+before they ask why their phone logged out.
+
+**Tick "also remove two-factor and passkeys" only when you mean it.** Leave it
+off for an ordinary forgotten password. Tick it if the account may be in
+somebody else's hands — a passkey signs its holder in without ever asking for
+the password, so a reset on its own revokes nothing — or if they have lost the
+phone holding their two-factor codes, because otherwise the new password still
+will not get them in.
+
+**When nobody can sign in at all**, including every Super Admin, the screen
+cannot help and this is the way back:
+
+```bash
+php artisan cicto:user super@baliwag.gov.ph --reset-password
+
+# ...and, if two-factor or a passkey is what is actually blocking them:
+php artisan cicto:user super@baliwag.gov.ph --reset-password --revoke-second-factors
+```
+
+It generates a password, prints it once, rotates the remember-me token, deletes
+any outstanding reset token, ends the account's live sessions and writes the
+whole thing to the security log. **Then clear it from your shell or hosting
+panel history** — the password is in that output. There is deliberately no
+`--password` option for the same reason.
+
+Two things it will do that are worth knowing before you need them:
+
+- **It refuses to create an account.** Every other option on `cicto:user`
+  creates the account if the address does not exist; `--reset-password` fails
+  instead. You are typing an address from memory in the one situation where you
+  cannot look it up, and `supe@` rather than `super@` would otherwise mint a
+  second account, print you a working password for it, and report success while
+  the real account stayed locked.
+- **It warns rather than assumes on second factors.** Without
+  `--revoke-second-factors` it leaves two-factor and passkeys alone and tells
+  you they are still there, because the password it just printed will not get
+  anybody past them. Clearing somebody's authenticator uninvited is its own kind
+  of damage; being told the rescue is incomplete is not.
+
+> Ending live sessions needs `SESSION_DRIVER=database`, which §3 already
+> requires and §1.3 explains. On any other driver the reset still works and the
+> screen says plainly that the other devices could not be signed out — which on
+> a compromised account is the difference between a fixed problem and one you
+> have been told is fixed.
+
+> **Say this to the client.** A new clerk, a transfer or someone leaving still
+> needs somebody with server access, because role, office and deactivation have
+> no screen. That is fine for go-live and unsustainable as a permanent
+> arrangement; it is the enforcement half of feature #11 delivered without all
+> of the administration half, and the missing screens are not costed anywhere.
 
 Delete every demo account before go-live:
 
@@ -525,7 +607,10 @@ whose loss it was supposed to insure against.
 - [ ] `CICTO_SCAN_BASE_URL` emits `https://` — print **one** label and scan it
 - [ ] Register → forward → receive → approve → complete, end to end
 - [ ] A QR label scans to the right document from a phone
-- [ ] Password reset email arrives (or SMTP absence is acknowledged in writing)
+- [ ] Forgot Password says it cannot send email and names the administrator — or,
+      if SMTP was configured, a reset link actually arrives
+- [ ] A Super Admin can set a password from Manage Users, and the person it was
+      set for signs in with it
 - [ ] Each of the three roles sees only its own panel
 - [ ] `APP_DEBUG=false` — visit a bad URL and confirm no stack trace
 - [ ] Backup ran, restore drilled, off-site copy exists
@@ -620,7 +705,13 @@ Do not let these surface as surprises three months in.
   user agents, which are personal data under RA 10173, and 180 days is published
   as a promise on the public privacy notice.
 - **Support tickets email; there is no ticket queue.** With no SMTP configured
-  they are recorded in the log and the UI says so.
+  — which **B3** settled on 2026-08-20 is the standing arrangement, not a
+  temporary one — they are recorded in the log and the UI says so.
+- **A forgotten password is an administrator's job, not an inbox's.** There is
+  no reset email and there is not going to be one unless the LGU stands up its
+  own mail service. Forgot Password says so; Manage Users is where it is fixed.
+  Somebody in the LGU has to be reachable to do that, and if the only Super
+  Admin leaves without handing over, the way back in is SSH.
 
 ---
 
@@ -634,7 +725,7 @@ Deployment can proceed without these, but the gaps stay open.
 | **A4** — *part delivered 2026-08-18.* The 53 offices, their codes and the 43 document types are seeded. **Turnaround days per type** are not: that question went to ARO and has not come back | Per-type deadlines. Every type shares the three-day `CICTO_DEFAULT_TURNAROUND_DAYS` until they do |
 | **B1** — the signature paragraph, acknowledged | §15 sign-off |
 | **B2** — *mostly answered 2026-08-18.* The host is **Laravel Cloud**: HTTPS is issued by the platform, the scheduler runs the three commands in `routes/console.php`, and the off-site destination is Laravel Cloud Object Storage. Still open: **who performs and who tests the restore drill**, object versioning on the documents bucket (§10), and whether `proc_open` and `pg_dump`/`mysqldump` exist there — `cicto:host-check` answers that last one on the real environment | §22 sign-off |
-| **B3** — SMTP credentials | Password reset, notifications, tickets |
+| ~~**B3** — SMTP credentials~~ *(ANSWERED 2026-08-20, and closed against us.)* CICTO will not supply them and recommends an external service; in their place they asked for, and got, a Super Admin password-reset module. Nothing further is owed by the client | Nothing. §12 notification email stays a change order whether or not SMTP is later configured |
 | **B4** — real `.xlsx` or CSV acceptable | §19 sign-off |
 | **B6** — *part answered 2026-08-18.* A floor was given — "3 to 5 years minimum" — and the code holds 1095 days. Still missing: the exact figure (with ARO), written sign-off, and a confirmed off-site copy | Enabling any pruner |
 

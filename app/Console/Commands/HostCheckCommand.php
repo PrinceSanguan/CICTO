@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Services\Backup\BackupService;
+use App\Support\OutgoingMail;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -161,14 +162,41 @@ class HostCheckCommand extends Command
     /** @return list<array{0: string, 1: string, 2: string}> */
     private function mail(): array
     {
-        $mailer = (string) config('mail.default');
-        $usable = ! in_array($mailer, ['log', 'array'], true);
+        $usable = OutgoingMail::isConfigured();
 
-        return [[
+        $rows = [[
             'Outgoing mail',
-            $usable ? 'OK '.$mailer : 'NO ('.$mailer.')',
-            'Password reset, deadline notices and support tickets do not send',
+            $usable ? 'OK '.OutgoingMail::mailer() : 'NO ('.OutgoingMail::mailer().')',
+            'No reset links, deadline notices or tickets send; a Super Admin sets passwords by hand instead',
         ]];
+
+        /*
+         * The second half of a working mail setup, and the half that is missed.
+         *
+         * Client question B3 points deployments at an external service, Google
+         * SMTP by name. Gmail refuses to send as an address that is not the
+         * account it authenticated -- so a host with MAIL_USERNAME and
+         * MAIL_PASSWORD filled in and MAIL_FROM_ADDRESS left at the framework's
+         * placeholder connects, authenticates, and then has every message
+         * rejected at send time. The row above says OK throughout.
+         *
+         * Only asked once there is a transport to ask it about; on the shipping
+         * default it is not a finding, it is just the placeholder sitting where
+         * nothing reads it.
+         */
+        if ($usable) {
+            $from = OutgoingMail::fromAddress();
+
+            $rows[] = [
+                'Mail From address',
+                OutgoingMail::fromAddressIsPlaceholder()
+                    ? 'NO ('.($from === '' ? 'unset' : $from).')'
+                    : 'OK '.$from,
+                'Google SMTP and most providers reject a From that is not the authenticated account',
+            ];
+        }
+
+        return $rows;
     }
 
     /** @return list<array{0: string, 1: string, 2: string}> */

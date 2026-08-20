@@ -49,6 +49,35 @@ that needs it.
 >
 > **B3** is untouched by all of this and still reads "?".
 
+> **2026-08-20 — `DTS-Questions (3).docx` closed B3, and closed it by refusing the question.**
+> The file is byte-identical to the 18th's except in one cell: where the answer to "your email
+> settings, so password resets and messages work" used to read "?", it now reads, in full, that
+> **CICTO cannot provide email credentials or configuration for this system, school project or
+> not**, and recommends an external service — Google SMTP by name — for anything the application
+> needs to send.
+>
+> That is a *no*, and a no is an answer. It does not leave B3 open; it closes it against us, and
+> the rest of the cell says what to build instead: *"you may develop a module that allows the
+> system administrator to reset the password of any user registered in your application."* That
+> module is now on `/super-admin/users` and is the whole recovery path for a forgotten password
+> on a deployment with no mail — which, until an LGU sets one up, is every deployment.
+>
+> **Two smaller things came with it.** An emailed reset is explicitly permitted *if* we want to
+> stand up an external service ourselves, and **in-app messaging** was answered before it was
+> asked: it is at our discretion, and *"the existing Document Tracking System (DTS) does not
+> currently have an in-app messaging capability"* — so it is not a gap against the incumbent and
+> nothing in this build treats it as one.
+>
+> **What this changed in the code, beyond the module.** The forgot-password page had been
+> claiming, on every deployment to date, that it had emailed a link. Under `MAIL_MAILER=log`
+> Fortify happily minted a real, single-use, one-hour token, wrote the whole message into the
+> shared application log, and returned a green success. Now the page says plainly that this
+> server cannot send email, drops the form and names the administrator instead, and the route
+> refuses to mint the token at all. That is the answer to B3 landing in the one screen that was
+> lying about it.
+>
+> B3's heading below is marked answered; nothing else on this page moved.
+
 ---
 
 ## Group A — blocks Phase 1, ask on day 1
@@ -398,18 +427,103 @@ is a deliberate act by whoever administers the bucket. Say this before sign-off.
 should be left believing the nightly backup would bring a deleted document back, because
 it would not.
 
-### B3. Is email delivery in scope? *(§3, §12)*
+### B3. Is email delivery in scope? *(§3, §12)* *(ANSWERED 2026-08-20 — no credentials, and a password-reset module instead)*
 
-`MAIL_MAILER=log` today — nothing sends. This affects two specified features:
-email verification on sign-up (§3) and notifications (§12).
+The question was: who provides SMTP credentials, and for what address? The
+answer, in writing, on 2026-08-20:
 
-- Who provides SMTP credentials, and for what address?
-- If there is no mail service, §3 email verification cannot function, and
-  notifications must be in-app only. That is a scope reduction and should be
-  acknowledged in writing.
+> For email-related settings, CICTO cannot provide email credentials or
+> configuration details, even when the system is being developed for school or
+> academic purposes. We highly recommend using alternative email services, such
+> as Google SMTP, for sending emails from your application.
+>
+> For password reset functionality, you may develop a module that allows the
+> system administrator to reset the password of any user registered in your
+> application.
+>
+> If you prefer to implement an email-based password reset feature, please use
+> an external email service, such as Google SMTP, as recommended above.
+>
+> If your group would like to implement an in-app messaging feature in your
+> application, you may do so at your discretion. However, please note that the
+> existing Document Tracking System (DTS) does not currently have an in-app
+> messaging capability.
 
-> Re-asked in `DTS-Questions.docx` on 2026-08-18. The answer came back "?".
-> `MAIL_MAILER=log` is still what ships, and nothing above has moved.
+**That is a closed question, not a deferred one.** Nobody is coming with a
+`mail.baliwag.gov.ph` and a service account. Read it as three decisions:
+
+#### 1. The recovery path is an administrator, not an inbox
+
+Built, and it is the load-bearing consequence of the whole answer. A Super Admin
+sets a password for any account from **Manage Users**
+(`POST /super-admin/users/{user}/password`), and the same operation is available
+over SSH as `php artisan cicto:user <email> --reset-password` for the one case
+the screen cannot serve — every Super Admin locked out, so there is nobody left
+to sign in and press the button.
+
+Setting somebody's password is a complete account takeover with a receipt, so
+the module does five things rather than one:
+
+| It does | Because |
+| --- | --- |
+| Asks for the **administrator's own** password in the form | An unattended signed-in browser must not be able to take over every account in the city. The house pattern is the `password.confirm` middleware, but that redirects an Inertia POST to another page and throws the typed password away; asking in the form buys the same property and keeps it |
+| Rotates `remember_token` | A stolen "remember me" cookie authenticates against that column, not the password. Leaving it is a reset that revoked nothing |
+| Deletes any outstanding emailed reset token | A link issued in the last hour would let whoever holds it set the password straight back |
+| Destroys the account's live sessions | `Auth::logoutOtherDevices()` cannot do this: it acts on the *administrator*, and it needs `AuthenticateSession`, which is not in this application's middleware stack. A direct delete on `sessions.user_id` is the only mechanic that works, and it needs `SESSION_DRIVER=database` — the screen says so when it is not |
+| Optionally removes two-factor and passkeys | A passkey signs its holder in without the password ever being consulted. Off by default, because a forgotten password and a stolen account want opposite answers; offered only on accounts that actually have one |
+
+It writes `SecurityEventType::PasswordResetByAdmin` — deliberately **not** the
+existing `auth.password_reset`, which `RecordSecurityEvents` renders as
+"*<email>* reset their password" with the account holder as the actor. Filing an
+administrator-set password under that case would put the wrong person's name
+against the one operation that hands over somebody else's account.
+
+#### 2. Email is possible, at the LGU's own expense, and is not configured here
+
+`config/mail.php` was always ready; what was missing was anyone saying which
+service. `.env.example` now carries the Google SMTP recipe the client named,
+including the two things that actually bite — an ordinary Google password is
+refused, it has to be a 16-character **App Password**, and `MAIL_FROM_ADDRESS`
+must be the authenticated Gmail account or every message is rejected at send
+time with the connection reporting healthy. `cicto:host-check` now checks the
+second one.
+
+**What does not change with SMTP configured:** §12 notification email is still
+out of scope and still a change order — see
+[`phase-2-workflow-and-trail.md`](phase-2-workflow-and-trail.md) §Email. A
+working mailer makes it *possible*, not *included*. And no credential is ever
+emailed to anybody, mail or no mail: a password in an inbox outlives every use
+of it, so both the create form and the reset panel say plainly that the
+administrator hands it over themselves.
+
+#### 3. In-app messaging is out, and the client said so first
+
+*"The existing DTS does not currently have an in-app messaging capability."* It
+is not a gap against the incumbent system and nothing here treats it as one. §12
+remains in-app **notifications** — deadline and movement notices raised by the
+system — which is a different feature and already built.
+
+#### What the answer forced us to fix
+
+`MAIL_MAILER=log` was never neutral. Fortify's forgot-password flow does not
+check whether mail works: it minted a real, single-use, one-hour token for any
+address posted to it, wrote the entire message — reset link included — into the
+shared unrotated application log at debug level, and returned the green *"We
+have emailed your password reset link"*. Every deployment of this system has
+been doing that.
+
+The page now says it cannot send email, drops the form and names the
+administrator instead; `RequireOutgoingMail` refuses the POST for anyone who
+arrives another way, with the same message for a known and an unknown address so
+it cannot be used to enumerate accounts; and the `log` mailer writes to its own
+7-day channel rather than into `stack`. That last one reduces the exposure and
+does not remove it — only a real transport does.
+
+#### Still owed on this question
+
+Nothing from the client. One thing from whoever deploys: if an LGU does stand up
+Google SMTP, `MAIL_FROM_ADDRESS` and the App Password have to be set together,
+and `php artisan cicto:host-check` is what says whether they were.
 
 ### B4. What does "exportable to PDF and Excel" mean? *(§19, Phase 3)*
 

@@ -63,6 +63,32 @@ return [
             'replace_placeholders' => true,
         ],
 
+        /*
+         * Where the `log` mailer writes, once MAIL_LOG_CHANNEL points at it.
+         *
+         * MAIL_MAILER=log is what ships (client question B3), and the log
+         * mailer renders the WHOLE message into the log -- which for a
+         * password-reset email means a working reset link, in cleartext,
+         * against the address it belongs to. Left in `stack` that link sits in
+         * the same unrotated debug-level file everybody tails when something
+         * breaks, and stays there.
+         *
+         * So it gets its own file and a short window. Seven days, not the
+         * fortnight `csp` keeps: a reset link expires in an hour and there is
+         * no reason to hold the message after that except to read what a
+         * deployment sent while it was being set up.
+         *
+         * This reduces the exposure; it does not remove it. The only thing that
+         * removes it is a real transport.
+         */
+        'mail' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/mail.log'),
+            'level' => 'debug',
+            'days' => 7,
+            'replace_placeholders' => true,
+        ],
+
         'stack' => [
             'driver' => 'stack',
             'channels' => explode(',', (string) env('LOG_STACK', 'single')),

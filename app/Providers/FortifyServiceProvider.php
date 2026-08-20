@@ -7,6 +7,7 @@ use App\Actions\Fortify\ResetUserPassword;
 use App\Http\Responses\LogoutResponse;
 use App\Http\Responses\RoleAwareLoginResponse;
 use App\Http\Responses\RoleAwarePasskeyLoginResponse;
+use App\Support\OutgoingMail;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -87,8 +88,27 @@ class FortifyServiceProvider extends ServiceProvider
             'passwordRules' => Password::defaults()->toPasswordRulesString(),
         ]));
 
+        /*
+         * The one auth screen that has to know whether mail works.
+         *
+         * Client question B3: CICTO will not supply SMTP credentials, so on
+         * every deployment to date this page could not do the thing it is
+         * named after. It still offered the form, and Fortify still answered
+         * with a green "We have emailed your password reset link" -- a
+         * statement that was false, about a token that was real and had just
+         * been written into a log file.
+         *
+         * With `mailConfigured` false the page drops the form and says what to
+         * do instead; RequireOutgoingMail refuses the POST for anyone who
+         * arrives at it another way. The `status` is suppressed in the same
+         * breath, because a stale green banner from an earlier request would
+         * outlive the form it belonged to and contradict the warning beside it.
+         */
         Fortify::requestPasswordResetLinkView(fn (Request $request) => Inertia::render('auth/forgot-password', [
-            'status' => $request->session()->get('status'),
+            'status' => OutgoingMail::isConfigured()
+                ? $request->session()->get('status')
+                : null,
+            'mailConfigured' => OutgoingMail::isConfigured(),
         ]));
 
         Fortify::verifyEmailView(fn (Request $request) => Inertia::render('auth/verify-email', [

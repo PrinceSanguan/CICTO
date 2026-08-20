@@ -462,16 +462,56 @@
         at agad na makakapag-log in.
     </div>
     <div class="warn">
-        <strong>Paalala:</strong> Dahil wala pa pong email na naka-setup
-        (tingnan ang Bahagi 7), <strong>walang ipapadalang email</strong> sa
-        bagong kawani. Kayo po mismo ang magbibigay ng password sa kanila.
+        <strong>Paalala:</strong> <strong>Walang ipapadalang email</strong> sa
+        bagong kawani — hindi po nagpapadala ng password ang sistemang ito sa
+        email kahit kailan (tingnan ang Bahagi 7). Kayo po mismo ang magbibigay
+        ng password sa kanila.
+    </div>
+</div>
+
+<div class="test">
+    <h3>5.1a — Magtakda ng bagong password para sa iba</h3>
+    <p>
+        Ito po ang kapalit ng “Forgot Password”, kaya mahalagang masubukan
+        nang maayos.
+    </p>
+    <ol class="steps">
+        <li>Mag-log out muna sa bagong account, tapos mag-log in ulit bilang
+            <strong>super@cicto.test</strong> at pumunta sa
+            <strong>Manage Users</strong>.</li>
+        <li>Hanapin ang account na kagagawa ninyo lang at pindutin ang
+            <strong>Set password</strong> sa hanay nito.</li>
+        <li>Basahin po muna kung ano ang sinasabi ng panel na mangyayari.</li>
+        <li>Ilagay ang <em>inyong sariling</em> password sa kahon na humihingi
+            nito, tapos ang bagong password nila nang dalawang beses.</li>
+        <li>Pindutin ang <strong>Set password</strong>.</li>
+        <li>Mag-log out, tapos mag-log in bilang account na iyon gamit ang
+            <em>bagong</em> password.</li>
+        <li>Mag-log out ulit at subukan ang <em>lumang</em> password.</li>
+    </ol>
+    <div class="expect">
+        <strong>Dapat mangyari:</strong> Gumagana ang bagong password. Hindi
+        gumagana ang luma. May paalala sa itaas na kayo mismo ang magbibigay ng
+        password dahil walang ipinapadalang email.
+    </div>
+    <ol class="steps">
+        <li>Mag-log in ulit bilang <strong>super@cicto.test</strong> at bumalik
+            sa <strong>Manage Users</strong>.</li>
+        <li>Tingnan ang <em>inyong sariling</em> hanay sa listahan.</li>
+    </ol>
+    <div class="expect">
+        <strong>Dapat mangyari:</strong> Walang <strong>Set password</strong> na
+        button sa <em>inyong sariling</em> hanay. Sinasadya po ito — ang sarili
+        ninyong password ay pinapalitan sa Settings, kung saan hinihingi muna
+        ang kasalukuyan ninyong password.
     </div>
 </div>
 
 <div class="test">
     <h3>5.2 — All Documents</h3>
     <ol class="steps">
-        <li>Pindutin ang <strong>All Documents</strong>.</li>
+        <li>Naka-log in pa rin bilang super@cicto.test, pindutin ang
+            <strong>All Documents</strong>.</li>
         <li>Tingnan kung nakikita ninyo ang papeles ng <em>lahat</em> ng opisina.</li>
         <li>Subukan ang search at ang status filter.</li>
     </ol>
@@ -537,26 +577,51 @@
     i-report ang mga ito.
 </p>
 
-<h3>7.1 — Walang email (pinakamahalaga)</h3>
+<h3>7.1 — Walang email, at hindi na po ito hinihintay</h3>
 <p>
-    Wala pa pong naka-setup na email sa server, kaya:
+    Noong <strong>Agosto 20</strong> po ay sinabi ninyong hindi maaaring
+    magbigay ang CICTO ng email settings para sa sistemang ito. Malinaw pong
+    sagot iyon, at wala na pong nakabinbin dahil dito — ginawa na namin ang
+    kapalit na hiningi ninyo. Ito po ang ibig sabihin araw-araw:
 </p>
 <ul>
-    <li><strong>Ang “Forgot Password” ay hindi pa gumagana.</strong>
-        Walang darating na email. Sa ngayon po, ang Super Admin ang
-        magpapalit ng password ng nakalimot.</li>
+    <li><strong>Ang “Forgot Password” ay nagsasabi nang magtanong sa inyo.</strong>
+        Hindi na po ito humihingi ng email address, dahil walang maipapadala.
+        Malinaw pong nakasulat sa page na hindi makakapagpadala ng email ang
+        server at may administrator na magtatakda ng bagong password.</li>
+    <li><strong>Kayo na po mismo ang magtatakda ng bagong password, sa loob ng
+        sistema.</strong> Pumunta sa <em>Manage Users</em>, hanapin ang tao, at
+        pindutin ang <strong>Set password</strong>. Hihingin muna ang
+        <em>inyong sariling</em> password, tapos ang bago nilang password nang
+        dalawang beses. Sabihin po ninyo sa kanila nang personal o sa telepono
+        — hindi po ito ipinapadala sa email ninuman. Pakisubukan po ito; bago
+        ito.</li>
     <li><strong>Ang mga support ticket ay naitatala lamang</strong> sa loob ng
         sistema, hindi naipapadala sa email. Sinasabi po ito nang malinaw ng
         sistema mismo kapag nag-submit kayo.</li>
     <li><strong>Walang email na abiso</strong> kapag may dumating na bagong
-        dokumento sa inyong opisina.</li>
+        dokumento sa inyong opisina. Nakikita pa rin po ito sa bell sa loob ng
+        sistema.</li>
 </ul>
 <div class="warn">
-    <strong>Kailangan namin mula sa inyo:</strong> ang SMTP details ng
-    email ng lungsod (server address, username, password, port). Kapag
-    naibigay na po ninyo ito, gagana na ang lahat ng nasa itaas nang hindi
-    na kailangang baguhin ang programa.
+    <strong>Dalawang dapat malaman bago magtakda ng password ng iba:</strong>
+    <ul>
+        <li><strong>Malo-log out po sila sa lahat ng device.</strong> Kung
+            naka-log in sila sa cellphone at sa computer, parehong hihinto agad.
+            Sabihin po ninyo sa kanila, kung hindi ay tatawag sila tungkol dito.</li>
+        <li><strong>May tick box para sa ninakaw na account.</strong> Kung
+            nakalimutan lang po nila ang password, huwag na itong pindutin.
+            Pindutin lamang kung sa palagay ninyo ay may ibang nakapasok sa
+            account nila, o kung nawala ang cellphone na pinagkukunan nila ng
+            security code. Inaalis nito ang mga karagdagang security method para
+            magsimula silang muli.</li>
+    </ul>
 </div>
+<p>
+    Kung sakaling magtayo po ang lungsod ng sariling email account para sa
+    sistemang ito, sabihin lang po ninyo sa amin at ikokonekta namin. Walang
+    kailangang baguhin muna sa nagagawa na.
+</p>
 
 <h3>7.2 — Ang camera sa QR scanner</h3>
 <p>
@@ -651,8 +716,11 @@
         </tr>
         <tr>
             <td><strong>SMTP / email details</strong></td>
-            <td><strong>Kailangan pa rin po namin ito.</strong> Wala pa pong
-                maipapadalang email hangga't wala nito (Bahagi 7.1).</td>
+            <td><strong>Nasagot na po, at wala nang kailangan pa.</strong> Ang
+                sabi po ninyo ay hindi makakapagbigay ang CICTO ng email
+                settings, at hiniling ninyong gumawa kami ng paraan para ang
+                administrator na mismo ang magtakda ng password ng iba. Nagawa
+                na po ito at nasa <em>Manage Users</em> (Bahagi 7.1).</td>
         </tr>
         <tr>
             <td><strong>Gaano katagal itatago ang mga file</strong></td>

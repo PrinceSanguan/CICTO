@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\SupportTicketRequest;
 use App\Mail\SupportTicketMail;
 use App\Support\Help\KnowledgeBase;
+use App\Support\OutgoingMail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -107,7 +108,7 @@ class HelpController extends Controller
         // nobody will ever read.
         Log::channel('stack')->info('Support ticket raised', $payload);
 
-        if ($to !== '' && $this->mailIsConfigured()) {
+        if ($to !== '' && OutgoingMail::isConfigured()) {
             Mail::to($to)->send(new SupportTicketMail(
                 $user,
                 $payload['subject'],
@@ -130,22 +131,6 @@ class HelpController extends Controller
     }
 
     /**
-     * Whether mail can actually leave this server.
-     *
-     * `log` and `array` are the two mailers that accept everything and deliver
-     * nothing, and `log` is the default in this deployment until SMTP details
-     * are supplied (client question B3).
-     */
-    private function mailIsConfigured(): bool
-    {
-        return ! in_array(
-            (string) config('mail.default'),
-            ['log', 'array'],
-            true,
-        );
-    }
-
-    /**
      * @return array<string, mixed>
      */
     private function support(): array
@@ -158,7 +143,7 @@ class HelpController extends Controller
             'hours' => config('cicto.support.hours'),
             'hours_detail' => config('cicto.support.hours_detail'),
             'response_window' => config('cicto.support.response_window'),
-            'mail_configured' => $this->mailIsConfigured(),
+            'mail_configured' => OutgoingMail::isConfigured(),
         ];
     }
 }

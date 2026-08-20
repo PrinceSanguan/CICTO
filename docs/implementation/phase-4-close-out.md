@@ -528,10 +528,175 @@ a command.
   horizontal overflow at 375/390/768/1280
 - `cicto:create-super-admin` run end to end and the resulting account inspected
 
+## B3 answered — 20 Aug 2026
+
+`DTS-Questions (3).docx` came back with one cell changed from "?", and it is the
+cell that had been holding up the two features named in §3 and §12. The answer
+is a refusal followed by an instruction:
+
+> For email-related settings, CICTO cannot provide email credentials or
+> configuration details, even when the system is being developed for school or
+> academic purposes. … For password reset functionality, you may develop a
+> module that allows the system administrator to reset the password of any user
+> registered in your application.
+
+So the recovery path for a forgotten password is a person, not an inbox.
+
+### What was built
+
+**The module they asked for.** `POST /super-admin/users/{user}/password`, behind
+`EnsureRole::using(Role::SuperAdmin)` and `throttle:6,1`, rendered on Manage
+Users as a per-row **Set password** panel. `App\Actions\Users\ResetAccountPassword`
+owns the operation and the console shares it, because two implementations of
+"give somebody a new password" is how one of them ends up skipping a step.
+
+Setting a password is a complete account takeover, so it does five things rather
+than one — the administrator's own password is required in the form,
+`remember_token` is rotated, any outstanding emailed reset token is deleted, the
+account's live sessions are destroyed, and second factors are removed on request.
+The reasoning for each, and why `logoutOtherDevices()` cannot be used here, is in
+[`client-questions.md`](client-questions.md) §B3.
+
+It writes a **new** `SecurityEventType::PasswordResetByAdmin` rather than reusing
+`auth.password_reset`, which `RecordSecurityEvents` renders as "*<email>* reset
+their password" with the account holder as actor. Reusing it would have put the
+wrong person's name against the one operation that hands over somebody else's
+account.
+
+**`cicto:user <email> --reset-password`**, for the situation the screen cannot
+serve: every Super Admin locked out, so there is nobody left to sign in and press
+the button, and no reset link either. Generates the password, prints it once,
+and runs the identical action. No `--password` option — it would outlive the
+deployment in a hosting panel's command history, and `AccountCommandsTest`
+asserts its absence.
+
+**The honesty guard on a page that had been lying.** This is the part nobody
+asked for and it is the reason the answer mattered. Fortify's forgot-password
+flow does not check whether mail works: under `MAIL_MAILER=log` it minted a real,
+single-use, one-hour token for any address posted to it, wrote the whole message
+— reset link included — into the shared unrotated log at debug level, and
+returned the green *"We have emailed your password reset link."* Every deployment
+of this system has been doing that. The page now says it cannot send email and
+names the administrator; `RequireOutgoingMail` refuses the POST, with the same
+message for a known and an unknown address so it cannot be used to enumerate
+accounts; and the `log` mailer writes to its own 7-day channel via
+`MAIL_LOG_CHANNEL` rather than into `stack`.
+
+**A Google SMTP path for an LGU that wants one.** `.env.example` and the runbook
+§3 both carry the recipe, including the two things that bite: an App Password
+rather than the account password, and `MAIL_FROM_ADDRESS` matching the
+authenticated account or every message is rejected while the connection reports
+healthy. `cicto:host-check` gained a row for the second.
+
+**One bug the module would otherwise have been blamed for.** `StoreUserRequest`
+did not lower-case the email address, while every other door into `users.email`
+does — Fortify's `lowercase_usernames` on sign-in and on the reset request,
+`cicto:user` on its argument. An account created as `Maria.Santos@…` cannot be
+signed in to on PostgreSQL, where `=` is case-sensitive; the obvious remedy is
+"reset their password", and it does not work, because the failure is the lookup
+and not the credential. It canonicalises now, and two tests pin it.
+
+**One predicate, deduplicated.** `App\Support\OutgoingMail` replaces a private
+method on `HelpController` and a second copy inlined in `HostCheckCommand`. Two
+copies of "can mail leave this server" is one drift away from a screen that says
+it works while the probe says it does not.
+
+### Found in review, and fixed before this shipped
+
+An adversarial pass over the change produced nineteen candidate defects, of
+which five survived independent verification. All five are fixed; the rest were
+refuted, mostly as true-of-Laravel-in-general but not of this configuration.
+They are listed because four of the five were introduced by this work.
+
+1. **`.env.example` contained a duplicate-key trap of its own making.** The
+   Google SMTP recipe shipped as a commented block of `MAIL_*` keys sitting
+   directly above the live placeholder block with the same key names. Uncomment
+   the six lines the file tells you to and dotenv's last-assignment-wins rule
+   leaves `MAIL_MAILER=smtp` pointing at `127.0.0.1:2525` — a mailer the
+   application now believes works, so the honesty guard steps aside, the form
+   comes back, and a submitted request mints a live reset token and then 500s.
+   Precisely the state this change exists to eliminate, reached by following the
+   file's own instructions. The recipe is now prose over a single live block,
+   with the last-wins rule stated.
+2. **Two open panels shared input ids.** Both the Add-account form and the reset
+   panel render `id="password"`; `label[for]` resolves to the first match, so
+   clicking the reset panel's "New password" label put the caret in the *other*
+   form. The administrator types a password into the wrong form and submits a
+   reset with an empty one. The reset fields carry their own ids now, the two
+   panels are mutually exclusive, and a test asserts the ids stay distinct.
+3. **The panel opened off-screen.** Measured in Chrome on a 1366×768 laptop:
+   pressing "Set password" on row 12 of 15 mounted the form ~517px above the
+   viewport and pushed every row down by its height, so the row under the cursor
+   became a different person with nothing visible to explain it. It now scrolls
+   into view and takes focus.
+4. **The success message overstated what it had removed.** "Two-factor and
+   passkeys were removed" was unconditional, so an account that carried only a
+   passkey was reported as having lost a two-factor enrolment it never had —
+   contradicting the checkbox the administrator had just read. `PasswordResetOutcome`
+   now carries the list of what was actually there, and the toast, the console
+   output and the audit line are all built from it.
+5. **A field posted as an array 500'd instead of failing validation.** Only
+   `required` is an implicit rule, so `your_password[]=x` failed `string` and
+   still reached `current_password`, which handed the array to
+   `password_verify()` and threw an uncatchable `TypeError`. `bail` in
+   `PasswordValidationRules::currentPasswordRules()` fixes it here and on the
+   pre-existing `PUT /settings/password`, which had the same shape.
+
+The two the review found in the console path — `--reset-password` creating an
+account on a mistyped address, and its inability to clear a two-factor lock on
+the one path that exists for a locked-out system — are described under *What was
+built* above, because both were fixed into the feature rather than after it.
+
+### Verified
+
+- **378 tests green, 39 of them new** — 22 on the reset module, 6 on the
+  mail-unavailable behaviour, 8 on the console flag, 3 on email canonicalisation
+  and markup. Three existing `PasswordResetTest` cases also had to declare
+  `mail.default = smtp`, because `phpunit.xml` pins `array` and the new guard
+  correctly reads that as no mail
+- **Green on both drivers**: 378/378 on SQLite and on PostgreSQL 17, including
+  the session-eviction case, which does a raw delete against the `sessions`
+  table
+- PHPStan level 7, Pint, ESLint, Prettier, `tsc --noEmit` and a production build
+  clean
+- Session eviction is asserted with `SESSION_DRIVER` switched to `database`;
+  under `phpunit.xml`'s pinned `array` it is a deliberate no-op and the test
+  would have passed without testing anything
+- Both handover guides regenerated to PDF, and `docs/qa/journeys.sh` gained
+  three smoke assertions: the reset route 403s for a clerk and for an office
+  Admin, and `/forgot-password` still renders without a mailer
+
+### Not done, deliberately
+
+- **No SMTP is configured anywhere.** The client said they will not supply it;
+  inventing a service would be worse than the honest absence.
+- **No in-app messaging.** Offered at our discretion, and declined: the client
+  noted the existing DTS has none, so it is not a gap against the incumbent.
+  §12 stays in-app *notifications*, which is a different feature and already
+  built.
+- **No emailed password reset built on top of a service we stand up.** Permitted
+  by the answer, not required by it, and it would need an account somebody pays
+  for and rotates.
+- **Second factors are not cleared by default.** A forgotten password and a
+  stolen account want opposite answers, so it is a decision the administrator
+  makes and the audit line records either way.
+- **Deactivating an account still has no screen**, so an incident response is
+  "set a new password" from the UI and `cicto:user --deactivate` from the shell.
+  That gap predates this work and is named in the runbook; it is worth pricing
+  alongside the role and office screens rather than absorbing.
+
+---
+
 ### Still open — and not ours to close
 
-Of the six client questions in §10 of the runbook, **B1, B3 and B4 remain
-unanswered.** Three moved on 2026-08-18 without closing:
+Of the six client questions in §11 of the runbook, **B1 and B4 remain
+unanswered.** **B3 closed on 2026-08-20** — closed against us, which is still an
+answer: CICTO will not supply email credentials or configuration, recommends an
+external service if the LGU wants one, and asked in their place for "a module
+that allows the system administrator to reset the password of any user". That
+module is built, and with it the honesty guard on a Forgot Password page that
+had been reporting success for a link it never sent. Three questions moved on
+2026-08-18 without closing:
 
 - **A4** supplied the 53 offices with their aliases and the 43 document types, but
   not the turnaround days — that part went to the City Archive and Records Office,

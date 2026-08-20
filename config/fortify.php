@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\RequireOutgoingMail;
 use Laravel\Fortify\Features;
 
 return [
@@ -101,7 +102,14 @@ return [
     |
     */
 
-    'middleware' => ['web'],
+    /*
+     * RequireOutgoingMail is added here rather than on a route because Fortify
+     * declares its own routes and there is nothing of ours to hang it on. It
+     * inspects the route name and does nothing on any of them except
+     * `password.email`, where it refuses to mint a reset token this server
+     * cannot deliver -- see the class for what that was costing.
+     */
+    'middleware' => ['web', RequireOutgoingMail::class],
 
     /*
     |--------------------------------------------------------------------------

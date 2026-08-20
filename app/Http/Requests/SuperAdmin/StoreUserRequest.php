@@ -24,6 +24,33 @@ class StoreUserRequest extends FormRequest
     }
 
     /**
+     * Lower-case the address before anything looks at it.
+     *
+     * Every OTHER door into users.email already does this: config/fortify.php
+     * sets `lowercase_usernames`, so Fortify canonicalises on sign-in and on
+     * the password-reset request, and `cicto:user` lower-cases its argument.
+     * This screen did not, and the asymmetry was a trap with a long fuse.
+     *
+     * Type "Maria.Santos@baliwag.gov.ph" here and the row is stored with
+     * capitals; sign-in lower-cases what is typed, and on PostgreSQL -- where
+     * `=` is case-sensitive -- the lookup finds nothing. The account is
+     * unreachable and the password is not the reason, so the obvious remedy,
+     * setting a new password for them, does not fix it either. Worse, the
+     * console fallback `cicto:user Maria.Santos@...` lower-cases, finds no
+     * match, and takes the CREATE branch: a second account for the same person.
+     *
+     * Canonicalising on the way in makes the unique index do its job.
+     */
+    protected function prepareForValidation(): void
+    {
+        $email = $this->input('email');
+
+        if (is_string($email)) {
+            $this->merge(['email' => mb_strtolower(trim($email))]);
+        }
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function rules(): array

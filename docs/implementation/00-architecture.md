@@ -492,7 +492,7 @@ Things that are true of the repository today and will bite if forgotten.
 
 | Fact | Consequence |
 | --- | --- |
-| `MAIL_MAILER=log` | **No email can be delivered.** Applying `verified` middleware locks out every account. Seed Phase 1 demo accounts pre-verified |
+| `MAIL_MAILER=log`, and **permanently** — client question B3, 2026-08-20 | **No email can be delivered, and no service is coming unless the LGU buys one.** So: accounts are created pre-verified, "Forgot Password" refuses rather than claiming to have sent a link, and a forgotten password is fixed by a Super Admin on Manage Users. (`verified` middleware is inert regardless — `User` does not implement `MustVerifyEmail` — but do not rely on that; the pre-verification is what makes it safe) |
 | `QUEUE_CONNECTION=database`, no worker | Nothing queued will ever run. Phase 2 must choose sync dispatch or a cron-driven `queue:work --stop-when-empty` |
 | `APP_URL=http://localhost:8000` | `config/fortify.php` derives the passkey relying-party ID from this. Passkeys break silently on any other host |
 | `AWS_BUCKET` empty, uploads on the local private disk | If backups land on the same disk, one disk failure loses both the documents and the backups |

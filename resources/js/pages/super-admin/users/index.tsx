@@ -1,5 +1,5 @@
 import { Form, Head, router } from '@inertiajs/react';
-import { Plus, Search } from 'lucide-react';
+import { AlertTriangle, KeyRound, Plus, Search } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { LastLogin } from '@/components/admin/last-login';
 import { PanelHeading } from '@/components/admin/panel-heading';
@@ -16,6 +16,9 @@ type UserRow = {
     office: string | null;
     is_active: boolean;
     last_login_at: string | null;
+    /** Whether a password reset alone would still leave them locked out. */
+    has_two_factor: boolean;
+    passkeys: number;
 };
 
 type Props = {
@@ -23,18 +26,50 @@ type Props = {
     filters: { q: string };
     roles: SelectOption[];
     offices: SelectOption[];
+    /**
+     * The signed-in Super Admin.
+     *
+     * Their row is still LISTED -- they are an account like any other and
+     * belong in the register. What is omitted is the control: your own
+     * password is changed under Settings > Security, where the current one has
+     * to be typed, and the action refuses this route for yourself anyway.
+     */
+    viewerId: number;
 };
 
 /**
  * §4's Manage Users screen.
  *
  * The only screen in the system that can create an account, which is why the
- * form states plainly that the password is handed over by hand: this
- * deployment has no outgoing mail, so nothing is emailed to the new user.
+ * form states plainly that the password is handed over by hand: nothing is
+ * ever emailed to a new user.
+ *
+ * It is also the only screen that can set somebody ELSE's password. That is
+ * client question B3's answer built: CICTO declined to supply SMTP credentials
+ * and asked instead for "a module that allows the system administrator to reset
+ * the password of any user registered in your application". With no mail there
+ * is no reset link, so this is the whole recovery path for a forgotten
+ * password.
  */
-export default function ManageUsers({ users, filters, roles, offices }: Props) {
+export default function ManageUsers({
+    users,
+    filters,
+    roles,
+    offices,
+    viewerId,
+}: Props) {
     const [q, setQ] = useState(filters.q ?? '');
     const [adding, setAdding] = useState(false);
+
+    // The row whose password is being set, if any. One panel rather than a
+    // form per row: at fifteen rows a page that is fifteen collapsed forms in
+    // the DOM, and only ever one of them is wanted at a time.
+    const [resetting, setResetting] = useState<UserRow | null>(null);
+
+    const openReset = useCallback((user: UserRow | null) => {
+        setAdding(false);
+        setResetting(user);
+    }, []);
 
     // Read through a ref rather than closed over: `filters` is a new object on
     // every response, so a useCallback keyed on it would rebuild `apply`, which
@@ -102,8 +137,16 @@ export default function ManageUsers({ users, filters, roles, offices }: Props) {
 
                     <button
                         type="button"
-                        onClick={() => setAdding((open) => !open)}
+                        onClick={() => {
+                            // One panel at a time. Both are rendered in the same
+                            // place and both are a form full of password boxes;
+                            // two of them stacked is how somebody sets the wrong
+                            // account's password.
+                            setResetting(null);
+                            setAdding((open) => !open);
+                        }}
                         aria-expanded={adding}
+                        aria-controls="add-account-panel"
                         className="flex items-center justify-center gap-2 rounded-lg bg-[#3B72C4] px-7 py-3 text-[15px] font-bold text-white shadow-lg transition hover:bg-[#31629F]"
                     >
                         <Plus aria-hidden="true" className="size-5" />
@@ -116,6 +159,14 @@ export default function ManageUsers({ users, filters, roles, offices }: Props) {
                         roles={roles}
                         offices={offices}
                         onDone={() => setAdding(false)}
+                    />
+                )}
+
+                {resetting && (
+                    <ResetPasswordForm
+                        key={resetting.id}
+                        user={resetting}
+                        onDone={() => setResetting(null)}
                     />
                 )}
 
@@ -146,6 +197,14 @@ export default function ManageUsers({ users, filters, roles, offices }: Props) {
                                     <LastLogin iso={user.last_login_at} />
                                 </span>
                             </div>
+                            {user.id !== viewerId && (
+                                <ResetButton
+                                    user={user}
+                                    open={resetting?.id === user.id}
+                                    onOpen={openReset}
+                                    className="mt-3"
+                                />
+                            )}
                         </li>
                     ))}
                 </ul>
@@ -160,6 +219,7 @@ export default function ManageUsers({ users, filters, roles, offices }: Props) {
                                     'Role',
                                     'Status',
                                     'Last Login',
+                                    'Password',
                                 ].map((heading) => (
                                     <th
                                         key={heading}
@@ -176,7 +236,7 @@ export default function ManageUsers({ users, filters, roles, offices }: Props) {
                             {users.data.length === 0 && (
                                 <tr>
                                     <td
-                                        colSpan={5}
+                                        colSpan={6}
                                         className="px-3 py-10 text-center text-sm text-copy"
                                     >
                                         No accounts match that search.
@@ -200,6 +260,21 @@ export default function ManageUsers({ users, filters, roles, offices }: Props) {
                                     </td>
                                     <td className="px-3 py-4 text-sm whitespace-nowrap text-copy">
                                         <LastLogin iso={user.last_login_at} />
+                                    </td>
+                                    <td className="px-3 py-4">
+                                        {/* Absent, not disabled, on the
+                                            viewer's own row: their own password
+                                            is changed under Settings >
+                                            Security, where the current one has
+                                            to be typed, and the action refuses
+                                            this route for themselves anyway. */}
+                                        {user.id !== viewerId && (
+                                            <ResetButton
+                                                user={user}
+                                                open={resetting?.id === user.id}
+                                                onOpen={openReset}
+                                            />
+                                        )}
                                     </td>
                                 </tr>
                             ))}
@@ -255,6 +330,225 @@ export default function ManageUsers({ users, filters, roles, offices }: Props) {
     );
 }
 
+function ResetButton({
+    user,
+    open,
+    onOpen,
+    className = '',
+}: {
+    user: UserRow;
+    open: boolean;
+    onOpen: (user: UserRow | null) => void;
+    className?: string;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={() => onOpen(open ? null : user)}
+            aria-expanded={open}
+            aria-controls="reset-password-panel"
+            className={`flex items-center gap-2 rounded-lg border border-[#D8E3F2] bg-white px-4 py-2 text-sm font-bold whitespace-nowrap text-navy transition hover:bg-[#F2F6FC] ${className}`}
+        >
+            <KeyRound aria-hidden="true" className="size-4" />
+            {/* Named for the person it is about. Fifteen buttons all reading
+                "Reset" is fifteen chances to reset the wrong row. */}
+            <span>
+                Set password
+                <span className="sr-only"> for {user.name}</span>
+            </span>
+        </button>
+    );
+}
+
+/**
+ * Client question B3's module: set a password on somebody else's behalf.
+ *
+ * Two things it does that the create form does not, both because this account
+ * already exists and may already be in trouble:
+ *
+ *  - it asks for the ADMINISTRATOR's own password. The house pattern for a
+ *    high-consequence action is the password.confirm middleware, but that
+ *    redirects an Inertia POST to a separate page and the typed password is
+ *    gone when it comes back. Asking in the form buys the same property -- an
+ *    unattended signed-in browser cannot take over an account -- and keeps what
+ *    was typed;
+ *  - it offers to remove second factors, but only when there are any. An
+ *    account whose owner forgot a password wants them left alone; an account in
+ *    somebody else's hands does not, and a password reset that leaves a passkey
+ *    in place has revoked nothing at all.
+ */
+function ResetPasswordForm({
+    user,
+    onDone,
+}: {
+    user: UserRow;
+    onDone: () => void;
+}) {
+    /*
+        Bring the panel to the administrator.
+
+        The list paginates at fifteen and the panel renders above the table, so
+        pressing "Set password" on a row near the bottom mounted a form entirely
+        off-screen AND pushed every row down by its height -- the row under the
+        cursor became a different person, with nothing visible to explain it.
+        Measured on a 1366x768 laptop: the panel opened ~517px above the
+        viewport. Scrolling to it and putting the caret in the first field means
+        the button does what pressing a button should.
+    */
+    // The ref is on the heading, not the <Form>: Inertia's Form forwards a
+    // FormComponentRef (reset, setError, ...), never the DOM node.
+    const heading = useRef<HTMLHeadingElement | null>(null);
+
+    useEffect(() => {
+        heading.current?.scrollIntoView({
+            block: 'center',
+            behavior: 'smooth',
+        });
+
+        document
+            .querySelector<HTMLInputElement>('#reset-password')
+            ?.focus({ preventScroll: true });
+    }, []);
+
+    const secondFactors = [
+        user.has_two_factor ? 'two-factor' : null,
+        user.passkeys > 0
+            ? `${user.passkeys} passkey${user.passkeys === 1 ? '' : 's'}`
+            : null,
+    ].filter(Boolean) as string[];
+
+    return (
+        <Form
+            {...superAdmin.users.password.form(user.id)}
+            options={{ preserveScroll: true }}
+            onSuccess={onDone}
+            resetOnSuccess
+            id="reset-password-panel"
+            aria-labelledby="reset-password-heading"
+            className="mt-6 rounded-xl border border-[#E4EAF3] bg-[#F7FAFF] p-5"
+        >
+            {({ processing, errors }) => (
+                <>
+                    <h3
+                        ref={heading}
+                        id="reset-password-heading"
+                        className="text-lg font-extrabold tracking-tight text-navy"
+                    >
+                        Set a new password for {user.name}
+                    </h3>
+                    <p className="mt-1 text-sm break-all text-copy">
+                        {user.email}
+                        {user.office && ` · ${user.office}`}
+                    </p>
+
+                    {/*
+                        Said before the form is filled in. Every one of these is
+                        something the administrator has to act on afterwards,
+                        and finding out about it in a toast is too late to plan
+                        the phone call.
+                    */}
+                    <p className="mt-4 max-w-prose text-xs leading-relaxed text-copy">
+                        Nothing is emailed — give the password to them yourself
+                        and ask them to change it under Settings &gt; Security.
+                        They will be signed out on every device they are
+                        currently signed in on.
+                    </p>
+
+                    {!user.is_active && (
+                        <p
+                            role="status"
+                            className="mt-4 flex gap-2 rounded-lg bg-[#FDF3DC] px-4 py-3 text-xs leading-relaxed font-semibold text-[#7A5B12]"
+                        >
+                            <AlertTriangle
+                                aria-hidden="true"
+                                className="mt-0.5 size-4 shrink-0"
+                            />
+                            <span>
+                                This account is deactivated. A new password will
+                                not let them in until somebody reactivates it.
+                            </span>
+                        </p>
+                    )}
+
+                    <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                        <Field
+                            label="New password"
+                            name="password"
+                            id="reset-password"
+                            type="password"
+                            autoComplete="new-password"
+                            error={errors.password}
+                        />
+                        <Field
+                            label="Confirm new password"
+                            name="password_confirmation"
+                            id="reset-password_confirmation"
+                            type="password"
+                            autoComplete="new-password"
+                            error={errors.password_confirmation}
+                        />
+                    </div>
+
+                    <div className="mt-4 sm:max-w-[calc(50%-0.5rem)]">
+                        <Field
+                            label="Your own password"
+                            name="your_password"
+                            id="reset-your_password"
+                            type="password"
+                            autoComplete="current-password"
+                            error={errors.your_password}
+                        />
+                        <p className="mt-1.5 text-xs text-copy">
+                            Confirms it is you, not a browser somebody left
+                            signed in.
+                        </p>
+                    </div>
+
+                    {secondFactors.length > 0 && (
+                        <label className="mt-5 flex max-w-prose gap-3 rounded-lg border border-[#E4EAF3] bg-white p-4">
+                            <input
+                                type="checkbox"
+                                name="revoke_second_factors"
+                                value="1"
+                                className="mt-0.5 size-4 shrink-0 rounded border-[#C7D4E6] text-[#3B72C4] focus-visible:ring-2 focus-visible:ring-[#3B72C4]"
+                            />
+                            <span className="text-xs leading-relaxed text-copy">
+                                <span className="block text-sm font-bold text-navy">
+                                    Also remove {secondFactors.join(' and ')}
+                                </span>
+                                Leave this off if they simply forgot their
+                                password. Tick it if the account may be in
+                                somebody else&apos;s hands.
+                                {user.passkeys > 0 &&
+                                    ' A passkey signs them in without the password ever being asked for, so a reset on its own would revoke nothing.'}
+                                {user.has_two_factor &&
+                                    ' Tick it too if they have lost the phone that holds their two-factor codes, or they still will not get in.'}
+                            </span>
+                        </label>
+                    )}
+
+                    <div className="mt-5 flex justify-end gap-3">
+                        <button
+                            type="button"
+                            onClick={onDone}
+                            className="rounded-lg border border-[#D8E3F2] bg-white px-6 py-2.5 text-sm font-bold text-navy transition hover:bg-[#F2F6FC]"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={processing}
+                            className="rounded-lg bg-[#3B72C4] px-6 py-2.5 text-sm font-bold text-white transition hover:bg-[#31629F] disabled:opacity-60"
+                        >
+                            {processing ? 'Setting…' : 'Set password'}
+                        </button>
+                    </div>
+                </>
+            )}
+        </Form>
+    );
+}
+
 function AddAccountForm({
     roles,
     offices,
@@ -272,6 +566,7 @@ function AddAccountForm({
             options={{ preserveScroll: true }}
             onSuccess={onDone}
             resetOnSuccess
+            id="add-account-panel"
             className="mt-6 rounded-xl border border-[#E4EAF3] bg-[#F7FAFF] p-5"
         >
             {({ processing, errors }) => (
@@ -282,15 +577,15 @@ function AddAccountForm({
 
                     {/*
                         Said before the form is filled in, not after it is
-                        submitted. Nothing is emailed to the new user on this
-                        deployment, so whoever creates the account has to know
-                        they are responsible for handing over the password.
+                        submitted. This application never emails a credential to
+                        anybody -- configured mail or not, because a password in
+                        an inbox outlives every use of it -- so whoever creates
+                        the account is responsible for handing it over.
                     */}
                     <p className="mt-1 max-w-prose text-xs leading-relaxed text-copy">
-                        The account can sign in immediately. Outgoing mail is
-                        not configured on this server, so no invitation is sent
-                        — give the person their password yourself, and ask them
-                        to change it from Settings once they are in.
+                        The account can sign in immediately. No invitation is
+                        emailed — give the person their password yourself, and
+                        ask them to change it from Settings once they are in.
                     </p>
 
                     <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -412,23 +707,37 @@ function Label({
     );
 }
 
+/**
+ * `id` is separate from `name` because two panels on this page can be open at
+ * once and both have a field called `password`.
+ *
+ * A duplicate id is not cosmetic here: `label[for]` resolves to the FIRST match
+ * in the document, so with the Add-account form open above it, clicking the
+ * reset panel's "New password" label put the caret in the Add form's box. The
+ * administrator then types a password into the wrong form and submits a reset
+ * with an empty one. The posted field is keyed on `name`, which stays as it is.
+ */
 function Field({
     label,
     name,
+    id,
     error,
     type = 'text',
     ...props
 }: {
     label: string;
     name: string;
+    id?: string;
     error?: string;
     type?: string;
 } & React.InputHTMLAttributes<HTMLInputElement>) {
+    const fieldId = id ?? name;
+
     return (
         <div>
-            <Label htmlFor={name}>{label}</Label>
+            <Label htmlFor={fieldId}>{label}</Label>
             <input
-                id={name}
+                id={fieldId}
                 name={name}
                 type={type}
                 aria-invalid={error ? true : undefined}

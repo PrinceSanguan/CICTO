@@ -18,6 +18,23 @@ class PasswordResetTest extends TestCase
         parent::setUp();
 
         $this->skipUnlessFortifyHas(Features::resetPasswords());
+
+        /*
+         * These cases describe a server that CAN send mail, so they have to say
+         * so out loud.
+         *
+         * phpunit.xml pins MAIL_MAILER=array, and App\Support\OutgoingMail
+         * counts `array` as no transport at all -- it accepts everything and
+         * delivers nothing, which is exactly the state the honesty guard added
+         * for client question B3 exists to refuse. Without this line
+         * RequireOutgoingMail turns every request below into a validation
+         * error, and the suite would be asserting the emailed flow against a
+         * deployment that has no email.
+         *
+         * The other half -- what happens when mail is NOT configured -- is
+         * pinned in MailUnavailableTest.
+         */
+        config()->set('mail.default', 'smtp');
     }
 
     public function test_reset_password_link_screen_can_be_rendered()

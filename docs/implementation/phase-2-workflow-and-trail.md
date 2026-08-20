@@ -361,6 +361,14 @@ an untestable `Mailable`. When SMTP arrives it goes on a cron-driven queue, neve
 synchronously — and it is a change order, not an absorbed revision. See client
 question **B3**.
 
+> **2026-08-20 — B3 came back, and this paragraph survives it intact.** CICTO will
+> not supply SMTP credentials; an LGU may stand up Google SMTP on its own account.
+> If one does, `MAIL_MAILER=smtp` makes notification email *possible* and does not
+> make it *included*. Every word above still applies to the day somebody asks for
+> it: queued, not synchronous, and quoted. Say that when the mailer is configured
+> rather than when the first "why didn't I get an email about my document" arrives
+> — a working mailer is exactly the moment §12 email starts looking free.
+
 ---
 
 ## Tests that must exist

@@ -93,6 +93,12 @@ say "2. Role separation — each panel refuses the wrong role"
 expect "clerk blocked from admin panel"       403 "$(get clerk /admin/dashboard)"
 expect "clerk blocked from super admin panel" 403 "$(get clerk /super-admin/dashboard)"
 expect "admin blocked from super admin panel" 403 "$(get admin /super-admin/dashboard)"
+# Client question B3's module. Setting somebody's password is a complete account
+# takeover, so the refusal for the wrong role matters more here than on a page.
+# User id 1 is whatever the seed made first; the role check fires before the
+# route model binding, so the id only has to be numeric.
+expect "clerk cannot set another account's password" 403 "$(post clerk /super-admin/users/1/password --data-urlencode 'password=x')"
+expect "admin cannot set another account's password" 403 "$(post admin /super-admin/users/1/password --data-urlencode 'password=x')"
 expect "admin reaches admin panel"            200 "$(get admin /admin/dashboard)"
 expect "super admin reaches both"             200 "$(get super /super-admin/dashboard)"
 
@@ -104,6 +110,9 @@ for p in /dashboard /documents /documents/create /documents/scan /reports /help 
 done
 # Password confirmation guards the security page -- a 302 here is the point.
 expect "GET /settings/security asks to confirm password" 302 "$(get admin /settings/security)"
+# B3: with no mailer configured this page must NOT offer a form that claims to
+# send a link. It still has to render -- the warning it shows is the answer.
+expect "forgot password renders without a mailer" 200 "$(curl -s -o /dev/null -w '%{http_code}' "$B/forgot-password")"
 
 say "4. Public routes need no session"
 expect "privacy notice"        200 "$(curl -s -o /dev/null -w '%{http_code}' "$B/privacy")"

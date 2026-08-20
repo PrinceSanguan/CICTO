@@ -20,6 +20,19 @@ enum SecurityEventType: string
     case TwoFactorDisabled = 'auth.two_factor_disabled';
 
     case UserCreated = 'user.created';
+
+    /*
+     * Distinct from PasswordReset above, and it has to be.
+     *
+     * RecordSecurityEvents::recordPasswordReset writes "<email> reset their
+     * password" and names the account holder as the actor, which is true of
+     * the forgot-password flow and false of this one. Filing an
+     * administrator-set password under the same case would put the wrong
+     * person's name against the one operation in the system that hands over
+     * someone else's account.
+     */
+    case PasswordResetByAdmin = 'user.password_reset';
+
     case RoleChanged = 'user.role_changed';
     case UserDeactivated = 'user.deactivated';
     case UserReactivated = 'user.reactivated';
@@ -47,6 +60,7 @@ enum SecurityEventType: string
             self::TwoFactorEnabled => 'Two-factor enabled',
             self::TwoFactorDisabled => 'Two-factor disabled',
             self::UserCreated => 'Account created',
+            self::PasswordResetByAdmin => 'Password set by an administrator',
             self::RoleChanged => 'Role changed',
             self::UserDeactivated => 'Account deactivated',
             self::UserReactivated => 'Account reactivated',

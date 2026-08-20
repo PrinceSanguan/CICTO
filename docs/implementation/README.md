@@ -109,7 +109,7 @@ do not map one-to-one, so this is where the unpriced sections land.
 | --- | --- | --- | --- |
 | 1 | Overview | — | Context, not a deliverable |
 | 2 | User Roles | 1 | Realised inside #11 as `users.role` + `users.office_id` + policies |
-| 3 | Authentication & Registration | 1 | **Unpriced.** Fortify already ships login, register, forgot/reset, email verification, plus 2FA and passkeys the spec never asked for. The only real gap is "separate login entry points", which is the RBAC post-login redirect. |
+| 3 | Authentication & Registration | 1 | **Unpriced.** Fortify already ships login, register, forgot/reset, email verification, plus 2FA and passkeys the spec never asked for. The only real gap is "separate login entry points", which is the RBAC post-login redirect. **Read the forgot/reset half against client question B3:** CICTO will not supply SMTP, so the emailed reset refuses rather than pretending, and an administrator sets passwords from Manage Users instead — which is what they asked for in its place. |
 | 4 | Navigation | 1 | **Unpriced.** Three role-specific sidebars with the exact labels §4 names |
 | 5 | Document Registration & Upload | 1 | #1 + #2 |
 | 6 | Document Classification | 1 | #3 |
@@ -118,7 +118,7 @@ do not map one-to-one, so this is where the unpriced sections land.
 | 9 | Workflow & Approval Management | 1 (routing) / 2 (approval) | #5 then #7 |
 | 10 | Status Tracking | 2 | #6 |
 | 11 | Due Date and Deadline Monitoring | 2 | #18 |
-| 12 | Notifications and Alerts | 2 | #8 |
+| 12 | Notifications and Alerts | 2 | #8 — **in-app only.** No mail service exists (B3) and email notification stays a change order even if one is later configured |
 | 13 | Document History (Audit Trail) | 2 | #9 |
 | 14 | Version Control | 3 | #10 |
 | 15 | Digital Signatures | 3 | #12 — see the expectation-setting note in Phase 3 |

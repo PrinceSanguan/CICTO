@@ -44,6 +44,21 @@ Route::middleware(['auth', 'verified', EnsureRole::using(Role::SuperAdmin)])
         Route::get('users', [SuperAdminUserController::class, 'index'])->name('users.index');
         Route::post('users', [SuperAdminUserController::class, 'store'])->name('users.store');
 
+        /*
+        | Client question B3, answered 2026-08-20: no SMTP credentials, and in
+        | their place "a module that allows the system administrator to reset
+        | the password of any user". With no mail there is no reset link, so
+        | this is the whole recovery path for a forgotten password.
+        |
+        | Throttled at the same 6/minute as settings/password. It is the one
+        | route in the panel that can take over an account, and the limit costs
+        | a legitimate administrator nothing -- nobody resets seven passwords in
+        | a minute.
+        */
+        Route::post('users/{user}/password', [SuperAdminUserController::class, 'resetPassword'])
+            ->middleware('throttle:6,1')
+            ->name('users.password');
+
         Route::get('reports', [SuperAdminReportController::class, 'index'])->name('reports.index');
 
         // §2 system settings, §22 backup console, §21 security log.

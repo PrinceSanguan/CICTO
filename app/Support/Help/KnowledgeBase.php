@@ -194,12 +194,19 @@ final class KnowledgeBase
                 ],
                 /*
                  * Rendered above the steps when the server has no mail
-                 * transport configured (client question B3). Until SMTP details
-                 * are supplied, step 4 above cannot happen -- and a help article
-                 * that calmly instructs somebody to wait for an email that will
-                 * never arrive is worse than no article at all.
+                 * transport configured (client question B3). Steps 3 to 6 above
+                 * cannot happen -- the Forgot Password page refuses rather than
+                 * pretending -- and a help article that calmly instructs
+                 * somebody to wait for an email that will never arrive is worse
+                 * than no article at all.
+                 *
+                 * It now names a procedure rather than only withdrawing one.
+                 * CICTO answered B3 on 2026-08-20 by declining to supply SMTP
+                 * credentials and asking for an administrator-set password
+                 * instead, so on this deployment that IS the reset procedure,
+                 * not a workaround for the absence of one.
                  */
-                'unavailable_without_mail' => 'Password reset is not available on this server yet, because outgoing email has not been configured. Ask your administrator to reset your password for you until it is.',
+                'unavailable_without_mail' => 'This server cannot send email yet, so the steps below will not work: no reset link can be sent. Ask a Super Admin to set a new password for you instead — they can do it from Manage Users while you wait — then change it yourself under Settings > Security once you are signed in.',
             ],
             [
                 'slug' => 'common-errors',

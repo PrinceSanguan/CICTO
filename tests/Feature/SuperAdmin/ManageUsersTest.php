@@ -261,4 +261,83 @@ class ManageUsersTest extends TestCase
             'a wildcard inside a word' => ['a%b'],
         ];
     }
+
+    /**
+     * Every other door into users.email lower-cases it: config/fortify.php sets
+     * `lowercase_usernames`, so Fortify canonicalises on sign-in and on the
+     * reset request, and `cicto:user` lower-cases its argument. This screen did
+     * not, and the asymmetry had a long fuse.
+     *
+     * An address stored with capitals is looked up in lower case at sign-in. On
+     * PostgreSQL, where `=` is case-sensitive, the lookup finds nothing: the
+     * account cannot be signed in to and the password is not the reason, so
+     * setting a new password for them does not fix it either. The console
+     * fallback then lower-cases, finds no match, and takes the CREATE branch --
+     * a second account for the same person.
+     */
+    public function test_the_email_address_is_stored_in_lower_case(): void
+    {
+        $office = $this->office('OCM', 'Office of the City Mayor');
+
+        $this->actingAs($this->superAdmin())
+            ->post(route('super-admin.users.store'), [
+                'name' => 'Maria Santos',
+                'email' => '  Maria.Santos@Baliwag.Gov.PH ',
+                'password' => self::PASSWORD,
+                'password_confirmation' => self::PASSWORD,
+                'role' => Role::Admin->value,
+                'office_id' => $office->id,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('users', ['email' => 'maria.santos@baliwag.gov.ph']);
+        $this->assertDatabaseMissing('users', ['email' => '  Maria.Santos@Baliwag.Gov.PH ']);
+    }
+
+    /**
+     * And the unique index therefore does its job: the same address in
+     * different case is the same account, not a second one.
+     */
+    public function test_a_duplicate_email_in_a_different_case_is_refused(): void
+    {
+        $office = $this->office('OCM', 'Office of the City Mayor');
+        $existing = $this->staff($office);
+
+        $this->actingAs($this->superAdmin())
+            ->from(route('super-admin.users.index'))
+            ->post(route('super-admin.users.store'), [
+                'name' => 'Duplicate',
+                'email' => mb_strtoupper($existing->email),
+                'password' => self::PASSWORD,
+                'password_confirmation' => self::PASSWORD,
+                'role' => Role::Admin->value,
+                'office_id' => $office->id,
+            ])
+            ->assertSessionHasErrors('email');
+
+        $this->assertSame(1, User::query()->where('email', $existing->email)->count());
+    }
+
+    /**
+     * Two panels can be open at once on this screen, and both are a form full
+     * of password boxes. `label[for]` resolves to the FIRST matching id in the
+     * document, so a shared id put the caret in the wrong form's box -- the
+     * administrator types a password into the Add-account panel and submits a
+     * reset with an empty one. Asserted against the source, because it is a
+     * property of the markup rather than of a response.
+     */
+    public function test_the_two_password_panels_do_not_share_input_ids(): void
+    {
+        $source = (string) file_get_contents(
+            resource_path('js/pages/super-admin/users/index.tsx'),
+        );
+
+        foreach (['reset-password', 'reset-password_confirmation', 'reset-your_password'] as $id) {
+            $this->assertStringContainsString(
+                'id="'.$id.'"',
+                $source,
+                "The reset panel's fields must carry ids of their own; [{$id}] is missing.",
+            );
+        }
+    }
 }
