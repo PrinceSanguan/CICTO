@@ -30,7 +30,7 @@ export function Hero({ authSlot }: { authSlot: ReactNode }) {
             id="home"
             className="relative scroll-mt-20 overflow-x-clip bg-linear-to-b/srgb from-brand to-brand-soft"
         >
-            <SiteNav authSlot={authSlot} />
+            <SiteNav />
 
             {/*
               No max-width container here. In the Figma the art runs to the
@@ -66,6 +66,19 @@ export function Hero({ authSlot }: { authSlot: ReactNode }) {
                         {HERO.subLine1}
                         <br className="hidden sm:inline" /> {HERO.subLine2}
                     </p>
+
+                    {/*
+                      The auth action, which the client asked to sit here
+                      rather than in the nav. This is the only thing in the
+                      copy column below the sub-line, so it lands in the empty
+                      band between the copy and the floating panel -- the area
+                      circled on the screenshot.
+
+                      `w-fit` because the column is a grid cell: without it the
+                      link would stretch to the full 36% track and the red
+                      would read as a bar rather than a button.
+                    */}
+                    <div className="mt-8 w-fit">{authSlot}</div>
                 </div>
 
                 <HeroScene className="mt-10 w-full lg:mt-0" />
@@ -81,3 +94,16 @@ export function Hero({ authSlot }: { authSlot: ReactNode }) {
         </section>
     );
 }
+
+/**
+ * Shared styling for the red action, so the Login and Logout states are
+ * identical. This is the Figma's nav-chip treatment (#df1c12 at a 3px radius)
+ * scaled up for its new home: at hero size the 13px chip read as a stray
+ * control rather than the page's primary call to action.
+ *
+ * It lives here, and not in site-nav.tsx, because the hero is what renders it
+ * now. It is still exported rather than applied internally because the link
+ * itself is built in pages/welcome.tsx -- see the note there.
+ */
+export const heroActionClass =
+    'inline-flex items-center rounded-[3px] bg-danger px-6 py-2.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90';

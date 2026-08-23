@@ -1,8 +1,7 @@
 import { Head, Link, usePage } from '@inertiajs/react';
 import { useEffect } from 'react';
 import { ORG } from '@/components/landing/content';
-import { Hero } from '@/components/landing/hero';
-import { navActionClass } from '@/components/landing/site-nav';
+import { Hero, heroActionClass } from '@/components/landing/hero';
 import { Skyline } from '@/components/landing/skyline';
 import { WhyChoose } from '@/components/landing/why-choose';
 import { login, logout } from '@/routes';
@@ -10,16 +9,19 @@ import { login, logout } from '@/routes';
 /**
  * CICTO landing page, built to the client's Figma.
  *
- * The design's nav carries a single red action, so there is no Register link
- * and therefore no `register()` call anywhere on this page. That is also why
- * the Chisel `registration` markers are gone: with nothing to guard they would
- * be noise, and `php artisan chisel` simply finds no section to strip either
- * way. If a Register link is added later it must live in THIS file wrapped in
+ * The design carries a single red action, so there is no Register link and
+ * therefore no `register()` call anywhere on this page. That is also why the
+ * Chisel `registration` markers are gone: with nothing to guard they would be
+ * noise, and `php artisan chisel` simply finds no section to strip either way.
+ * If a Register link is added later it must live in THIS file wrapped in
  * `/* @chisel-registration *` markers -- `chisel-paths.php` maps the `welcome`
  * key to this exact path and knows nothing about `components/landing/`.
  *
- * The nav still takes its action as a prop so that constraint stays easy to
- * honour.
+ * The Hero still takes its action as a prop so that constraint stays easy to
+ * honour. The Hero, not the nav, is where that action is rendered: the client
+ * asked on 2026-08-23 for the Login button to sit in the hero copy, beneath
+ * the "Welcome to CICTO Document Tracking System" line, instead of in the
+ * top-right corner of the nav where it was easy to miss.
  *
  * The `cicto-landing` class also has to be managed here: `app.blade.php` sets
  * it server-side for the first paint, but an Inertia visit to /login never
@@ -51,12 +53,12 @@ export default function Welcome() {
                         <Link
                             href={logout()}
                             as="button"
-                            className={navActionClass}
+                            className={heroActionClass}
                         >
                             Logout
                         </Link>
                     ) : (
-                        <Link href={login()} className={navActionClass}>
+                        <Link href={login()} className={heroActionClass}>
                             Login
                         </Link>
                     )
