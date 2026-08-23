@@ -7,6 +7,7 @@ use App\Http\Requests\Settings\ProfileDeleteRequest;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
 use App\Models\DocumentMovement;
 use App\Models\DocumentSignature;
+use App\Support\OutgoingMail;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -34,8 +35,32 @@ class ProfileController extends Controller
     {
         $request->user()->fill($request->validated());
 
-        if ($request->user()->isDirty('email')) {
+        /*
+         * Only re-verify on a host that can actually re-verify.
+         *
+         * This line predates the change of 2026-08-23 and was inert until it:
+         * User did not implement MustVerifyEmail, so `verified` gated nothing
+         * and nulling this column cost nothing. It is now a real gate on all
+         * six protected route groups, which turns an unconditional null here
+         * into a one-way door on any host with no transport -- the resend is
+         * refused by RequireOutgoingMail, editing the address back re-fires
+         * isDirty('email') and nulls it again, and nothing in
+         * SuperAdminUserController or `cicto:user` can mark an existing user
+         * verified. The account signs in and reaches nothing, for ever.
+         *
+         * Same reasoning, and the same condition, as the auto-verify in
+         * App\Actions\Fortify\CreateNewUser: enforce verification wherever it
+         * is achievable, and do not lock people behind a door that cannot be
+         * opened where it is not.
+         */
+        if ($request->user()->isDirty('email') && OutgoingMail::isConfigured()) {
             $request->user()->email_verified_at = null;
+
+            // Fortify's flow only mails on Registered; an email CHANGE fires
+            // nothing, so without this the user is bounced to the verify screen
+            // with no link on the way.
+            $request->user()->save();
+            $request->user()->sendEmailVerificationNotification();
         }
 
         $request->user()->save();

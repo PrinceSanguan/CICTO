@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 /**
  * §23 Help & Support: knowledge base, support ticket, contact details.
@@ -109,11 +110,36 @@ class HelpController extends Controller
         Log::channel('stack')->info('Support ticket raised', $payload);
 
         if ($to !== '' && OutgoingMail::isConfigured()) {
-            Mail::to($to)->send(new SupportTicketMail(
-                $user,
-                $payload['subject'],
-                $payload['body'],
-            ));
+            /*
+             * Caught here rather than left to the handler in bootstrap/app.php.
+             *
+             * That handler is right for the auth flows, where a failed send
+             * means the whole request achieved nothing. This one already did
+             * something worth keeping: the ticket was written to the log three
+             * lines up, so the honest outcome is "recorded, not delivered" --
+             * the same warning the no-transport branch below gives -- and not
+             * an error that implies the report was lost.
+             *
+             * Only transport failures. A bug in the Mailable or its view is a
+             * bug and should still surface as one.
+             */
+            try {
+                Mail::to($to)->send(new SupportTicketMail(
+                    $user,
+                    $payload['subject'],
+                    $payload['body'],
+                ));
+            } catch (TransportExceptionInterface $e) {
+                Log::channel('stack')->error('Support ticket email failed', [
+                    'to' => $to,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return back()->with('toast', [
+                    'type' => 'warning',
+                    'message' => 'Your ticket was recorded, but the email could not be delivered just now. Please contact the office directly on '.config('cicto.support.phone').'.',
+                ]);
+            }
 
             return back()->with('toast', [
                 'type' => 'success',

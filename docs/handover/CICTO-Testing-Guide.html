@@ -193,6 +193,13 @@
     The screen should not go blank or show anything confusing.
 </p>
 
+<p>
+    There is a <strong>Forgot Password</strong> link on this page, and it does
+    work now &mdash; the system started sending email on 23 August 2026. Testing
+    it needs an account with a real address you can open, so it has a part of
+    its own at the end: see <strong>Part 10</strong>.
+</p>
+
 <div class="notes">
     <strong>Anything wrong? Write it here:</strong>
     <div class="line"></div>
@@ -424,13 +431,17 @@
 <ol class="check">
     <li>On the left, click <strong>Manage Users</strong>.</li>
     <li>Click <strong>Add New Admin</strong>.</li>
-    <li>Fill in a name, a new email address, choose the role and office,
-        and make up a long password.</li>
+    <li>Fill in a name and an email address, choose the role and office,
+        and make up a long password. Please use a <strong>real address you can
+        open</strong> &mdash; Part 10 needs one.</li>
     <li>Click <strong>Create account</strong>.</li>
     <li>Log out, then try logging in with the account you just made.</li>
 </ol>
 <p class="see">
-    The new account should appear in the list and should be able to log in.
+    The new account should appear in the list and should be able to log in
+    straight away. It is not asked to confirm its email address first, because
+    you typed that address in yourself. Nothing is emailed to the person, so
+    tell them the password you set.
 </p>
 
 <p>
@@ -450,7 +461,8 @@
 </ol>
 <p class="see">
     The new password works. The old one does not. The message at the top reminds
-    you to give them the password yourself, because nothing is emailed.
+    you to give them the password yourself. The system never emails anybody a
+    password, even now that it can send email.
 </p>
 
 <ol class="check">
@@ -520,42 +532,138 @@
 </div>
 </div>
 
+<!-- ================= PART 10 ================= -->
+<div class="part">
+<h2>Part 10. Getting back in when a password is forgotten</h2>
+
+<p>
+    This part is new. Until 23 August the system could not send any email, and
+    an earlier version of this sheet said so. It can now, and we would like this
+    tested properly &mdash; it is the thing your staff will need on the morning
+    somebody cannot get in.
+</p>
+
+<p>
+    You need an account whose inbox you can actually open. The five practice
+    log-ins end in <strong>@cicto.test</strong>, which is not a real address, so
+    use the account you made in Part 8 with your own work address.
+</p>
+
+<ol class="check">
+    <li>Log out. On the Login page, click <strong>Forgot Password</strong>.</li>
+    <li>Type that email address and click <strong>Email password reset
+        link</strong>. It can take a second or two.</li>
+    <li>Open your inbox. If nothing has arrived after a minute, look in the
+        junk or spam folder.</li>
+    <li>Click the link in the message. Type a new password twice and save.</li>
+    <li>Log in with the new password.</li>
+    <li>Go back to the message and click the same link a second time.</li>
+</ol>
+<p class="see">
+    The message arrives from the <strong>CICTO office Gmail account</strong>. The
+    link takes you to a page where <em>you</em> choose the new password &mdash;
+    nobody is ever emailed a password itself. The second click should be
+    refused: a link works once, and stops working an hour after it was sent.
+    Asking for another link straight away is also held back for about a minute.
+    All three of those are on purpose.
+</p>
+
+<div class="box">
+    <strong>If no message ever arrives, please tell us.</strong>
+    That is a fault now, not a known limitation. Check the junk folder first,
+    and check on Manage Users that the address on the account is spelled
+    correctly.
+</div>
+
+<p>
+    <strong>Somebody who cannot receive email at all is still covered.</strong>
+    An administrator sets their password directly from <em>Manage Users</em>,
+    which you tested in Part 8. That has not gone away, and it is still the
+    right answer for a staff member with no working inbox.
+</p>
+
+<p>
+    <strong>One more thing, if you have five minutes.</strong> A person who makes
+    their own account from the <strong>Register</strong> link now has to confirm
+    their email address before the account can be used.
+</p>
+
+<ol class="check">
+    <li>Log out, click <strong>Register</strong>, and sign up with an address
+        you can open.</li>
+    <li>Before opening your inbox, try to reach Track Documents.</li>
+    <li>Now open the message that arrived and click the link in it.</li>
+</ol>
+<p class="see">
+    Before you click the link you should be held on a page asking you to
+    confirm the address, and let no further into the system. After you click it
+    you should be let straight in. An account that has signed itself up also has no office yet, so it
+    cannot put a document in until an administrator gives it one. That is on
+    purpose too.
+</p>
+
+<div class="notes">
+    <strong>Anything wrong? Write it here:</strong>
+    <div class="line"></div>
+    <div class="line"></div>
+</div>
+</div>
+
 <!-- ================= NOT WORKING ================= -->
 <h2>Things that do not work yet</h2>
 
 <p>
     So you do not waste time on them, here is what we already know is not
-    finished. These are waiting on information from your side. Please do not
-    report these.
+    finished and is waiting on information from your side, together with the
+    ones that have been settled since this sheet was first written. Where an
+    item below still says it is waiting on you, please do not report it. Where
+    it says it now works, please do test it &mdash; and please do tell us if it
+    does not.
 </p>
 
-<h3>1. The system does not send email</h3>
+<h3>1. The system does send email &mdash; this changed on 23 August</h3>
 <p>
     You told us on 20 August that CICTO cannot give out email settings for
-    this system. That is a fine answer and nothing is waiting on it any more
-    &mdash; we have built the alternative you asked for instead. What it means
-    day to day:
+    this system, and we built the alternative you asked for instead. That answer
+    still stands, that alternative is still there, and nothing is waiting on you.
+    What changed is that on <strong>23 August 2026</strong> the system was given
+    an email account of its own, and it was tested with a real message that
+    really arrived. So the things on this page that used to be about missing
+    email are now things to try rather than things to skip:
 </p>
 <ul>
-    <li><strong>"Forgot Password" tells people to ask you.</strong> The page no
-        longer asks for an email address, because no email can be sent. It says
-        plainly that the server cannot send email and that an administrator will
-        set a new password.</li>
-    <li><strong>You set the new password yourself, from the system.</strong> Go
-        to <em>Manage Users</em>, find the person, and press <strong>Set
-        password</strong>. You will be asked for your own password first, then
-        theirs twice. Tell them the new password in person or over the phone
-        &mdash; the system never emails it to anybody. Please test this one; it
-        is new.</li>
-    <li><strong>Help messages are saved but not sent.</strong> If someone uses
-        the Submit a Ticket page, the message is kept inside the system.
-        Nobody gets an email about it. The page says so when you use it.</li>
+    <li><strong>"Forgot Password" works.</strong> The page asks for an email
+        address again and sends a link that lets the person set their own new
+        password. Please test it &mdash; <strong>Part 10</strong> takes you
+        through it step by step. If a link does not arrive, that is a fault and
+        we want to hear about it.</li>
+    <li><strong>A person who signs themselves up must confirm their address
+        first.</strong> Anyone using the Register link is sent a confirmation
+        message and cannot use the system until they click the link in it.
+        Accounts <em>you</em> make on Manage Users are not affected: you typed
+        the address, so those can sign in at once.</li>
+    <li><strong>You can still set a password yourself, and sometimes you
+        should.</strong> Go to <em>Manage Users</em>, find the person, and press
+        <strong>Set password</strong>. You will be asked for your own password
+        first, then theirs twice. This is the answer for a staff member with no
+        email address, or who cannot get at their inbox. Tell them the new
+        password in person or over the phone &mdash; the system never emails a
+        password to anybody, then or now.</li>
+    <li><strong>Help messages are now sent as well as saved.</strong> If someone
+        uses the Submit a Ticket page, the message is still kept inside the
+        system, and it is now also emailed to the support address. If that send
+        fails, the page tells you plainly that the ticket was recorded but not
+        delivered, and gives you the phone number instead.</li>
     <li><strong>Nobody is emailed</strong> when a new document arrives at
-        their office. The bell inside the system still tells them.</li>
+        their office. That has not changed, and we do not plan to change it.
+        The bell inside the system still tells them.</li>
 </ul>
 <p>
-    If the city ever does set up an email account for this system, tell us and
-    we will connect it. Nothing here has to be undone first.
+    The account it sends from is an ordinary free mailbox, which is allowed
+    roughly five hundred messages a day &mdash; far beyond anything this system
+    will do. If you would rather it sent from an official baliwag.gov.ph address
+    later on, tell us and we will move it across. Nothing here has to be undone
+    first.
 </p>
 
 <h3>1a. Two things to know before you set someone's password</h3>
@@ -651,11 +759,14 @@
         </tr>
         <tr>
             <td>Your email settings</td>
-            <td><strong>Answered, and nothing further is needed.</strong> You
-                said CICTO cannot give out email settings, and asked us to build
-                a way for an administrator to set someone's password instead.
-                That is built and is on the Manage Users page. See the section
-                above.</td>
+            <td><strong>Answered 20 August 2026, and overtaken by events on 23
+                August.</strong> You said CICTO cannot give out email settings,
+                and asked us to build a way for an administrator to set
+                someone's password instead. That is built, it is on the Manage
+                Users page, and it stays. Since then the system has been given
+                an email account of its own, so password-reset email works as
+                well. See the section above. Nothing further is needed from
+                you.</td>
         </tr>
         <tr>
             <td>How long old files should be kept</td>

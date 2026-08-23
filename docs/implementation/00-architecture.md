@@ -492,7 +492,7 @@ Things that are true of the repository today and will bite if forgotten.
 
 | Fact | Consequence |
 | --- | --- |
-| `MAIL_MAILER=log`, and **permanently** — client question B3, 2026-08-20 | **No email can be delivered, and no service is coming unless the LGU buys one.** So: accounts are created pre-verified, "Forgot Password" refuses rather than claiming to have sent a link, and a forgotten password is fixed by a Super Admin on Manage Users. (`verified` middleware is inert regardless — `User` does not implement `MustVerifyEmail` — but do not rely on that; the pre-verification is what makes it safe) |
+| `MAIL_MAILER=smtp` since 2026-08-23, superseding the `MAIL_MAILER=log` this shipped with | **Email is delivered.** Client question B3 (2026-08-20) stands exactly as written — CICTO supply no credentials and no configuration — but the operator took the other half of that same answer and stood up Google SMTP on their own Gmail account, with 2-Step Verification and a 16-character App Password. So: "Forgot Password" really sends a link, the support ticket really arrives, and `User` **does** implement `MustVerifyEmail` now, which makes the `verified` middleware on all six protected route groups real rather than the no-op it had been since Phase 1. All five existing accounts were already verified, so nobody was locked out. The Super Admin's set-password panel on Manage Users is still the supported way back into an account whose holder cannot receive mail — it is no longer the only way |
 | `QUEUE_CONNECTION=database`, no worker | Nothing queued will ever run. Phase 2 must choose sync dispatch or a cron-driven `queue:work --stop-when-empty` |
 | `APP_URL=http://localhost:8000` | `config/fortify.php` derives the passkey relying-party ID from this. Passkeys break silently on any other host |
 | `AWS_BUCKET` empty, uploads on the local private disk | If backups land on the same disk, one disk failure loses both the documents and the backups |
@@ -514,6 +514,16 @@ of notification rows costs milliseconds. Revisit only if a transition exceeds
 > `SESSION_DRIVER=database` means a long synchronous request holds the session lock
 > and freezes the user's other tabs. That is the real ceiling on synchronous work —
 > which is why exports get hard row caps rather than a queue.
+
+**2026-08-23 — mail joined the synchronous set, deliberately.** With `MAIL_MAILER=smtp`
+live, a password-reset link, a verification message and a support ticket are all sent
+*inline*, on the request that triggered them. Queuing them would be worse rather than
+better: there is no worker and nothing runs `queue:work`, so a queued message would
+silently never send — which is the exact failure mode this section exists to refuse.
+The cost is roughly 1–3 s on the three requests that send, bounded by `MAIL_TIMEOUT`,
+which `config/mail.php` now defaults to **15 seconds** instead of `null` — `null` is not
+"no timeout", it is Symfony falling back to PHP's `default_socket_timeout`, 60 s on most
+builds, held against a database session lock.
 
 **Cron: assume it may not exist.** Everything load-bearing must work without it:
 

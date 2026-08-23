@@ -78,6 +78,32 @@ that needs it.
 >
 > B3's heading below is marked answered; nothing else on this page moved.
 
+> **2026-08-23 — B3's answer still stands. Its consequence does not: mail is live.**
+> The client's refusal has not changed and is not going to. CICTO supply no credentials
+> and no configuration, and nothing below about that is retracted. What changed is that
+> the operator acted on the other half of the same cell — *"we highly recommend using
+> alternative email services, such as Google SMTP"* — and stood one up: a Gmail account
+> with 2-Step Verification, a 16-character App Password, `MAIL_MAILER=smtp` over STARTTLS
+> on port 587, and `MAIL_FROM_ADDRESS` set to the authenticated account. Confirmed with a
+> real handshake **and** a real delivered message rather than a config read;
+> `php artisan cicto:host-check` now reports *Outgoing mail: OK smtp*, *Mail From address:
+> OK* and *SMTP handshake: OK authenticated*.
+>
+> **So every present-tense sentence on this page that says this server cannot send email
+> is now a record of what was true between 20 and 23 August, not a description of the
+> system.** The forgot-password form is back and the link it mints is delivered to a
+> person. The support ticket arrives. `User` implements `MustVerifyEmail`, so registration
+> sends a verification link and the `verified` middleware finally enforces something — it
+> had been matching nothing on every protected route group, because the interface was
+> never declared. And `POST /forgot-password` gained a real rate limiter, 10 requests per
+> IP per hour, because until now `RequireOutgoingMail` refusing every POST *was* the
+> limiter.
+>
+> **The administrator-set-password module stays.** It is what the client asked for in
+> place of email, it is still the answer for a user whose address is wrong or unreachable,
+> and it is still the only route left when nobody can sign in at all. It is no longer the
+> *only* way back into an account, and that is the whole of what changed.
+
 ---
 
 ## Group A — blocks Phase 1, ask on day 1
@@ -427,7 +453,7 @@ is a deliberate act by whoever administers the bucket. Say this before sign-off.
 should be left believing the nightly backup would bring a deleted document back, because
 it would not.
 
-### B3. Is email delivery in scope? *(§3, §12)* *(ANSWERED 2026-08-20 — no credentials, and a password-reset module instead)*
+### B3. Is email delivery in scope? *(§3, §12)* *(ANSWERED 2026-08-20 — no credentials, and a password-reset module instead; SUPERSEDED IN PART 2026-08-23 — the operator stood up Google SMTP themselves, and mail is live)*
 
 The question was: who provides SMTP credentials, and for what address? The
 answer, in writing, on 2026-08-20:
@@ -478,7 +504,7 @@ existing `auth.password_reset`, which `RecordSecurityEvents` renders as
 administrator-set password under that case would put the wrong person's name
 against the one operation that hands over somebody else's account.
 
-#### 2. Email is possible, at the LGU's own expense, and is not configured here
+#### 2. Email is possible, at the LGU's own expense — and since 2026-08-23 it is configured
 
 `config/mail.php` was always ready; what was missing was anyone saying which
 service. `.env.example` now carries the Google SMTP recipe the client named,
@@ -487,6 +513,20 @@ refused, it has to be a 16-character **App Password**, and `MAIL_FROM_ADDRESS`
 must be the authenticated Gmail account or every message is rejected at send
 time with the connection reporting healthy. `cicto:host-check` now checks the
 second one.
+
+**2026-08-23 — it was set up.** Not by the LGU and not by CICTO: by the operator of
+this deployment, on their own Gmail account, which is exactly the route the client's
+answer pointed at. 2-Step Verification on, a 16-character App Password issued,
+`MAIL_MAILER=smtp`, `MAIL_HOST=smtp.gmail.com`, `MAIL_PORT=587`, STARTTLS, and
+`MAIL_FROM_ADDRESS` equal to the authenticated account. Both traps written above were
+the two that had to be walked past, which is why they were written down. The check
+gained a third row for it — **SMTP handshake**, which really connects and
+authenticates without sending anything, because reading `mail.default` and printing
+"OK smtp" is a check a typo'd App Password passes. Two limits worth stating in the
+same breath: mail is sent **inline** rather than queued, bounded by a 15-second
+`MAIL_TIMEOUT` that `config/mail.php` now sets instead of `null`; and a free Gmail
+account caps at roughly **500 recipients a day**, after which it refuses everything
+for 24 hours.
 
 **What does not change with SMTP configured:** §12 notification email is still
 out of scope and still a change order — see
@@ -519,11 +559,28 @@ it cannot be used to enumerate accounts; and the `log` mailer writes to its own
 7-day channel rather than into `stack`. That last one reduces the exposure and
 does not remove it — only a real transport does.
 
+**And on 2026-08-23 a real transport arrived, so all of that is dormant rather than
+retired.** `OutgoingMail::isConfigured()` returns true, `RequireOutgoingMail` passes
+the POST through, the form is back on the page, and the link is delivered to a person
+instead of written into a log file. The guard is deliberately left in place: it is
+what makes a future deployment that forgets `MAIL_MAILER` fail honestly rather than
+silently, and `tests/Feature/Auth/MailUnavailableTest.php` still pins that branch.
+What the guard *also* was, without anyone writing it down, is the only rate limit on
+that route — it refused every POST before Fortify's broker ran. Turning mail on
+removed it, so `ThrottlePasswordResetRequests` replaces it at 10 requests per IP per
+hour. `config/auth.php`'s `'throttle' => 60` does not cover this: it is keyed on the
+email address, so it stops one address being mailed twice a minute and does nothing
+about one client walking a staff list.
+
 #### Still owed on this question
 
-Nothing from the client. One thing from whoever deploys: if an LGU does stand up
-Google SMTP, `MAIL_FROM_ADDRESS` and the App Password have to be set together,
-and `php artisan cicto:host-check` is what says whether they were.
+Nothing from the client. The one thing owed by whoever deploys — if an LGU does stand
+up Google SMTP, `MAIL_FROM_ADDRESS` and the App Password have to be set together, and
+`php artisan cicto:host-check` is what says whether they were — was done on 2026-08-23
+and the check passes on all three mail rows. What is owed now is smaller and ongoing:
+the App Password is a credential like any other. It lives in `.env` and nowhere else,
+it is not in this repository and must not be put there, and it has to be rotated if
+the Gmail account changes hands.
 
 ### B4. What does "exportable to PDF and Excel" mean? *(§19, Phase 3)*
 

@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Enums\Role;
 use Database\Factories\UserFactory;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -44,7 +44,27 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  */
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
-class User extends Authenticatable implements PasskeyUser
+/*
+ * MustVerifyEmail is declared, not merely inherited.
+ *
+ * The `MustVerifyEmail` *trait* on Illuminate\Foundation\Auth\User already
+ * gave this model `hasVerifiedEmail()` and `sendEmailVerificationNotification()`,
+ * so the methods were always there and the class looked verified-capable. But
+ * both of the framework pieces that matter test for the CONTRACT, not the
+ * methods: Illuminate\Auth\Listeners\SendEmailVerificationNotification and the
+ * `verified` middleware each do `instanceof MustVerifyEmail`. Without this
+ * `implements`, registration sent no verification mail and the `verified`
+ * middleware on all six protected route groups (routes/web.php:72,
+ * settings.php:15, documents.php:23 and :101, panels.php:25 and :38) was a
+ * silent no-op -- a self-registered account walked straight past a gate that
+ * reads, in the routes file, as if it were closed.
+ *
+ * That was survivable only while MAIL_MAILER=log made verification impossible
+ * anyway. It is not survivable now that mail works, which is why it is declared
+ * here. No existing account is affected: all five were already verified when
+ * this changed.
+ */
+class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, PasskeyAuthenticatable, TwoFactorAuthenticatable;

@@ -27,7 +27,7 @@ must perform, and it is the step that punishes being skipped.
 | **A cron entry** *(ANSWERED 2026-08-18 — Cloud runs the scheduler)* | Deadline warnings, overdue notices, nightly signature verification and backups all hang off `schedule:run` | Settled. Laravel Cloud runs the Laravel scheduler as a per-environment compute setting, so it is off until somebody switches it on. Do not add a crontab — §1.2 |
 | **Durable storage for the documents** *(NEW, and the dangerous one)* | Laravel Cloud's filesystem is ephemeral and per-replica: a local documents disk there is emptied by the next deploy while the `document_files` rows still point at the missing bytes | No fallback, and no error either — it fails silently. Attach a private bucket and set `CICTO_DOCUMENTS_DRIVER=s3` **before the first real upload**. §1.1 |
 | **`proc_open` enabled** | `pg_dump`/`mysqldump` need it | Still unconfirmed on Cloud, and not blocking: `PhpDumper` takes over automatically and produces a data-only dump, so restore then needs `migrate` first. Probe it on the real environment and write down which dumper you got, because it changes the restore procedure |
-| **SMTP credentials** *(ANSWERED 2026-08-20 — CICTO will not supply them)* | Password resets, notifications and support tickets | **Closed against us, and no longer blocking.** CICTO will not provide email credentials or configuration, and recommends an external service (Google SMTP) if the LGU wants one. "Forgot password" therefore refuses rather than pretending, and a Super Admin sets passwords from Manage Users instead — that is the module CICTO asked for in its place. §3 carries the SMTP block for a deployment that does stand one up |
+| **SMTP credentials** *(ANSWERED 2026-08-20 — CICTO will not supply them; SUPERSEDED 2026-08-23 — the operator stood one up)* | Password resets, verification links and support tickets | **Settled, and mail is live.** CICTO's answer stands: they supply no credentials and recommend an external service (Google SMTP). On 2026-08-23 the operator took that recommendation — a Gmail account with 2-Step Verification on and a 16-character App Password, proved by a real STARTTLS handshake *and* a real delivered message. Production runs `MAIL_MAILER=smtp`; §3 carries the block and the things that break it. Forgot Password now sends a genuine reset link, and Manage Users remains the supported route for anyone who cannot receive mail |
 
 The remaining thing B2 asked — **where the off-site backup goes** — is answered
 too: Laravel Cloud Object Storage, which is S3-compatible and offered in
@@ -114,7 +114,7 @@ is told. They are registered in `routes/console.php`, at these times, in
 | --- | --- | --- |
 | `cicto:backup` | 01:00 daily | The nightly backup. §22's "automated regular backups" is then simply not delivered |
 | `cicto:verify-signatures --quiet-ok` | 02:30 daily | Tampering stays *detectable* and stops being *detected*. Nobody re-opens a six-month-old certificate by hand |
-| `cicto:notify-deadlines` | 08:00 daily | Deadline warnings and overdue notices. The Overdue filter, the row badges and the dashboard counts stay correct regardless — overdue is a live query, not a stored flag — so the only thing that goes missing is the mail, silently |
+| `cicto:notify-deadlines` | 08:00 daily | Deadline warnings and overdue notices, which are **in-app** notifications and not email. The sweep sends no mail even now that SMTP works — §12 notification email is still a change order — so do not go looking in the Gmail account for evidence it ran. The Overdue filter, the row badges and the dashboard counts stay correct regardless, because overdue is a live query and not a stored flag, so the only thing that goes missing is the push, silently |
 
 Do not also add a crontab. Confirm the registration from the **Commands** tab:
 
@@ -172,7 +172,7 @@ From the **Commands** tab, not your laptop:
 php artisan cicto:host-check
 ```
 
-Record the output with the handover. Two rows decide whether you may proceed:
+Record the output with the handover. Three rows decide whether you may proceed:
 
 - **Documents durable?** — this row only appears when the documents disk is
   `local`. On Laravel Cloud, seeing it means §1.1 has not been done and the next
@@ -183,6 +183,16 @@ Record the output with the handover. Two rows decide whether you may proceed:
   Cloud is not confirmed. It is not blocking, because the backup falls back to
   `PhpDumper` on its own, but the fallback dump is data-only and the restore in
   §8 then has to run `migrate` first. Write down which one this host gave you.
+- **SMTP handshake** — new as of 2026-08-23, and the only row that *proves*
+  mail rather than describing it. It really opens the connection and runs EHLO,
+  STARTTLS and AUTH against the live provider with the live credential, then
+  stops. **It sends nothing, so it costs no Gmail quota and lands in nobody's
+  inbox.** `OK authenticated` is the only reading that means reset links,
+  verification links and support tickets can leave this host — the two mail
+  rows above it read `OK` on a host where every send fails, because they only
+  read configuration. A failure prints the first line of the provider's
+  rejection, truncated on purpose so the credential is never quoted back into a
+  handover screenshot. See §3.
 
 ---
 
@@ -219,29 +229,29 @@ SESSION_DRIVER=database
 SESSION_SECURE_COOKIE=true      # ONLY once HTTPS is confirmed
 
 # Outgoing mail. CICTO answered B3 on 2026-08-20: they will not supply email
-# credentials or configuration, and recommend an external service. So this ships
-# as `log` and nothing leaves the server. Leave it that way unless the LGU has
-# actually stood a service up -- the application is honest about the absence
-# (Forgot Password refuses and names the administrator) and dishonest about
-# nothing, which is the safe state.
-MAIL_MAILER=log
+# credentials or configuration, and recommend an external service. On 2026-08-23
+# the operator took that recommendation and stood up Google SMTP, so production
+# runs on `smtp` and mail is live. `.env.example` still ships `log` -- that is
+# the safe default for a fresh checkout, not the production value.
+#
+# These nine move together, and you EDIT THEM IN PLACE rather than appending a
+# second block. dotenv takes the LAST assignment of a duplicated key, so a
+# half-pasted block leaves MAIL_MAILER=smtp pointing at the placeholder host:
+# a mailer the application believes works, minting reset tokens that go nowhere.
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587                   # 587 = STARTTLS
+MAIL_SCHEME=null                # leave null for 587; smtps + 465 is the alternative
+MAIL_USERNAME=<the gmail account>
+MAIL_PASSWORD=<a 16-character Gmail App Password, NOT the account password>
+MAIL_FROM_ADDRESS=<the same gmail account>
+MAIL_FROM_NAME="${APP_NAME}"
 MAIL_LOG_CHANNEL=mail           # keeps rendered messages out of the shared log
-
-# If they DO stand up Google SMTP, these six move together — EDIT THEM IN PLACE
-# rather than appending a second block. dotenv takes the LAST assignment of a
-# duplicated key, so a half-pasted block leaves MAIL_MAILER=smtp pointing at the
-# placeholder host: a mailer the application believes works, minting reset
-# tokens that go nowhere. That is the exact state B3's guard exists to prevent.
-#   MAIL_MAILER=smtp
-#   MAIL_HOST=smtp.gmail.com
-#   MAIL_PORT=587               # 587 = STARTTLS, leave MAIL_SCHEME unset
-#   MAIL_USERNAME=<the gmail account>
-#   MAIL_PASSWORD=<16-character App Password, NOT the account password>
-#   MAIL_FROM_ADDRESS=<the same gmail account>
-# The last line is the one that gets missed: Google rejects a From address that
-# is not the account it authenticated, and the connection reports healthy while
-# every message bounces. `cicto:host-check` checks it, and §9 asks you to prove
-# a reset link actually arrives rather than that the config looks right.
+MAIL_TIMEOUT=15                 # seconds. Do not unset it -- see "Outgoing mail" below
+# MAIL_FROM_ADDRESS is the line that gets missed: Google rejects a From address
+# that is not the account it authenticated, and the connection reports healthy
+# while every message bounces. `cicto:host-check` checks it, and §9 asks you to
+# prove a reset link actually arrives rather than that the config looks right.
 
 # Printed onto paper. Get it right before any label is issued at volume.
 CICTO_SCAN_BASE_URL=https://cicto.example.gov.ph
@@ -284,6 +294,86 @@ Those last four already match the shipped defaults in `config/cicto.php`. They
 are listed so an operator can change them without a deploy, not because the
 deploy needs them set. Two of them are provisional: see §4 for why every
 document type currently gets the same three days.
+
+### Outgoing mail
+
+Live since 2026-08-23, and almost nothing that keeps it working is visible in
+the block above.
+
+**The credential is a Gmail App Password, and 2-Step Verification has to be on
+before one can exist.** Google offers App Passwords only on an account that has
+2-Step Verification enabled, so the order is: turn 2-Step Verification on,
+generate the App Password, paste it into `MAIL_PASSWORD`. Google displays it as
+four groups of four characters — **the spaces are presentation; paste the 16
+characters without them.** The ordinary account password is not a substitute and
+never authenticates over SMTP, and a Workspace account whose domain policy
+disables SMTP AUTH will not authenticate either — that is a setting on the
+domain, not something this host can fix.
+
+**Prove it on the host, and prove it for nothing.** `php artisan cicto:host-check`
+carries an **SMTP handshake** row that opens the real connection and runs EHLO,
+STARTTLS and AUTH with the live credential, then stops. **It sends nothing: no
+quota is spent, nothing lands in anybody's inbox, and it is safe to run against
+production as often as you like.** `OK authenticated` is the only reading that
+means mail leaves this host — the `Outgoing mail` and `Mail From address` rows
+above it read configuration only and both say `OK` on a host where every send
+fails. §1.6.
+
+**Roughly 500 recipients a day, and then nothing for 24 hours.** That is the free
+Gmail cap. It is not a delay and not a queue: past the limit Google refuses, and
+the refusal takes password resets, verification links and support tickets down
+**together**, because all three leave through the one account. Ordinary LGU
+traffic is nowhere near it — resets are a handful a week — so the realistic way
+to spend 500 messages in a day is somebody walking the staff list at the Forgot
+Password form, which is what the throttle below exists to stop. If it happens
+anyway there is nothing to configure: wait out the 24 hours, and use Manage
+Users → **Set password** meanwhile (§4).
+
+**Mail is sent inline, not queued. No `queue:work` process is required, and do
+not add one expecting mail to travel through it.** This is a decision rather than
+an oversight. Nothing in this deployment runs a queue worker: the VPS crontab in
+§6 runs `schedule:run` and nothing else, and Laravel Cloud's scheduler setting
+starts no worker either. Queue the mail on a host like that and every message is
+written to the jobs table and sits there — the screen reports the reset link was
+sent, the token is real and live, and nothing ever leaves the building. The cost
+of sending inline is that the request waits for Google: roughly one to three
+seconds on Forgot Password, on registration and on a support ticket, bounded by
+`MAIL_TIMEOUT=15` so a provider that stops answering cannot hold a web worker
+open indefinitely. A slow page that really sent it beats an instant one that
+quietly did not.
+
+**A failed send is now a sentence, not a stack trace.** Any transport failure —
+a revoked App Password, the daily cap, a minute of bad DNS — is rendered as an
+error under the field the user was filling in; a failed registration goes forward
+to the verification notice, which has a Resend button, rather than back to a form
+that would then reject their own new address as taken; and a support ticket keeps
+the copy it already wrote to the log and reports itself as recorded but not
+delivered. None of it is silent: every failure is written to the application log
+with the provider's reason for it. (That is the ordinary log stack, not
+`MAIL_LOG_CHANNEL` — that key only says where the `log` *mailer* would dump
+rendered messages on a host with mail switched off, and it never sees a
+delivery failure.) On Laravel Cloud, read it from the log stream — §1.5.
+
+**Email verification is enforced as of 2026-08-23.** `User` now declares
+`MustVerifyEmail`, which is what makes the `verified` middleware on the six
+protected route groups do anything at all: a self-registered account is held on
+the verification notice and reaches no screen in the application until the link
+in the mail is clicked. Accounts *you* create are unaffected —
+`cicto:create-super-admin`, `cicto:user` and Manage Users all stamp the account
+verified at creation, which is why nobody was locked out when this changed. What
+it does mean is that on a host where mail is broken, self-registration is not
+inconvenient but a dead end, because the Resend button needs the same transport.
+
+**Reset requests are throttled at 10 per IP per hour.** That is
+`ThrottlePasswordResetRequests`, registered in `config/fortify.php` beside
+`RequireOutgoingMail`. Laravel's own limiter sits on the password broker and is
+keyed on the *email address*, so it stops one address being mailed twice a minute
+and does nothing about one client posting a hundred different addresses. Somebody
+who reaches the limit gets a red error under the email field — "Too many reset
+requests from this connection. Try again in N seconds, or ask your administrator
+to set a new password for you." — rather than a 429 page, so what they typed
+survives. The window is per IP, so an office behind one municipal NAT shares the
+ten between them; that is why the figure is 10 and not 3.
 
 ### The three settings that are hard to undo
 
@@ -411,11 +501,24 @@ Run it with no options to see an account's current role, office and state.
 
 #### When somebody forgets their password
 
-Client question **B3**, answered 2026-08-20: there are no SMTP credentials, so
-there is no reset link. The Forgot Password page says so and points at you.
+Client question **B3**, answered 2026-08-20, meant there was no reset link at
+all: the Forgot Password page said so and pointed at you. **Superseded
+2026-08-23** — the operator stood up Google SMTP (§3), so Forgot Password takes
+an address and sends a genuine reset link, and most forgotten passwords now never
+reach you at all.
 
-**Ordinarily, from the screen.** Manage Users → the person's row → **Set
-password**. You confirm your own password, type theirs, and hand it to them.
+What follows is for the ones that still do: an address the person can no longer
+read, a mailbox that bounces, a day the Gmail quota is spent, a transport that is
+down. Two things to recognise before you reach for the screen. Reset requests are
+capped at **10 per IP per hour**, so somebody who has been hammering Send is told
+to wait rather than mailed again — that is the throttle working, not a fault. And
+a reset link proves possession of a mailbox and nothing else, so if the account
+may be in somebody else's hands, read the two-factor paragraph below before you
+decide the link was enough.
+
+**From the screen, when the link cannot reach them.** Manage Users → the
+person's row → **Set password**. You confirm your own password, type theirs, and
+hand it to them.
 They are signed out on every device they were signed in on, so tell them that
 before they ask why their phone logged out.
 
@@ -517,6 +620,13 @@ On a VPS, one entry. Everything else is scheduled inside the app.
 * * * * * cd /path/to/cicto && php artisan schedule:run >> /dev/null 2>&1
 ```
 
+**That is the only background process there is. Do not add a `queue:work` entry**
+— nothing in CICTO is queued, mail included. Mail is sent inline for precisely
+the reason this section exists: a host that can forget the scheduler can forget a
+worker just as easily, and queued mail with no worker running is written to the
+database and never sent while every screen reports that it was. §3, "Outgoing
+mail".
+
 Confirm it is actually firing:
 
 ```bash
@@ -534,9 +644,19 @@ warnings, overdue notices and backups will not happen on their own.
 
 ## 7. APP_KEY escrow
 
-`APP_KEY` decrypts the encrypted settings column. **Lose it and the stored SMTP
-password and any other encrypted setting are unrecoverable** — not
-"inconvenient", unrecoverable.
+`APP_KEY` decrypts the encrypted settings column. **Lose it and every encrypted
+setting is unrecoverable** — not "inconvenient", unrecoverable. It also signs the
+session cookies and the signed URLs the verification links are built from, so
+rotating it signs everybody out and voids any verification or reset link still in
+flight.
+
+**It does not protect the mail credential, and earlier drafts of this section
+said it did.** There is no stored SMTP password: the App Password lives in `.env`
+— or in the hosting panel's environment settings, which is the same thing on
+Laravel Cloud — and nowhere else. The application never writes it to the
+database, so `APP_KEY` neither guards it nor can lose it. Escrow it separately,
+wherever the LGU keeps the database password. It is the same class of secret and
+the same problem on the day the person holding it leaves.
 
 1. Copy the value out of `.env`.
 2. Seal it somewhere that survives the developer, the laptop and the hosting
@@ -607,8 +727,14 @@ whose loss it was supposed to insure against.
 - [ ] `CICTO_SCAN_BASE_URL` emits `https://` — print **one** label and scan it
 - [ ] Register → forward → receive → approve → complete, end to end
 - [ ] A QR label scans to the right document from a phone
-- [ ] Forgot Password says it cannot send email and names the administrator — or,
-      if SMTP was configured, a reset link actually arrives
+- [ ] `cicto:host-check` on the real environment reports **SMTP handshake: OK
+      authenticated**. The two mail rows above it read `OK` on a host where every
+      send fails, so they are not the check
+- [ ] Forgot Password sends a link that actually arrives, and the link sets a
+      password that then signs in
+- [ ] A test self-registration receives its verification email, and is refused
+      every protected screen until the link in it is clicked — then deactivate
+      that account with `cicto:user <address> --deactivate`
 - [ ] A Super Admin can set a password from Manage Users, and the person it was
       set for signs in with it
 - [ ] Each of the three roles sees only its own panel
@@ -640,9 +766,10 @@ Do not let these surface as surprises three months in.
   `CICTO_BUSINESS_END_HOUR` sets the *hour* a deadline lands on; nothing in the
   system knows which *days* the counter is open. So a three-day turnaround filed
   on a Tuesday falls due Friday, on a Wednesday falls due Saturday, and on a
-  Thursday falls due Sunday — and the 08:00 sweep mails an overdue notice for it
-  on a morning nobody was ever at the desk. Roughly three filing days in seven
-  land this way. Teaching the clock about working days needs a holidays table
+  Thursday falls due Sunday — and the 08:00 sweep raises an overdue notice for it
+  on a morning nobody was ever at the desk. (In the app, not by email: the sweep
+  sends no mail even now that SMTP works — §1.2.) Roughly three filing days in
+  seven land this way. Teaching the clock about working days needs a holidays table
   reseeded every year by proclamation, which is a separate quote; see decision
   D18. Say this to the LGU before they see their first Monday backlog.
 - **Every document currently shares one deadline.** All 43 document types seed
@@ -704,14 +831,38 @@ Do not let these surface as surprises three months in.
   retention was deliberately **not** raised to match — it holds IP addresses and
   user agents, which are personal data under RA 10173, and 180 days is published
   as a promise on the public privacy notice.
-- **Support tickets email; there is no ticket queue.** With no SMTP configured
-  — which **B3** settled on 2026-08-20 is the standing arrangement, not a
-  temporary one — they are recorded in the log and the UI says so.
-- **A forgotten password is an administrator's job, not an inbox's.** There is
-  no reset email and there is not going to be one unless the LGU stands up its
-  own mail service. Forgot Password says so; Manage Users is where it is fixed.
-  Somebody in the LGU has to be reachable to do that, and if the only Super
-  Admin leaves without handing over, the way back in is SSH.
+- **Support tickets email; there is no ticket queue.** Since 2026-08-23 they are
+  genuinely delivered, to `CICTO_SUPPORT_EMAIL`, as ordinary mail. What does not
+  exist is everything after that: no ticket table, no status, no reply thread, no
+  admin inbox in the application. Whoever reads that mailbox *is* the ticket
+  system, and if nobody is assigned to read it the ticket is as lost as it ever
+  was. Every ticket is written to the log as well, so one that fails to send is
+  recorded rather than dropped, and the sender is told it was recorded and not
+  delivered rather than thanked.
+- **All of the outgoing mail leaves through one free Gmail account.** Password
+  resets, verification links and support tickets share a single App Password and
+  its cap of roughly 500 recipients a day, and when that is spent the provider
+  refuses everything for 24 hours — all three at once. There is no second
+  transport to fall back to and nothing to fail over. This belongs in writing
+  next to the bullet below, because it is the reason the administrator route is
+  not being decommissioned now that mail works.
+- **A forgotten password now has an inbox, and still needs an administrator
+  behind it.** Forgot Password sends a real reset link as of 2026-08-23, capped
+  at 10 requests per IP per hour. It reaches nobody whose recorded address is
+  wrong or unreadable, nobody whose mailbox bounces, and nobody at all on a day
+  the quota is spent — so Manage Users → **Set password** remains the supported
+  fallback, and somebody in the LGU has to stay reachable to work it. If the only
+  Super Admin leaves without handing over, the way back in is still SSH.
+- **New self-registrations are gated on email.** `MustVerifyEmail` is enforced as
+  of 2026-08-23, so an account that registers itself sees the verification notice
+  and nothing else until the link arrives and is clicked. Accounts created by an
+  administrator are stamped verified and never meet it. The consequence to state:
+  on a day outgoing mail is down, self-registration is closed in practice, and
+  the way in is for an administrator to create the account instead.
+- **Nothing is queued, mail included.** There is no worker to run and no failed
+  jobs to watch, which removes a whole class of silent failure and buys it back
+  as one to three seconds on the handful of requests that send mail. §3,
+  "Outgoing mail".
 
 ---
 
@@ -725,7 +876,7 @@ Deployment can proceed without these, but the gaps stay open.
 | **A4** — *part delivered 2026-08-18.* The 53 offices, their codes and the 43 document types are seeded. **Turnaround days per type** are not: that question went to ARO and has not come back | Per-type deadlines. Every type shares the three-day `CICTO_DEFAULT_TURNAROUND_DAYS` until they do |
 | **B1** — the signature paragraph, acknowledged | §15 sign-off |
 | **B2** — *mostly answered 2026-08-18.* The host is **Laravel Cloud**: HTTPS is issued by the platform, the scheduler runs the three commands in `routes/console.php`, and the off-site destination is Laravel Cloud Object Storage. Still open: **who performs and who tests the restore drill**, object versioning on the documents bucket (§10), and whether `proc_open` and `pg_dump`/`mysqldump` exist there — `cicto:host-check` answers that last one on the real environment | §22 sign-off |
-| ~~**B3** — SMTP credentials~~ *(ANSWERED 2026-08-20, and closed against us.)* CICTO will not supply them and recommends an external service; in their place they asked for, and got, a Super Admin password-reset module. Nothing further is owed by the client | Nothing. §12 notification email stays a change order whether or not SMTP is later configured |
+| ~~**B3** — SMTP credentials~~ *(ANSWERED 2026-08-20, closed against us; SUPERSEDED 2026-08-23.)* CICTO will not supply them and recommends an external service; in their place they asked for, and got, a Super Admin password-reset module. That answer stands and nothing further is owed by the client — but the recommendation was taken: on 2026-08-23 the operator stood up Google SMTP on a Gmail App Password, so reset links, verification links and support tickets are delivered, and §3's "Outgoing mail" records what keeps them working and what takes them down. The password-reset module remains the supported fallback | Nothing. §12 notification email stays a change order now that SMTP is configured, exactly as it did before |
 | **B4** — real `.xlsx` or CSV acceptable | §19 sign-off |
 | **B6** — *part answered 2026-08-18.* A floor was given — "3 to 5 years minimum" — and the code holds 1095 days. Still missing: the exact figure (with ARO), written sign-off, and a confirmed off-site copy | Enabling any pruner |
 

@@ -7,6 +7,8 @@ use App\Support\OutgoingMail;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\Mailer\Transport\Smtp\EsmtpTransport;
+use Symfony\Component\Mailer\Transport\Smtp\Stream\SocketStream;
 use Throwable;
 
 /**
@@ -194,9 +196,106 @@ class HostCheckCommand extends Command
                     : 'OK '.$from,
                 'Google SMTP and most providers reject a From that is not the authenticated account',
             ];
+
+            $rows[] = $this->smtpHandshake();
         }
 
         return $rows;
+    }
+
+    /**
+     * Actually open the connection and authenticate.
+     *
+     * Everything above this reads config and reports what it finds, which is
+     * the whole problem: a revoked App Password, a typo in it, a host that
+     * blocks outbound 587, and 2-Step Verification switched back off all leave
+     * the config looking perfect. This command exists to be run before
+     * deploying, and answering "yes, mail works" from settings alone is exactly
+     * the kind of confident wrong answer it is meant to catch.
+     *
+     * Nothing is sent. The dialogue stops after AUTH, so this costs no quota
+     * and lands in nobody's inbox.
+     *
+     * @return array{0: string, 1: string, 2: string}
+     */
+    private function smtpHandshake(): array
+    {
+        $consequence = 'Config can look perfect while the password is wrong, expired, or port 587 is blocked';
+
+        $mailer = (string) config('mail.default');
+        $transport = config('mail.mailers.'.$mailer.'.transport');
+
+        // Only smtp has a handshake to make. A future ses/postmark deployment
+        // is an API key, not a socket, and would need its own probe.
+        if ($transport !== 'smtp') {
+            return ['SMTP handshake', 'SKIP (transport '.(is_string($transport) ? $transport : 'unknown').')', $consequence];
+        }
+
+        try {
+            /*
+             * Built directly rather than through EsmtpTransportFactory, which
+             * declares TransportInterface -- and that interface has no start(),
+             * stop() or setLocalDomain(). The concrete class is what this needs
+             * and what it should therefore ask for.
+             *
+             * The third argument is IMPLICIT tls, not "use encryption": false
+             * still upgrades with STARTTLS when the server advertises it, which
+             * is the 587 path. Only MAIL_SCHEME=smtps on 465 wants true.
+             */
+            $connection = new EsmtpTransport(
+                (string) config('mail.mailers.'.$mailer.'.host'),
+                (int) config('mail.mailers.'.$mailer.'.port'),
+                ((string) config('mail.mailers.'.$mailer.'.scheme')) === 'smtps',
+            );
+
+            $username = (string) config('mail.mailers.'.$mailer.'.username');
+
+            $connection->setUsername($username);
+            $connection->setPassword((string) config('mail.mailers.'.$mailer.'.password'));
+            $connection->setLocalDomain((string) config('mail.mailers.'.$mailer.'.local_domain'));
+
+            /*
+             * The same ceiling the application sends under. Without it this
+             * inherits the stream default and a host that silently drops
+             * outbound 587 -- the common cloud-provider posture, and precisely
+             * what this row exists to catch -- hangs the whole command instead
+             * of reporting the fault.
+             */
+            $stream = $connection->getStream();
+
+            // Narrowed because setTimeout() is SocketStream's, not
+            // AbstractStream's -- the other implementation is ProcessStream,
+            // which sendmail uses and which has no socket to bound.
+            if ($stream instanceof SocketStream) {
+                $stream->setTimeout((float) config('mail.mailers.'.$mailer.'.timeout', 15));
+            }
+
+            // start() runs connect + EHLO + STARTTLS + AUTH, and stops there.
+            $connection->start();
+            $connection->stop();
+
+            /*
+             * Symfony's handleAuth() returns immediately on an empty username,
+             * so a connection that authenticated NOTHING completes cleanly and
+             * would otherwise be reported as proof the credentials work. On
+             * Gmail that configuration cannot send at all.
+             */
+            if ($username === '') {
+                return ['SMTP handshake', 'NO (connected, but MAIL_USERNAME is unset so nothing authenticated)', $consequence];
+            }
+
+            return ['SMTP handshake', 'OK authenticated', $consequence];
+        } catch (Throwable $e) {
+            /*
+             * Deliberately truncated. Gmail's rejection quotes the dialogue
+             * back, and this output gets pasted into handover notes and
+             * screenshots -- the first line names the fault without reprinting
+             * the credential.
+             */
+            $first = trim(strtok($e->getMessage(), "\n") ?: 'failed');
+
+            return ['SMTP handshake', 'NO ('.mb_strimwidth($first, 0, 60, '...').')', $consequence];
+        }
     }
 
     /** @return list<array{0: string, 1: string, 2: string}> */

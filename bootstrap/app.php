@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Fortify\CreateNewUser;
 use App\Exceptions\AlreadySignedException;
 use App\Exceptions\IllegalTransitionException;
 use App\Exceptions\StaleWorkflowStateException;
@@ -10,14 +11,17 @@ use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\ThrottlePublicRegistration;
+use App\Models\User;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -72,6 +76,84 @@ return Application::configure(basePath: dirname(__DIR__))
             return $request->expectsJson()
                 ? response()->json(['message' => $e->getMessage()], 409)
                 : back()->withErrors(['action' => $e->getMessage()]);
+        });
+
+        /*
+         * Outgoing mail failed. A refusal to show the user, not a 500.
+         *
+         * Until MAIL_MAILER became smtp this could not happen: `log` and
+         * `array` accept everything, so no send ever threw and no call site
+         * needed a catch. A real transport can fail for entirely ordinary
+         * reasons -- Gmail rate-limits the account, the App Password is
+         * revoked, the host loses DNS for a minute -- and every one of those
+         * used to surface as a crash page.
+         *
+         * The reset flow is the reason this is centralised rather than a
+         * try/catch per controller. Fortify owns `password.email`, and
+         * PasswordBroker mints and STORES the token before it sends: on a
+         * transport failure the row in `password_reset_tokens` is already
+         * committed, config/auth.php's 60-second `throttle` then refuses the
+         * retry, and the user is left staring at a 500 with a live token they
+         * were never given. The message below tells them the truth and points
+         * at the same fallback the mail-off page does.
+         *
+         * Deliberately NOT sending mail is not this: HelpController catches its
+         * own send so it can keep the ticket it already wrote to the log, and
+         * RequireOutgoingMail still refuses the reset POST outright when the
+         * transport cannot deliver at all.
+         */
+        $exceptions->render(function (TransportExceptionInterface $e, Request $request) {
+            Log::error('Outgoing mail failed', [
+                'route' => $request->route()?->getName(),
+                // The message only; the exception's context can carry the SMTP
+                // dialogue, and on an auth failure that dialogue quotes the
+                // credential back.
+                'error' => $e->getMessage(),
+            ]);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Email could not be sent right now. Please try again shortly.',
+                ], 502);
+            }
+
+            /*
+             * Registration is the one flow where the account already exists by
+             * the time the verification mail fails. Sending them back to the
+             * form would invite a duplicate-email error on their own new
+             * account, so they go forward to the notice screen, which carries
+             * a Resend button.
+             */
+            if ($request->routeIs('register.store')) {
+                /*
+                 * Sign them in on the way past, because Fortify has not yet.
+                 * RegisteredUserController fires the Registered event -- which
+                 * is what sends the mail and throws -- BEFORE $guard->login(),
+                 * so without this the redirect below lands on `auth`-gated
+                 * verification.notice as a guest, bounces to /login, and the
+                 * flash is consumed by that hop. The user would see a bare
+                 * login page and retry the form, only to be told their own
+                 * brand-new address is taken.
+                 */
+                $registered = app()->bound(CreateNewUser::REGISTERED)
+                    ? app()->make(CreateNewUser::REGISTERED)
+                    : null;
+
+                if ($registered instanceof User) {
+                    Auth::login($registered);
+                }
+
+                return redirect()->route('verification.notice')->with(
+                    'status',
+                    'Your account was created, but the verification email could not be sent. '.
+                    'Use Resend below, or ask your administrator.',
+                );
+            }
+
+            return back()->withErrors([
+                'email' => 'Email could not be sent right now. Please try again shortly, '.
+                    'or ask your administrator to set a new password for you.',
+            ]);
         });
 
         /*

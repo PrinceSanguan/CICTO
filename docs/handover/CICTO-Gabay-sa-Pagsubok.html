@@ -290,6 +290,12 @@
         Kapag mali, may lalabas na pulang mensahe sa ilalim ng email —
         hindi po dapat mag-error o mag-blangko ang screen.
     </div>
+    <div class="note">
+        May <strong>Forgot Password</strong> po sa page na ito, at
+        <strong>gumagana na ito</strong> — nakakapagpadala na po ng email ang
+        sistema mula noong Agosto 23. Kailangan po nito ng account na tunay ang
+        email address, kaya nasa <strong>5.1b</strong> ang pagsubok dito.
+    </div>
 </div>
 
 <div class="test">
@@ -452,7 +458,7 @@
     <ol class="steps">
         <li>Sa gilid, pindutin ang <strong>Manage Users</strong>.</li>
         <li>Pindutin ang <strong>Add New Admin</strong>.</li>
-        <li>Punan ang pangalan, bagong email, piliin ang Role at Office,
+        <li>Punan ang pangalan at ang email address, piliin ang Role at Office,
             maglagay ng malakas na password.</li>
         <li>Pindutin ang <strong>Create account</strong>.</li>
         <li>Mag-log out, tapos subukang mag-log in gamit ang bagong account.</li>
@@ -462,10 +468,16 @@
         at agad na makakapag-log in.
     </div>
     <div class="warn">
-        <strong>Paalala:</strong> <strong>Walang ipapadalang email</strong> sa
-        bagong kawani — hindi po nagpapadala ng password ang sistemang ito sa
-        email kahit kailan (tingnan ang Bahagi 7). Kayo po mismo ang magbibigay
-        ng password sa kanila.
+        <strong>Paalala:</strong> <strong>Walang imbitasyong ipapadala sa
+        email</strong> sa bagong kawani, at kailanman po ay hindi ipinapadala sa
+        email ang password — kayo po mismo ang magbibigay nito sa kanila
+        (tingnan ang Bahagi 7.1). Magagamit agad po ang account na ito nang
+        hindi na kailangang kumpirmahin ang email address, dahil kayo mismo ang
+        nag-type ng address na iyon.
+    </div>
+    <div class="note">
+        <strong>Gamitin po ang tunay na email address</strong> na kaya ninyong
+        buksan sa hakbang 3. Kakailanganin po ito sa <strong>5.1b</strong>.
     </div>
 </div>
 
@@ -492,7 +504,8 @@
     <div class="expect">
         <strong>Dapat mangyari:</strong> Gumagana ang bagong password. Hindi
         gumagana ang luma. May paalala sa itaas na kayo mismo ang magbibigay ng
-        password dahil walang ipinapadalang email.
+        password sa kanila — kahit gumagana na po ang email, hindi ipinapadala
+        doon ang password ninuman.
     </div>
     <ol class="steps">
         <li>Mag-log in ulit bilang <strong>super@cicto.test</strong> at bumalik
@@ -504,6 +517,88 @@
         button sa <em>inyong sariling</em> hanay. Sinasadya po ito — ang sarili
         ninyong password ay pinapalitan sa Settings, kung saan hinihingi muna
         ang kasalukuyan ninyong password.
+    </div>
+</div>
+
+<div class="test">
+    <h3>5.1b — Ang “Forgot Password” sa email (bago po ito)</h3>
+    <p>
+        Mula po noong <strong>Agosto 23</strong> ay nakakapagpadala na ng email
+        ang sistema, kaya <strong>gumagana na po ang “Forgot Password”</strong>.
+        Pakisubukan po ito nang maayos — ito po ang unang hahanapin ng inyong
+        kawani sa umagang hindi na sila makapasok sa account nila.
+    </p>
+    <p>
+        Kailangan po ng account na <strong>tunay ang email address</strong> at
+        kaya ninyong buksan. Ang limang pansubok na account po ay nagtatapos sa
+        <code>@cicto.test</code>, na hindi tunay na address — kaya gamitin po
+        ang account na ginawa ninyo sa 5.1 gamit ang sarili ninyong address.
+    </p>
+    <ol class="steps">
+        <li>Mag-log out, tapos sa Login page ay pindutin ang
+            <strong>Forgot Password</strong>.</li>
+        <li>Ilagay ang email address na iyon at pindutin ang <strong>Email
+            password reset link</strong>. Maaari pong tumagal ito nang isa o
+            dalawang segundo.</li>
+        <li>Buksan ang inyong inbox. Kung wala pa pagkalipas ng isang minuto,
+            tingnan po sa <em>junk</em> o <em>spam</em> folder.</li>
+        <li>Pindutin ang link sa mensahe, maglagay ng bagong password nang
+            dalawang beses, tapos i-save.</li>
+        <li>Mag-log in gamit ang bagong password.</li>
+        <li>Balikan po ang mensahe at pindutin ulit ang parehong link.</li>
+    </ol>
+    <div class="expect">
+        <strong>Dapat mangyari:</strong> Darating ang mensahe mula sa
+        <strong>Gmail account ng tanggapan ng CICTO</strong>. Dadalhin kayo ng link sa page
+        kung saan <em>kayo mismo</em> ang pipili ng bagong password — hindi po
+        ipinapadala sa email ang password ninuman. Sa pangalawang pindot,
+        hindi na po dapat gumana ang link: minsan lamang po itong magagamit, at
+        nawawalan ito ng bisa pagkalipas ng isang oras. Kapag humingi po kayo
+        ulit ng link agad-agad, pahihintayin po kayo nang mga isang minuto.
+        Sinasadya po ang tatlong ito.
+    </div>
+    <div class="warn">
+        <strong>Kung wala talagang dumating na mensahe, pakisabi po agad sa
+        amin.</strong> Depekto na po ito ngayon, hindi na “kilalang
+        limitasyon”. Tingnan lamang po muna ang junk folder, at tingnan din po
+        sa <em>Manage Users</em> kung tama ang pagkakasulat ng email address sa
+        account.
+    </div>
+    <div class="note">
+        <strong>Ang kawaning walang email, o hindi makabukas ng inbox niya,</strong>
+        ay may daan pa rin: kayo po mismo ang magtatakda ng password nila sa
+        <em>Manage Users</em>, gaya ng sinubukan ninyo sa 5.1a. Hindi po nawala
+        iyon, at iyon pa rin po ang tamang sagot para sa kanila.
+    </div>
+</div>
+
+<div class="test">
+    <h3>5.1c — Kailangan munang kumpirmahin ang email ng bagong nagparehistro</h3>
+    <p>
+        Sa ilalim po ng Login page ay may <strong>Register</strong> para sa
+        taong gagawa ng sarili niyang account. Mula Agosto 23, ang ganitong
+        account po ay <strong>hindi magagamit hangga’t hindi nakukumpirma ang
+        email address</strong> nito.
+    </p>
+    <ol class="steps">
+        <li>Mag-log out, pindutin ang <strong>Register</strong>, at gumawa ng
+            account gamit ang address na kaya ninyong buksan.</li>
+        <li>Bago buksan ang inbox, subukan po munang pumunta sa
+            <strong>Track Documents</strong>.</li>
+        <li>Ngayon po, buksan ang inbox at pindutin ang link sa mensahe.</li>
+    </ol>
+    <div class="expect">
+        <strong>Dapat mangyari:</strong> Bago pindutin ang link, hindi po kayo
+        papapasukin — mananatili kayo sa page na humihingi ng kumpirmasyon.
+        Pagkapindot, papasok na po kayo. Isa pa pong dapat malaman: ang account
+        na gumawa ng sarili niya ay <strong>wala pang opisina</strong>, kaya
+        hanggang hindi siya inilalagay ng administrator sa isang opisina ay
+        hindi siya makakapagpasok ng dokumento. Sinasadya rin po ito.
+    </div>
+    <div class="note">
+        Hindi po kasama rito ang mga account na kayo mismo ang gumawa sa
+        <strong>Manage Users</strong> — kayo po ang nag-type ng address, kaya
+        agad na po silang makakapag-log in.
     </div>
 </div>
 
@@ -573,34 +668,55 @@
 <p>
     Para po maging patas at malinaw: may ilang bahagi na <strong>sadyang
     hindi pa gumagana</strong> dahil may kailangan pa kaming impormasyon o
-    setup mula sa inyo. Hindi po ito mga depekto. Huwag na po ninyong
-    i-report ang mga ito.
+    setup mula sa inyo. Hindi po ito mga depekto, at hindi na po kailangang
+    i-report. Nakatala rin po rito ang mga <strong>naayos na</strong> mula nang
+    unang isulat ang gabay na ito — ang mga iyon po ay <strong>dapat nang
+    subukan</strong>, at pakisabi po sa amin kapag hindi gumana.
 </p>
 
-<h3>7.1 — Walang email, at hindi na po ito hinihintay</h3>
+<h3>7.1 — Gumagana na po ang email (nagbago noong Agosto 23)</h3>
 <p>
     Noong <strong>Agosto 20</strong> po ay sinabi ninyong hindi maaaring
-    magbigay ang CICTO ng email settings para sa sistemang ito. Malinaw pong
-    sagot iyon, at wala na pong nakabinbin dahil dito — ginawa na namin ang
-    kapalit na hiningi ninyo. Ito po ang ibig sabihin araw-araw:
+    magbigay ang CICTO ng email settings para sa sistemang ito, at ginawa na
+    namin ang kapalit na hiningi ninyo — ang pagtatakda ng password ng
+    administrator. Nananatili pong tama ang sagot na iyon, nandiyan pa rin ang
+    kapalit, at wala pong hinihintay sa inyo. Ang nagbago po ay ito: noong
+    <strong>Agosto 23, 2026</strong> ay nabigyan na ng sariling email account
+    ang sistema, at nasubukan na po namin ito sa tunay na mensaheng talagang
+    dumating. Kaya ang mga dating nakasulat dito bilang “walang email” ay
+    <strong>dapat nang subukan</strong>, hindi na laktawan:
 </p>
 <ul>
-    <li><strong>Ang “Forgot Password” ay nagsasabi nang magtanong sa inyo.</strong>
-        Hindi na po ito humihingi ng email address, dahil walang maipapadala.
-        Malinaw pong nakasulat sa page na hindi makakapagpadala ng email ang
-        server at may administrator na magtatakda ng bagong password.</li>
-    <li><strong>Kayo na po mismo ang magtatakda ng bagong password, sa loob ng
-        sistema.</strong> Pumunta sa <em>Manage Users</em>, hanapin ang tao, at
-        pindutin ang <strong>Set password</strong>. Hihingin muna ang
-        <em>inyong sariling</em> password, tapos ang bago nilang password nang
-        dalawang beses. Sabihin po ninyo sa kanila nang personal o sa telepono
-        — hindi po ito ipinapadala sa email ninuman. Pakisubukan po ito; bago
-        ito.</li>
-    <li><strong>Ang mga support ticket ay naitatala lamang</strong> sa loob ng
-        sistema, hindi naipapadala sa email. Sinasabi po ito nang malinaw ng
-        sistema mismo kapag nag-submit kayo.</li>
+    <li><strong>Gumagana na po ang “Forgot Password”.</strong> Humihingi na
+        ulit ito ng email address at nagpapadala ng link na siyang magbibigay-daan
+        sa tao na <em>siya mismo</em> ang pumili ng bagong password.
+        Pakisubukan po ito — nasa <strong>5.1b</strong> ang hakbang-hakbang.
+        Kung walang dumating na link, <strong>depekto na po iyon</strong> at
+        nais po naming malaman.</li>
+    <li><strong>Ang gumagawa ng sarili niyang account ay kailangang kumpirmahin
+        muna ang email address niya.</strong> Sinuman pong gumamit ng
+        <strong>Register</strong> ay padadalhan ng mensahe, at hindi niya
+        magagamit ang sistema hangga’t hindi niya napipindot ang link doon
+        (nasa <strong>5.1c</strong> ang pagsubok). Hindi po kasama rito ang mga
+        account na kayo mismo ang gumawa sa <em>Manage Users</em> — agad na po
+        iyong makakapag-log in.</li>
+    <li><strong>Kaya pa rin po ninyong magtakda mismo ng password, at may
+        pagkakataong iyon pa rin ang tama.</strong> Pumunta sa
+        <em>Manage Users</em>, hanapin ang tao, at pindutin ang <strong>Set
+        password</strong>. Hihingin muna ang <em>inyong sariling</em> password,
+        tapos ang bago nilang password nang dalawang beses. Ito po ang sagot
+        para sa kawaning walang email address o hindi makabukas ng inbox niya.
+        Sabihin po ninyo sa kanila nang personal o sa telepono — hindi po
+        nagpapadala ng password sa email ang sistema kahit kailan, kahit
+        gumagana na ang email.</li>
+    <li><strong>Ang mga support ticket ay naipapadala na rin sa email</strong>
+        ng opisina, bukod pa sa naitatala pa rin ang mga ito sa loob ng
+        sistema. Kapag hindi po nakalusot ang pagpapadala, sasabihin po nang
+        malinaw na naitala ngunit hindi naipadala, at ibibigay ang numero ng
+        telepono — hindi po ito basta mag-e-error.</li>
     <li><strong>Walang email na abiso</strong> kapag may dumating na bagong
-        dokumento sa inyong opisina. Nakikita pa rin po ito sa bell sa loob ng
+        dokumento sa inyong opisina. Hindi po nagbago ito, at wala rin po
+        kaming balak baguhin — nakikita pa rin ito sa bell sa loob ng
         sistema.</li>
 </ul>
 <div class="warn">
@@ -618,9 +734,12 @@
     </ul>
 </div>
 <p>
-    Kung sakaling magtayo po ang lungsod ng sariling email account para sa
-    sistemang ito, sabihin lang po ninyo sa amin at ikokonekta namin. Walang
-    kailangang baguhin muna sa nagagawa na.
+    Isa pa pong dapat malaman: ang ginagamit na email account ay isang libreng
+    mailbox, na may limitasyong humigit-kumulang <strong>500 mensahe kada
+    araw</strong> — malayong-malayo po iyon sa aabutin ng sistemang ito. Kung
+    nais po ninyong ang opisyal na address ng lungsod (baliwag.gov.ph) ang
+    gamiting pinagmumulan ng mga mensahe, sabihin lang po ninyo sa amin at
+    papalitan namin. Walang kailangang baguhin muna sa nagagawa na.
 </p>
 
 <h3>7.2 — Ang camera sa QR scanner</h3>
@@ -716,11 +835,15 @@
         </tr>
         <tr>
             <td><strong>SMTP / email details</strong></td>
-            <td><strong>Nasagot na po, at wala nang kailangan pa.</strong> Ang
-                sabi po ninyo ay hindi makakapagbigay ang CICTO ng email
-                settings, at hiniling ninyong gumawa kami ng paraan para ang
-                administrator na mismo ang magtakda ng password ng iba. Nagawa
-                na po ito at nasa <em>Manage Users</em> (Bahagi 7.1).</td>
+            <td><strong>Nasagot na po noong Agosto 20, 2026; may bagong
+                pangyayari noong Agosto 23.</strong> Ang sabi po ninyo ay hindi
+                makakapagbigay ang CICTO ng email settings, at hiniling ninyong
+                gumawa kami ng paraan para ang administrator na mismo ang
+                magtakda ng password ng iba. Nagawa na po ito, nasa
+                <em>Manage Users</em>, at mananatili po ito. Simula naman po
+                noong <strong>Agosto 23</strong> ay may sariling email account
+                na ang sistema, kaya gumagana na rin po ang password reset sa
+                email (Bahagi 7.1). Wala na pong kailangan pa sa inyo.</td>
         </tr>
         <tr>
             <td><strong>Gaano katagal itatago ang mga file</strong></td>

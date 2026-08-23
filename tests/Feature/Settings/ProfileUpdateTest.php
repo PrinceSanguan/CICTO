@@ -4,11 +4,34 @@ namespace Tests\Feature\Settings;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class ProfileUpdateTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        /*
+         * These cases describe a host that can send, and now have to say so.
+         *
+         * phpunit.xml pins MAIL_MAILER=array, which OutgoingMail counts as no
+         * transport. As of 2026-08-23 ProfileController only clears
+         * `email_verified_at` on an email change when a transport exists --
+         * because User implements MustVerifyEmail now, so clearing it on a host
+         * that can never re-verify locks the account out of every protected
+         * screen with no way back. `test_profile_information_can_be_updated`
+         * asserts the column IS cleared, which is the mail-ON answer.
+         *
+         * The mail-OFF half is pinned in
+         * Tests\Feature\Auth\VerifiedMiddlewareTest.
+         */
+        config()->set('mail.default', 'smtp');
+        Notification::fake();
+    }
 
     public function test_profile_page_is_displayed()
     {

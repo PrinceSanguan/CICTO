@@ -45,7 +45,23 @@ return [
             'port' => env('MAIL_PORT', 2525),
             'username' => env('MAIL_USERNAME'),
             'password' => env('MAIL_PASSWORD'),
-            'timeout' => null,
+            /*
+             * Bounded, where the framework default is null.
+             *
+             * null does not mean "no timeout" -- it means Symfony falls back to
+             * PHP's default_socket_timeout, which is 60 seconds on most builds
+             * and unlimited on some. These sends are inline (see
+             * routes/console.php for why nothing is queued), so that ceiling is
+             * how long a password-reset POST can hold a php-fpm worker open
+             * while Gmail is unreachable. Fifteen seconds is well clear of a
+             * normal Gmail handshake, which is one to three.
+             *
+             * `?:` rather than env()'s own default, which only fires when the
+             * key is ABSENT: `MAIL_TIMEOUT=` present-but-empty returns "" and
+             * casts to 0, which Symfony reads as no limit -- the exact value
+             * this replaced, reintroduced by a blank line in .env.
+             */
+            'timeout' => (int) (env('MAIL_TIMEOUT') ?: 15),
             'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
         ],
 

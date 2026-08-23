@@ -19,9 +19,19 @@ namespace App\Support;
  *
  * CLIENT QUESTION B3, answered 2026-08-20: CICTO will not supply SMTP
  * credentials, and recommends an external service such as Google SMTP instead.
- * So `log` remains what ships, this keeps returning false until an operator
- * sets MAIL_MAILER, and the administrator-set-password module on
- * /super-admin/users is the supported way back into a locked-out account.
+ * So `log` was what shipped, this returned false everywhere, and the
+ * administrator-set-password module on /super-admin/users was the only way back
+ * into a locked-out account.
+ *
+ * SUPERSEDED 2026-08-23: an operator took that recommendation and pointed the
+ * host at a Gmail account with a 16-character App Password, verified by an
+ * authenticated handshake and by a message that arrived. On that host this
+ * returns true and the screens that ask it say so. B3 itself still stands --
+ * the credentials came from the operator, not from the client -- and `log` is
+ * still what .env.example ships, so every false branch downstream of this is
+ * live code rather than history. The administrator-set-password module remains
+ * a supported way into a locked-out account, and the right advice for a user
+ * who cannot receive mail at all; it is no longer the only one.
  */
 final class OutgoingMail
 {

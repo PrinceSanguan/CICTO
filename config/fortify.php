@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\RequireOutgoingMail;
+use App\Http\Middleware\ThrottlePasswordResetRequests;
 use Laravel\Fortify\Features;
 
 return [
@@ -109,7 +110,7 @@ return [
      * `password.email`, where it refuses to mint a reset token this server
      * cannot deliver -- see the class for what that was costing.
      */
-    'middleware' => ['web', RequireOutgoingMail::class],
+    'middleware' => ['web', RequireOutgoingMail::class, ThrottlePasswordResetRequests::class],
 
     /*
     |--------------------------------------------------------------------------

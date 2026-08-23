@@ -211,7 +211,7 @@ above 1,000 rows for PDF and 25,000 for XLSX.
 | 1 | Documents on a **private** disk, never `public/` — no `storage` symlink | Phase 1 |
 | 2 | **Flip `config/filesystems.php` local disk to `serve => false`** — it is still `true`, registering a live `GET /storage/{path}` route that bypasses `DocumentPolicy` | ⚠️ outstanding |
 | 3 | Every download policy-gated, `->scopeBindings()`, and audited | Phase 1/3 |
-| 4 | `app_settings.setting_value` **unconditionally** encrypted via Laravel's `encrypted` cast on a TEXT column — no per-row `is_encrypted` flag to forget. This is where SMTP credentials will live | Phase 3 |
+| 4 | `app_settings.setting_value` **unconditionally** encrypted via Laravel's `encrypted` cast on a TEXT column — no per-row `is_encrypted` flag to forget. Planned as the home for SMTP credentials; when mail was actually configured on 2026-08-23 they went into `.env` instead, so the table holds workflow settings and the encryption stands ready for whatever credential lands next | Phase 3 |
 | 5 | Never encrypt anything searchable (D10) | — |
 | 6 | `SESSION_ENCRYPT=true` (database session driver), `SESSION_SAME_SITE=lax` | Phase 3 |
 | 7 | `SESSION_SECURE_COOKIE=true` — **deferred to the hour TLS is confirmed.** Setting it optimistically breaks login over plain HTTP; leaving it off means session cookies travel in the clear over LGU wifi | blocked on A1 |

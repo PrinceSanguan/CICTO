@@ -261,6 +261,11 @@ The cheapest honest implementation, assuming B5 lands on "include it":
 > If there is no mail service, this page cannot function as named, and that is a
 > scope reduction that must be acknowledged in writing rather than shipped as a
 > form that silently discards submissions.
+>
+> **Unblocked 2026-08-23.** The operator configured Google SMTP, so the ticket is
+> delivered and the page does function as named. The warning shipped anyway and
+> still fires — see *§23 Help & Support* below — because it is what a deployment
+> without a mailer gets, and that is still a deployment somebody may make.
 
 A stored-ticket model with an admin inbox, status and replies is a separate
 feature and a §5 re-quote.
@@ -380,8 +385,8 @@ Six articles live in `app/Support/Help/KnowledgeBase.php`. A test asserts every
 listed article actually opens and that each belongs to a declared category — a
 knowledge base whose links 404 is worse than an empty one.
 
-**The B3 warning is honoured rather than papered over.** `MAIL_MAILER=log` means
-nothing leaves the server, so:
+**The B3 warning is honoured rather than papered over.** As built, `MAIL_MAILER=log`
+meant nothing left the server, so:
 
 - the ticket page shows the warning **before** the form, not after submitting —
   the user needs to know while deciding whether to type out their problem;
@@ -396,6 +401,19 @@ pins that. It is the load-bearing test in the file.
 The ticket form takes no name or email field — both come from the signed-in
 account. A form that lets you type somebody else's address is a way to send mail
 as them, and this one posts to a municipal inbox.
+
+**2026-08-23 — mail is configured, and the honesty moved to the branch beside it.**
+With `MAIL_MAILER=smtp` the warning does not render, the ticket is delivered, and the
+page reports a real success. Everything above is untouched and still fires for a
+deployment with no mailer. What had no answer at all was the case in between — a
+transport that exists and then fails — which arrived as a 500 the moment one could.
+`HelpController` catches `TransportExceptionInterface` on the send and reports *"your
+ticket was recorded, but the email could not be delivered just now"* with the office
+phone number, which is the same warning the no-transport branch gives and for the same
+reason: the ticket is logged either way, and a Gmail hiccup is not the user's problem
+to read a stack trace about. `resources/views/mail/support-ticket.blade.php` also
+stopped HTML-escaping a `text/plain` body, which had been delivering an apostrophe in
+somebody's problem description as `&#039;`.
 
 ### §16 Archive Management
 
@@ -508,8 +526,11 @@ Two commands were written because the runbook needed them to exist:
 - **`cicto:host-check`** probes PHP, `proc_open`, ZipArchive, GD, upload limits,
   both disks, the mailer, the scan URL and the backup driver, and prints what
   each missing capability costs. It exits 0 either way — it is a report, not a
-  gate. On this machine it correctly reports the three real gaps: no outgoing
-  mail, a non-HTTPS scan URL, and no restore ever drilled.
+  gate. When this was written it correctly reported the three real gaps on this
+  machine: no outgoing mail, a non-HTTPS scan URL, and no restore ever drilled.
+  Two of the three are still open. The mail row has read OK since 2026-08-23, and
+  the command grew an **SMTP handshake** row that really connects and
+  authenticates, so "OK smtp" can no longer be earned by a wrong App Password.
 - **`cicto:create-super-admin`** prompts for a hidden password rather than
   taking one from a file, enforces a 12-character minimum, and creates the
   account verified so nobody is locked out of a new deployment waiting on an
@@ -580,7 +601,9 @@ of this system has been doing that. The page now says it cannot send email and
 names the administrator; `RequireOutgoingMail` refuses the POST, with the same
 message for a known and an unknown address so it cannot be used to enumerate
 accounts; and the `log` mailer writes to its own 7-day channel via
-`MAIL_LOG_CHANNEL` rather than into `stack`.
+`MAIL_LOG_CHANNEL` rather than into `stack`. *(Superseded 2026-08-23 — see* Mail
+turned on *below. The guard is still in the stack; it no longer fires, because the
+mailer is real.)*
 
 **A Google SMTP path for an LGU that wants one.** `.env.example` and the runbook
 §3 both carry the recipe, including the two things that bite: an App Password
@@ -669,14 +692,18 @@ built* above, because both were fixed into the feature rather than after it.
 ### Not done, deliberately
 
 - **No SMTP is configured anywhere.** The client said they will not supply it;
-  inventing a service would be worse than the honest absence.
+  inventing a service would be worse than the honest absence. *(Superseded
+  2026-08-23: the operator configured Google SMTP on an account of their own. The
+  client still supplies nothing — see* Mail turned on *below.)*
 - **No in-app messaging.** Offered at our discretion, and declined: the client
   noted the existing DTS has none, so it is not a gap against the incumbent.
   §12 stays in-app *notifications*, which is a different feature and already
   built.
 - **No emailed password reset built on top of a service we stand up.** Permitted
   by the answer, not required by it, and it would need an account somebody pays
-  for and rotates.
+  for and rotates. *(Superseded 2026-08-23: the operator provided exactly that
+  account, and rotating it is theirs to own. Fortify's emailed reset works; the
+  administrator panel stays as the route for anyone who cannot receive mail.)*
 - **Second factors are not cleared by default.** A forgotten password and a
   stolen account want opposite answers, so it is a decision the administrator
   makes and the audit line records either way.
@@ -684,6 +711,83 @@ built* above, because both were fixed into the feature rather than after it.
   "set a new password" from the UI and `cicto:user --deactivate` from the shell.
   That gap predates this work and is named in the runbook; it is worth pricing
   alongside the role and office screens rather than absorbing.
+
+---
+
+## Mail turned on — 23 Aug 2026
+
+Three days after B3 closed against us, the operator answered the half of it the
+client had left open. *"We highly recommend using alternative email services, such
+as Google SMTP"* was advice, not an obstacle, and somebody took it: a Gmail account
+with 2-Step Verification, a 16-character App Password, `MAIL_MAILER=smtp` over
+STARTTLS on port 587, and `MAIL_FROM_ADDRESS` equal to the authenticated account.
+Confirmed with a real handshake and a real delivered message rather than a config
+read. `cicto:host-check` reports *Outgoing mail: OK smtp*, *Mail From address: OK*,
+*SMTP handshake: OK authenticated*.
+
+**Nothing about the client's answer changed.** CICTO still supply no credentials and
+no configuration, and the administrator-set-password module is still what they asked
+for in place of email. What changed is that it is no longer the only way back into an
+account.
+
+### What turning it on exposed
+
+The mail-off configuration had been carrying more load than anybody had written down.
+
+**The `verified` middleware was a no-op, and nothing would have revealed it.** `User`
+did not implement `MustVerifyEmail`, so the `verified` middleware on all six protected
+route groups matched nothing: anyone could self-register and reach every authenticated
+screen with an address they had never proved they own. That was survivable only
+because accounts were created pre-verified and there was no verification mail to send
+anyway. The interface is declared now, registration sends the link, and the middleware
+finally means what every route file says it means. All five existing users were
+already verified, so nobody was locked out. `docs/qa/FINDINGS.md` had carried this as
+an open MEDIUM since 11 August; it is ticked.
+
+**`POST /forgot-password` had no rate limiter, and had not needed one.**
+`RequireOutgoingMail` refused every request before Fortify's broker ran, so the missing
+mailer *was* the throttle, and turning mail on removed it without anyone touching a
+file. `config/auth.php`'s `'throttle' => 60` does not cover this: it is keyed on the
+email address, so it stops one address being mailed twice a minute and does nothing at
+all about one client walking a staff list. N known addresses is N real messages a
+minute out of the operator's own Gmail, against a free-account ceiling of roughly 500
+recipients a day — after which Gmail refuses everything for 24 hours and takes support
+tickets and verification mail down with it. `ThrottlePasswordResetRequests` caps it at
+10 per IP per hour, registered beside `ThrottlePublicRegistration` for the same reason:
+Fortify declares the route itself and exposes no limiter key for it.
+
+**A dead SMTP connection was a 500.** `bootstrap/app.php` now renders
+`TransportExceptionInterface` as a field error on the form the user is looking at, and
+for `register.store` as a redirect to the verification notice — the account was
+created, the message was not sent, and "resend" is the right next move rather than a
+stack trace. `HelpController` catches the same exception on the ticket send.
+
+**`config/mail.php` had no timeout.** `'timeout' => null` does not mean *no limit*;
+Symfony falls back to PHP's `default_socket_timeout`, 60 seconds on most builds. Mail
+here is sent inline, and `SESSION_DRIVER=database` means a wedged connection held the
+user's session lock for that whole minute. It is `MAIL_TIMEOUT` now, defaulting to 15.
+
+**`cicto:host-check` could not tell a good App Password from a bad one.** It read
+`mail.default` and printed "OK smtp", which a typo'd credential passes. It opens a real
+STARTTLS connection and authenticates now, sending nothing.
+
+**The support-ticket template was HTML-escaping a `text/plain` body**, so an apostrophe
+in somebody's problem description arrived as `&#039;`.
+
+### Still true, and worth saying plainly
+
+- **Mail is sent inline, not queued.** There is no worker and nothing runs
+  `queue:work`, so a queued message would silently never send — the one failure this
+  build refuses to ship. The cost is ~1–3 s on the requests that send, bounded by the
+  15-second timeout.
+- **The scheduler still needs its single crontab line** for deadline sweeps, signature
+  checks and backups. A working mailer is not a working scheduler.
+- **The Gmail account is a free one**: roughly 500 recipients a day, and exceeding it
+  disables sending for 24 hours.
+- **§12 notification email is still out of scope and still a change order.** A working
+  mailer makes it possible, not included.
+- **The App Password lives in `.env` and nowhere else.** It is not in this repository,
+  must not be put there, and has to be rotated if the account changes hands.
 
 ---
 
@@ -695,8 +799,10 @@ answer: CICTO will not supply email credentials or configuration, recommends an
 external service if the LGU wants one, and asked in their place for "a module
 that allows the system administrator to reset the password of any user". That
 module is built, and with it the honesty guard on a Forgot Password page that
-had been reporting success for a link it never sent. Three questions moved on
-2026-08-18 without closing:
+had been reporting success for a link it never sent. **On 2026-08-23 the operator
+stood up Google SMTP themselves** — which changes what the system does without
+changing a word of the client's answer; see *Mail turned on* above. Three questions
+moved on 2026-08-18 without closing:
 
 - **A4** supplied the 53 offices with their aliases and the 43 document types, but
   not the turnaround days — that part went to the City Archive and Records Office,
