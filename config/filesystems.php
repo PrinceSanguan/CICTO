@@ -1,5 +1,7 @@
 <?php
 
+use App\Support\CloudDisk;
+
 return [
 
     /*
@@ -56,8 +58,9 @@ return [
          * the missing bytes.
          *
          * On Laravel Cloud set CICTO_DOCUMENTS_DRIVER=s3 and attach a PRIVATE
-         * Laravel Object Storage bucket; Cloud injects the AWS_* credentials
-         * itself. Do not add 'visibility' => 'public' -- the bucket is
+         * Laravel Object Storage bucket. Cloud does NOT inject AWS_*; it sets
+         * LARAVEL_CLOUD_DISK_CONFIG, which CloudDisk reads below.
+         * Do not add 'visibility' => 'public' -- the bucket is
          * Cloudflare R2, which rejects per-object ACLs with NotImplemented and
          * governs access at the bucket level instead.
          *
@@ -71,12 +74,21 @@ return [
             'root' => storage_path('app/documents'),
 
             // s3 / R2. Ignored by the local driver.
-            'key' => env('AWS_ACCESS_KEY_ID'),
-            'secret' => env('AWS_SECRET_ACCESS_KEY'),
-            'region' => env('AWS_DEFAULT_REGION', 'auto'),
-            'bucket' => env('CICTO_DOCUMENTS_BUCKET', env('AWS_BUCKET')),
-            'endpoint' => env('AWS_ENDPOINT'),
-            'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
+            //
+            // Falls back to whatever bucket Laravel Cloud attached, so a Cloud
+            // host needs no AWS_* copied out of LARAVEL_CLOUD_DISK_CONFIG by
+            // hand. With more than one bucket attached, name the one this disk
+            // should use in CICTO_DOCUMENTS_CLOUD_DISK -- CloudDisk refuses to
+            // guess, because guessing wrong puts private documents in the
+            // bucket Cloud serves over a public URL.
+            ...CloudDisk::s3(env('LARAVEL_CLOUD_DISK_CONFIG'), env('CICTO_DOCUMENTS_CLOUD_DISK'), [
+                'key' => env('AWS_ACCESS_KEY_ID'),
+                'secret' => env('AWS_SECRET_ACCESS_KEY'),
+                'region' => env('AWS_DEFAULT_REGION'),
+                'bucket' => env('CICTO_DOCUMENTS_BUCKET', env('AWS_BUCKET')),
+                'endpoint' => env('AWS_ENDPOINT'),
+                'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT'),
+            ]),
 
             'serve' => false,
             'throw' => true,
@@ -99,13 +111,17 @@ return [
             // local
             'root' => storage_path('app/backups'),
 
-            // s3 / R2. Ignored by the local driver.
-            'key' => env('AWS_ACCESS_KEY_ID'),
-            'secret' => env('AWS_SECRET_ACCESS_KEY'),
-            'region' => env('AWS_DEFAULT_REGION', 'auto'),
-            'bucket' => env('CICTO_BACKUP_BUCKET', env('AWS_BUCKET')),
-            'endpoint' => env('AWS_ENDPOINT'),
-            'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
+            // s3 / R2. Ignored by the local driver. Same Cloud fallback as the
+            // documents disk above; CICTO_BACKUP_CLOUD_DISK names the bucket
+            // when several are attached.
+            ...CloudDisk::s3(env('LARAVEL_CLOUD_DISK_CONFIG'), env('CICTO_BACKUP_CLOUD_DISK'), [
+                'key' => env('AWS_ACCESS_KEY_ID'),
+                'secret' => env('AWS_SECRET_ACCESS_KEY'),
+                'region' => env('AWS_DEFAULT_REGION'),
+                'bucket' => env('CICTO_BACKUP_BUCKET', env('AWS_BUCKET')),
+                'endpoint' => env('AWS_ENDPOINT'),
+                'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT'),
+            ]),
 
             'serve' => false,
             'throw' => true,

@@ -78,16 +78,32 @@ So, before anybody registers a real document:
 CICTO_DOCUMENTS_DRIVER=s3
 CICTO_BACKUP_DISK_DRIVER=s3
 
-# Only needed when the two buckets differ, which is the arrangement you want.
-# Each defaults to AWS_BUCKET, and leaving both unset is what silently puts the
-# backups in the documents bucket.
-CICTO_BACKUP_BUCKET=<the backup bucket>
-# CICTO_DOCUMENTS_BUCKET=<the documents bucket>
+# Which attached bucket each disk uses. Required once more than one is
+# attached, which is the arrangement you want -- see §1.1 item 2.
+CICTO_DOCUMENTS_CLOUD_DISK=<the documents bucket's disk name>
+CICTO_BACKUP_CLOUD_DISK=<the backup bucket's disk name>
 ```
 
-Cloud injects `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_BUCKET` and
-`AWS_ENDPOINT` itself once a bucket is attached, so those four stay out of the
-env block in §3. Do not paste keys you were not given.
+**Cloud does not inject `AWS_BUCKET`, or any other `AWS_*` variable.** An
+earlier version of this runbook said it did, and that one sentence is worth the
+correction: it sets a single `LARAVEL_CLOUD_DISK_CONFIG` JSON describing every
+attached bucket, and its own bootstrap turns that into one disk named by each
+entry's `disk` key. The `documents` and `backups` disks are this application's
+own, so nothing filled their bucket in and the S3 adapter failed construction
+with `Argument #2 ($bucket) must be of type string, null given` — which reads
+as a missing credential rather than as two systems that never agreed on a name.
+
+`App\Support\CloudDisk` now reads that JSON directly, so an attached bucket
+works with nothing copied by hand, and keeps working when Cloud rotates the
+keys. The disk name in the two variables above is the `"disk"` value in the
+JSON. With exactly one bucket attached you may leave them unset; with several,
+set them — CloudDisk refuses to guess rather than risk putting documents in the
+bucket Cloud serves over a public URL.
+
+On a host that is not Laravel Cloud, set `AWS_ACCESS_KEY_ID`,
+`AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT` and `AWS_BUCKET` (or the per-disk
+`CICTO_DOCUMENTS_BUCKET` / `CICTO_BACKUP_BUCKET`) as usual. Anything set
+explicitly wins over the attached bucket. Do not paste keys you were not given.
 
 Two things not to do:
 
