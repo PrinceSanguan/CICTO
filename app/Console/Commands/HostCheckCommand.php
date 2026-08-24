@@ -149,13 +149,21 @@ class HostCheckCommand extends Command
          * reads back inside one request -- so nothing else in this command
          * would ever notice. Name it here, because this is the command the
          * runbook tells an operator to run before committing to a host.
+         *
+         * BOTH disks, not just documents. This check covered `documents` alone
+         * for long enough to matter: a deployed environment ran with backups on
+         * the container's own disk while this table printed "Disk: backups | OK
+         * local" beside it, so every archive was destroyed by the next deploy
+         * and the one command written to say so said nothing.
          */
-        if (config('filesystems.disks.documents.driver') === 'local') {
-            $rows[] = [
-                'Documents durable?',
-                'CHECK',
-                'Local disk: fine on a VPS, TOTAL LOSS on Laravel Cloud or any container host',
-            ];
+        foreach (['documents' => 'Documents', 'backups' => 'Backups'] as $disk => $label) {
+            if (config("filesystems.disks.{$disk}.driver") === 'local') {
+                $rows[] = [
+                    "{$label} durable?",
+                    'CHECK',
+                    'Local disk: fine on a VPS, TOTAL LOSS on Laravel Cloud or any container host',
+                ];
+            }
         }
 
         return $rows;

@@ -46,7 +46,7 @@ use Throwable;
 class SeedStorageCommand extends Command
 {
     protected $signature = 'cicto:seed-storage
-                            {--force : Required in production, because this writes billable objects}
+                            {--force : Required in production, because this writes billable objects. Not needed with --dry-run}
                             {--dry-run : Report what would be written without writing anything}
                             {--limit=0 : Stop after this many documents (0 means no limit)}';
 
@@ -82,8 +82,15 @@ class SeedStorageCommand extends Command
             );
         }
 
-        if (app()->isProduction() && ! $this->option('force')) {
-            $this->components->error('Refusing to run in production without --force.');
+        /*
+         * A dry run is exempt. --force means "yes, write billable objects to
+         * production", and demanding it before a run that writes nothing made
+         * the safe way to preview this the same keystroke as the unsafe way to
+         * perform it -- so the preview got skipped, which is the opposite of
+         * what the guard is for.
+         */
+        if (! $dryRun && app()->isProduction() && ! $this->option('force')) {
+            $this->components->error('Refusing to run in production without --force. Add --dry-run to preview instead.');
 
             return self::FAILURE;
         }

@@ -84,6 +84,23 @@ class HandoverTest extends TestCase
         $this->artisan('cicto:host-check')->assertSuccessful();
     }
 
+    /**
+     * A local backups disk is as fatal on a container host as a local documents
+     * disk, and for a while only the second one was named. A deployed
+     * environment ran with "Disk: backups | OK local" printed beside archives
+     * that every deploy destroyed.
+     */
+    public function test_the_host_check_names_both_ephemeral_disks(): void
+    {
+        config()->set('filesystems.disks.documents.driver', 'local');
+        config()->set('filesystems.disks.backups.driver', 'local');
+
+        $this->artisan('cicto:host-check')
+            ->expectsOutputToContain('Documents durable?')
+            ->expectsOutputToContain('Backups durable?')
+            ->assertSuccessful();
+    }
+
     public function test_the_super_admin_command_creates_a_verified_active_super_admin(): void
     {
         $this->artisan('cicto:create-super-admin', [

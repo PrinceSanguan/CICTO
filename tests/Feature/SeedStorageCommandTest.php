@@ -132,4 +132,21 @@ class SeedStorageCommandTest extends TestCase
 
         $this->assertSame(0, DocumentFile::query()->count());
     }
+
+    /**
+     * The preview must not need the flag that means "yes, write to production".
+     *
+     * It did, and the effect was the obvious one: the safe way to look and the
+     * unsafe way to act were the same keystroke, so the operator went straight
+     * to --force on a disk that had never been proved writable.
+     */
+    public function test_a_dry_run_does_not_need_force_in_production(): void
+    {
+        $this->app->detectEnvironment(fn () => 'production');
+
+        $this->artisan('cicto:seed-storage --dry-run')->assertSuccessful();
+
+        $this->assertSame(0, DocumentFile::query()->count());
+        $this->assertEmpty(Storage::disk('documents')->allFiles());
+    }
 }
