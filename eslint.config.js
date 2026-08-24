@@ -106,6 +106,12 @@ export default [
         ignores: [
             'vendor',
             'node_modules',
+            // Claude Code worktrees are complete checkouts, vendor/ and node_modules
+            // included. The patterns above are anchored to the repo root, so they do
+            // not reach inside one -- and linting a whole second copy of the app
+            // produces enough results to overflow the stylish formatter, which fails
+            // as `RangeError: Invalid string length` rather than as a lint error.
+            '.claude/**',
             'public',
             // A standalone Node QA script, not application source: it runs
             // outside the browser and uses process/Buffer, which this config's

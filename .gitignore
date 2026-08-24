@@ -22,6 +22,9 @@ Homestead.yaml
 npm-debug.log
 yarn-error.log
 /auth.json
+# Claude Code scratch. Holds the git worktrees it creates, which are embedded
+# repositories -- committing one records a gitlink to a commit nobody else has.
+/.claude
 /.fleet
 /.idea
 /.nova
