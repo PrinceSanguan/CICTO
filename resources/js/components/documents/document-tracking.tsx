@@ -1,5 +1,4 @@
 import {
-    Building2,
     CalendarDays,
     Check,
     ChevronRight,
@@ -52,6 +51,99 @@ function stageIndex(status: string): number {
     }
 }
 
+/**
+ * The stages this document has NOT reached yet.
+ *
+ * The client's design draws the four-stage rail vertically as well as across
+ * the top: under the stages that happened, the ones still to come appear as
+ * empty grey rows with a blank duration. `isOpen` is what keeps that honest --
+ * a rejected or completed document has nothing still coming, and listing
+ * "Approved" and "Completed" beneath a rejection would be a claim the movement
+ * ledger never made.
+ */
+export function upcomingStages(status: string, isOpen: boolean): string[] {
+    if (!isOpen) {
+        return [];
+    }
+
+    return STAGES.slice(stageIndex(status) + 1).map((stage) => stage.label);
+}
+
+/**
+ * The document mark the design hangs in the card's left gutter, level with the
+ * stage rail rather than tucked against the heading.
+ *
+ * Drawn rather than pulled from the icon set: everything else on this screen is
+ * a 1.5px lucide outline, and the design's mark is a solid block with the page
+ * ruling knocked out of it in white and the corner folded. An outline glyph in
+ * its place read as a sixth control rather than the sheet's emblem.
+ */
+export function DocumentMark({ className }: { className?: string }) {
+    return (
+        <svg
+            viewBox="0 0 24 28"
+            aria-hidden="true"
+            className={className}
+            fill="none"
+        >
+            <path
+                d="M2 3a3 3 0 0 1 3-3h9l8 8v17a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V3Z"
+                fill="#3B72C4"
+            />
+            <path d="M14 0l8 8h-6a2 2 0 0 1-2-2V0Z" fill="#8FB4E4" />
+            <g fill="#FFFFFF">
+                <rect x="6" y="12" width="12" height="2" rx="1" />
+                <rect x="6" y="17" width="12" height="2" rx="1" />
+                <rect x="6" y="22" width="8" height="2" rx="1" />
+            </g>
+        </svg>
+    );
+}
+
+/**
+ * The office mark for the Current Stage tile.
+ *
+ * The design draws three of the four metric glyphs as thin outlines -- clock,
+ * hourglass, calendar -- and this one as a solid block with lit windows, the
+ * same treatment as the sheet's document mark. It is the tile that answers
+ * "where is it right now", and the weight is what makes it read first.
+ */
+export function OfficeMark({ className }: { className?: string }) {
+    return (
+        <svg
+            viewBox="0 0 28 28"
+            aria-hidden="true"
+            className={className}
+            fill="none"
+        >
+            <path
+                d="M3 9a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v18H3V9Z"
+                fill="#3B72C4"
+            />
+            <path
+                d="M14 3a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v24H14V3Z"
+                fill="#2C5EA8"
+            />
+            <g fill="#FFFFFF">
+                <rect x="5.5" y="11" width="2.5" height="2.5" rx="0.5" />
+                <rect x="9.5" y="11" width="2.5" height="2.5" rx="0.5" />
+                <rect x="5.5" y="15.5" width="2.5" height="2.5" rx="0.5" />
+                <rect x="9.5" y="15.5" width="2.5" height="2.5" rx="0.5" />
+                <rect x="5.5" y="20" width="2.5" height="2.5" rx="0.5" />
+                <rect x="9.5" y="20" width="2.5" height="2.5" rx="0.5" />
+                <rect x="16.5" y="5.5" width="2.5" height="2.5" rx="0.5" />
+                <rect x="20.5" y="5.5" width="2.5" height="2.5" rx="0.5" />
+                <rect x="16.5" y="10" width="2.5" height="2.5" rx="0.5" />
+                <rect x="20.5" y="10" width="2.5" height="2.5" rx="0.5" />
+                <rect x="16.5" y="14.5" width="2.5" height="2.5" rx="0.5" />
+                <rect x="20.5" y="14.5" width="2.5" height="2.5" rx="0.5" />
+                <rect x="16.5" y="19" width="2.5" height="2.5" rx="0.5" />
+                <rect x="20.5" y="19" width="2.5" height="2.5" rx="0.5" />
+            </g>
+        </svg>
+    );
+}
+
 export function StageStepper({ status }: { status: string }) {
     const current = stageIndex(status);
 
@@ -74,50 +166,63 @@ export function StageStepper({ status }: { status: string }) {
 
                 return (
                     <li key={stage.key} className="flex items-center">
+                        {/*
+                            One navy rail, not a blue-ahead/grey-behind pair.
+                            The design runs the same dark line between all four
+                            stages: progress is carried by the badges and the
+                            active banner, so colouring the track as well said
+                            the same thing twice and left the tail looking
+                            disabled rather than simply not yet reached.
+                        */}
                         {index > 0 && (
                             <span
                                 aria-hidden="true"
-                                className={`mx-2 hidden h-0.5 w-10 sm:block xl:w-16 ${
-                                    done || active
-                                        ? 'bg-[#3B72C4]'
-                                        : 'bg-[#D9DEE6]'
-                                }`}
+                                className="mx-3 hidden h-0.5 w-12 bg-navy sm:block xl:w-20"
                             />
                         )}
 
-                        {active ? (
-                            // The chevron block the design uses for "you are
-                            // here". aria-current does the same job for a
-                            // screen reader.
+                        {/*
+                            Badge THEN label, for all four -- the design gives
+                            the active stage a filled blue disc in front of its
+                            banner exactly like the others, so the rail reads as
+                            one row of markers rather than three markers and an
+                            unexplained block.
+                        */}
+                        <span className="flex items-center gap-2">
                             <span
-                                aria-current="step"
-                                className="relative mr-4 flex h-10 items-center rounded-sm bg-[#3B72C4] pr-6 pl-5 text-[15px] font-bold text-white sm:mr-0"
+                                aria-hidden="true"
+                                className={`flex size-6 items-center justify-center rounded-full text-white ${
+                                    done
+                                        ? 'bg-[#2FA36B]'
+                                        : active
+                                          ? 'bg-[#3B72C4]'
+                                          : 'bg-[#C9CFD9]'
+                                }`}
                             >
-                                {stage.label}
-                                <span
-                                    aria-hidden="true"
-                                    className="absolute top-0 -right-4 h-0 w-0 border-y-[20px] border-l-[16px] border-y-transparent border-l-[#3B72C4]"
-                                />
+                                {done ? (
+                                    <Check className="size-4" strokeWidth={3} />
+                                ) : (
+                                    <ChevronRight
+                                        className="size-4"
+                                        strokeWidth={3}
+                                    />
+                                )}
                             </span>
-                        ) : (
-                            <span className="flex items-center gap-2">
+
+                            {active ? (
+                                // aria-current does for a screen reader what
+                                // the banner does for a sighted reader.
                                 <span
-                                    aria-hidden="true"
-                                    className={`flex size-6 items-center justify-center rounded-full ${
-                                        done
-                                            ? 'bg-[#2FA36B] text-white'
-                                            : 'bg-[#D9DEE6] text-white'
-                                    }`}
+                                    aria-current="step"
+                                    className="relative mr-4 flex h-10 items-center rounded-sm bg-[#3B72C4] pr-6 pl-5 text-[15px] font-bold text-white sm:mr-0"
                                 >
-                                    {done ? (
-                                        <Check
-                                            className="size-4"
-                                            strokeWidth={3}
-                                        />
-                                    ) : (
-                                        <ChevronRight className="size-4" />
-                                    )}
+                                    {stage.label}
+                                    <span
+                                        aria-hidden="true"
+                                        className="absolute top-0 -right-4 h-0 w-0 border-y-[20px] border-l-[16px] border-y-transparent border-l-[#3B72C4]"
+                                    />
                                 </span>
+                            ) : (
                                 <span
                                     className={`text-[15px] font-bold ${
                                         done ? 'text-[#2FA36B]' : 'text-navy'
@@ -125,8 +230,8 @@ export function StageStepper({ status }: { status: string }) {
                                 >
                                     {stage.label}
                                 </span>
-                            </span>
-                        )}
+                            )}
+                        </span>
                     </li>
                 );
             })}
@@ -212,7 +317,7 @@ export function TrackingMetrics({
                     }
                 />
                 <Metric
-                    icon={Building2}
+                    mark={OfficeMark}
                     /*
                      * A finished document has no open leg, so reading the open
                      * leg alone made this tile say "Not routed yet" about a
@@ -227,6 +332,7 @@ export function TrackingMetrics({
 
             <Metric
                 icon={Hourglass}
+                captionTone="loud"
                 title="Longest Stage"
                 value={
                     longestStage
@@ -251,26 +357,48 @@ export function TrackingMetrics({
 
 function Metric({
     icon: Icon,
+    mark: Mark,
     title,
     value,
     caption,
+    captionTone = 'quiet',
 }: {
-    icon: typeof Clock;
+    icon?: typeof Clock;
+    /** A drawn glyph, for the one tile the design fills in. */
+    mark?: (props: { className?: string }) => React.ReactElement;
     title: string;
     value: React.ReactNode;
     caption?: string;
+    /** 'loud' renders the caption as a second value line, as drawn. */
+    captionTone?: 'quiet' | 'loud';
 }) {
     return (
         <div className="flex items-start gap-3 p-4">
-            <Icon
-                aria-hidden="true"
-                className="mt-0.5 size-8 shrink-0 text-[#3B72C4]"
-                strokeWidth={1.5}
-            />
+            {Mark ? (
+                <Mark className="mt-0.5 w-10 shrink-0" />
+            ) : (
+                Icon && (
+                    <Icon
+                        aria-hidden="true"
+                        className="mt-0.5 size-10 shrink-0 text-[#3B72C4]"
+                        strokeWidth={1.5}
+                    />
+                )
+            )}
             <div>
                 <p className="text-[15px] font-bold text-link">{title}</p>
                 <p className="text-[15px] font-bold text-navy">{value}</p>
-                {caption && <p className="text-xs text-copy">{caption}</p>}
+                {caption && (
+                    <p
+                        className={
+                            captionTone === 'loud'
+                                ? 'text-[15px] font-bold text-navy'
+                                : 'text-xs text-copy'
+                        }
+                    >
+                        {caption}
+                    </p>
+                )}
             </div>
         </div>
     );
@@ -280,9 +408,12 @@ function Metric({
 export function ProgressTimeline({
     timeline,
     summary,
+    upcoming = [],
 }: {
     timeline: TimelineEntry[];
     summary: string;
+    /** Stage labels still ahead, drawn as empty rows -- see upcomingStages. */
+    upcoming?: string[];
 }) {
     return (
         /*
@@ -299,13 +430,12 @@ export function ProgressTimeline({
             <div className="grid gap-6 @2xl:grid-cols-[minmax(0,1fr)_300px]">
                 <ol className="relative">
                     {timeline.map((entry, index) => {
-                        const last = index === timeline.length - 1;
+                        const last =
+                            index === timeline.length - 1 &&
+                            upcoming.length === 0;
 
                         return (
-                            <li
-                                key={entry.id}
-                                className="flex gap-4 pb-8 last:pb-0"
-                            >
+                            <li key={entry.id} className="flex gap-4">
                                 <div className="flex flex-col items-center">
                                     <span
                                         aria-hidden="true"
@@ -325,12 +455,24 @@ export function ProgressTimeline({
                                     {!last && (
                                         <span
                                             aria-hidden="true"
-                                            className="mt-1 w-0.5 flex-1 bg-[#C9D2DE]"
+                                            className="mt-1 w-0.5 flex-1 bg-navy"
                                         />
                                     )}
                                 </div>
 
-                                <div className="flex flex-1 flex-wrap items-start justify-between gap-x-6 gap-y-1">
+                                {/*
+                                    A two-track grid, not justify-between. The
+                                    design lines every "Duration :" up on one
+                                    column; pushing each to the right edge of
+                                    its own row instead made the labels wander
+                                    with the length of the stage name above
+                                    them.
+                                */}
+                                <div
+                                    className={`grid flex-1 gap-x-6 gap-y-1 sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] ${
+                                        last ? '' : 'pb-8'
+                                    }`}
+                                >
                                     <div>
                                         <p className="text-[15px] font-bold text-navy">
                                             {entry.action_label}
@@ -358,6 +500,40 @@ export function ProgressTimeline({
                             </li>
                         );
                     })}
+
+                    {upcoming.map((label, index) => (
+                        <li key={`upcoming-${label}`} className="flex gap-4">
+                            <div className="flex flex-col items-center">
+                                <span
+                                    aria-hidden="true"
+                                    className="size-7 shrink-0 rounded-full bg-[#D9DEE6]"
+                                />
+                                {index < upcoming.length - 1 && (
+                                    <span
+                                        aria-hidden="true"
+                                        className="mt-1 w-0.5 flex-1 bg-navy"
+                                    />
+                                )}
+                            </div>
+
+                            <div
+                                className={`grid flex-1 gap-x-6 gap-y-1 sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] ${
+                                    index < upcoming.length - 1 ? 'pb-8' : ''
+                                }`}
+                            >
+                                <div>
+                                    <p className="text-[15px] font-bold text-[#8A9AAE]">
+                                        {label}
+                                    </p>
+                                    <p className="text-xs text-copy">
+                                        Not reached yet
+                                    </p>
+                                </div>
+
+                                <p className="text-sm text-copy">Duration :</p>
+                            </div>
+                        </li>
+                    ))}
 
                     {timeline.length === 0 && (
                         <li className="text-sm text-copy">
@@ -391,13 +567,28 @@ function formatDate(value: string | null | undefined): string {
 }
 
 function formatDateTime(value: string | null | undefined): string {
-    return value
-        ? new Date(value).toLocaleString(undefined, {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-              hour: 'numeric',
-              minute: '2-digit',
-          })
-        : '—';
+    if (!value) {
+        return '—';
+    }
+
+    /*
+     * Date and time composed, not `toLocaleString`. That helper joins the two
+     * with a connector -- "August 11, 2026 at 2:52 PM" in en-US -- and the
+     * design writes them plainly, "March 15, 2026 8:15 AM". The extra word is
+     * also what wrapped the Pending Time caption onto a second line.
+     */
+    const at = new Date(value);
+
+    const date = at.toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+    });
+
+    const time = at.toLocaleTimeString(undefined, {
+        hour: 'numeric',
+        minute: '2-digit',
+    });
+
+    return `${date} ${time}`;
 }

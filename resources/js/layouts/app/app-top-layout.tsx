@@ -29,7 +29,12 @@ export default function AppTopLayout({
                     {children}
                 </main>
 
-                <Skyline />
+                {/*
+                    Pulled up under the content rather than sitting in a band
+                    below it: both of the client's screens run the rooflines
+                    behind the bottom card, which is why `main` carries z-10.
+                */}
+                <Skyline className="-mt-8 lg:-mt-12" />
             </div>
         </div>
     );

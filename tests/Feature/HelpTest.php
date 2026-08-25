@@ -65,9 +65,38 @@ class HelpTest extends TestCase
         }
     }
 
-    public function test_the_help_pages_require_a_session(): void
+    /**
+     * The landing page's main navigation links Help, so a visitor with no
+     * account must be able to READ it. Answering an FAQ request with /login is
+     * what this asserts can never come back.
+     */
+    public function test_a_guest_can_read_the_help_pages(): void
     {
-        $this->get(route('help.knowledge-base'))->assertRedirect(route('login'));
+        foreach ([
+            route('help.index'),
+            route('help.knowledge-base'),
+            route('help.contact'),
+            route('help.article', KnowledgeBase::articles()[0]['slug']),
+        ] as $url) {
+            $this->get($url)->assertOk();
+        }
+    }
+
+    /**
+     * Filing is the other half. submitTicket reads `from`, `name` and `office`
+     * off the session, so an anonymous ticket is not a thing that can exist --
+     * both the form and the endpoint stay behind auth.
+     */
+    public function test_a_guest_cannot_file_a_ticket(): void
+    {
+        $this->get(route('help.ticket'))->assertRedirect(route('login'));
+
+        $this->post(route('help.ticket.store'), [
+            'name' => 'Nobody',
+            'email' => 'nobody@example.test',
+            'issue_type' => 'Something else',
+            'body' => 'Filed with no session at all.',
+        ])->assertRedirect(route('login'));
     }
 
     public function test_a_ticket_is_emailed_when_mail_is_configured(): void

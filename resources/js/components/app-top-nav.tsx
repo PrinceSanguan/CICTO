@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { CictoLockup } from '@/components/auth/cicto-lockup';
 import { useCurrentUrl } from '@/hooks/use-current-url';
 import { navFor, panelHomeFor } from '@/lib/nav';
-import { logout } from '@/routes';
+import { login, logout } from '@/routes';
 
 /**
  * §4's main navigation: Home, Track Documents, Reports, Help.
@@ -23,7 +23,20 @@ export function AppTopNav() {
     const { isCurrentUrl } = useCurrentUrl();
     const [open, setOpen] = useState(false);
 
-    const items = navFor(auth?.role).main;
+    /*
+        §23's Help pages are readable with no session, so this shell now
+        renders for guests too -- see the public Help block in routes/web.php.
+        `Home` means different things to the two audiences: the dashboard to
+        somebody signed in, the landing page to somebody who is not. Pointing a
+        visitor's Home at /dashboard would bounce them to login from a page
+        that did not need one, which is the whole complaint this fixes.
+
+        The four LABELS are untouched: §4 names them and they are contract
+        acceptance criteria. Only the destination moves.
+    */
+    const items = navFor(auth?.role).main.map((item) =>
+        !auth?.user && item.title === 'Home' ? { ...item, href: '/' } : item,
+    );
     const panel = panelHomeFor(auth?.role);
     const PanelIcon = panel?.icon;
 
@@ -96,13 +109,25 @@ export function AppTopNav() {
                         </Link>
                     )}
 
-                    <Link
-                        href={logout()}
-                        as="button"
-                        className="rounded-md bg-danger px-5 py-2 text-sm font-bold text-white transition hover:brightness-95"
-                    >
-                        Logout
-                    </Link>
+                    {/*
+                        Logout for a session, Login for a guest. A guest reaches
+                        this shell through the public Help pages, and offering
+                        them a Logout is the same lie the error page was fixed
+                        for -- see STANDALONE_PAGES in app.tsx.
+                    */}
+                    {auth?.user ? (
+                        <Link
+                            href={logout()}
+                            as="button"
+                            className={topActionClass}
+                        >
+                            Logout
+                        </Link>
+                    ) : (
+                        <Link href={login()} className={topActionClass}>
+                            Login
+                        </Link>
+                    )}
 
                     <button
                         type="button"
@@ -173,3 +198,11 @@ export function AppTopNav() {
         </header>
     );
 }
+
+/**
+ * The red action in the top-right of the bar. Shared so the Logout and Login
+ * states are the same control with a different word, exactly as the hero's
+ * `heroActionClass` does for the landing page.
+ */
+const topActionClass =
+    'rounded-md bg-danger px-5 py-2 text-sm font-bold text-white transition hover:brightness-95';

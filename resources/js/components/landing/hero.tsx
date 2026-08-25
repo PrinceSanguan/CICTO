@@ -84,8 +84,18 @@ export function Hero({ authSlot }: { authSlot: ReactNode }) {
                 <HeroScene className="mt-10 w-full lg:mt-0" />
             </div>
 
-            {/* Floating panel. Inset on the left only; bleeds off the right. */}
-            <div className="relative z-10 mt-6 ml-0 rounded-tl-[28px] bg-surface pt-10 pb-10 lg:mt-[-6vw] lg:ml-[4.1vw] lg:rounded-tl-[52px] lg:pt-[6.5vw] lg:pb-[5vw]">
+            {/*
+              The panel that overlaps the hero art. Full-bleed, and that is the
+              alignment fix rather than a simplification: it used to be inset
+              `4.1vw` on the left and bleed off the right, which left a rounded
+              corner and ~60px of gradient on one side and a hard cut on the
+              other. Worse, FeatureStrip centres a max-w-7xl row inside it, so
+              an asymmetric panel pushed the three cards ~30px right of every
+              other max-w-7xl row on the page -- the nav above them and "Why
+              Choose CICTO" below. Spanning the frame puts the cards back on
+              the page's grid and makes the band symmetric in one move.
+            */}
+            <div className="relative z-10 mt-6 bg-surface pt-10 pb-10 lg:mt-[-6vw] lg:pt-[6.5vw] lg:pb-[5vw]">
                 <FeatureStrip />
             </div>
 

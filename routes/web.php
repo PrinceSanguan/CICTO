@@ -69,6 +69,29 @@ Route::post('_csp-report', CspReportController::class)
 Route::redirect('login/admin', '/login')->name('login.admin');
 Route::redirect('login/super-admin', '/login')->name('login.super-admin');
 
+/*
+| §23 Help & Support, the READING half -- and it is public.
+|
+| The landing page's main navigation points Help at this route (see NAV in
+| resources/js/components/landing/content.ts for why those items became real
+| screens), so a visitor with no account was answered with /login when they
+| asked to read an FAQ. Nothing on these four pages needs a session:
+| HelpController serves static articles out of KnowledgeBase and the office's
+| own published contact details out of config.
+|
+| The WRITING half stays in the authenticated group below. submitTicket
+| attributes every ticket to $request->user() -- `from`, `name` and `office`
+| all come from the session -- so an anonymous ticket is not a thing that can
+| exist. pages/help/contact.tsx offers a guest the sign-in instead of a form
+| that would bounce them on submit and lose what they typed.
+*/
+Route::get('help', [HelpController::class, 'index'])->name('help.index');
+Route::get('help/knowledge-base', [HelpController::class, 'knowledgeBase'])
+    ->name('help.knowledge-base');
+Route::get('help/knowledge-base/{slug}', [HelpController::class, 'article'])
+    ->name('help.article');
+Route::get('help/contact', [HelpController::class, 'contact'])->name('help.contact');
+
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
@@ -78,16 +101,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // §19 Reports and Analytics
     Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
     Route::get('reports/export', [ReportController::class, 'export'])->name('reports.export');
-    /*
-    | §23 Help & Support. Static knowledge base, an emailed ticket and contact
-    | details -- see HelpController for why it is deliberately that small.
-    */
-    Route::get('help', [HelpController::class, 'index'])->name('help.index');
-    Route::get('help/knowledge-base', [HelpController::class, 'knowledgeBase'])
-        ->name('help.knowledge-base');
-    Route::get('help/knowledge-base/{slug}', [HelpController::class, 'article'])
-        ->name('help.article');
-    Route::get('help/contact', [HelpController::class, 'contact'])->name('help.contact');
+
+    // The one Help route that has to know who you are.
     Route::get('help/ticket', [HelpController::class, 'ticket'])->name('help.ticket');
     Route::post('help/ticket', [HelpController::class, 'submitTicket'])
         ->middleware('throttle:6,1')

@@ -1,4 +1,5 @@
 import buildingSrc from '@/assets/building.png';
+import { cn } from '@/lib/utils';
 
 /**
  * The decorative city band that closes the page.
@@ -24,13 +25,16 @@ import buildingSrc from '@/assets/building.png';
  * `shrink-0` because AppTopLayout mounts this as a flex-column child: without
  * it a long document list compresses the band instead of scrolling past it.
  */
-export function Skyline() {
+export function Skyline({ className }: { className?: string }) {
     return (
         <img
             src={buildingSrc}
             alt=""
             aria-hidden="true"
-            className="block h-[130px] w-full shrink-0 object-cover object-bottom sm:h-[180px] lg:h-auto"
+            className={cn(
+                'block h-[130px] w-full shrink-0 object-cover object-bottom sm:h-[180px] lg:h-auto',
+                className,
+            )}
         />
     );
 }

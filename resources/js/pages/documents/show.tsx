@@ -1,5 +1,5 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { ChevronLeft, Download, QrCode } from 'lucide-react';
+import { ChevronDown, ChevronLeft, Download, QrCode } from 'lucide-react';
 import { useState } from 'react';
 import DocumentCommentController from '@/actions/App/Http/Controllers/DocumentCommentController';
 import DocumentFileController from '@/actions/App/Http/Controllers/DocumentFileController';
@@ -7,9 +7,11 @@ import DocumentSignatureController from '@/actions/App/Http/Controllers/Document
 import DocumentWorkflowController from '@/actions/App/Http/Controllers/DocumentWorkflowController';
 import {
     DocumentFacts,
+    DocumentMark,
     ProgressTimeline,
     StageStepper,
     TrackingMetrics,
+    upcomingStages,
 } from '@/components/documents/document-tracking';
 import { OfficeRoutePicker } from '@/components/documents/office-route-picker';
 import { SignaturePad } from '@/components/documents/signature-pad';
@@ -140,279 +142,97 @@ export default function ShowDocument({
             <div className="mt-4 flex flex-col gap-6">
                 {/* §10 Status Tracking, in the client's "View Documents" shape. */}
                 <section className="rounded-xl bg-white p-6 shadow-xl sm:p-8">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                        <h1 className="text-2xl font-bold text-navy">
-                            View Documents
-                        </h1>
+                    {/*
+                        The mark hangs in the gutter beside the rail, not inline
+                        with the heading -- `mt-9` is what drops it off the
+                        heading's baseline to sit between the title and the
+                        stages, where the design puts it. It is hidden on a
+                        phone, where there is no gutter to hang it in.
 
-                        <div className="flex flex-wrap gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setShowQr((value) => !value)}
-                            >
-                                <QrCode className="size-4" />
-                                {showQr ? 'Hide QR' : 'Show QR'}
-                            </Button>
-                            <Button variant="outline" size="sm" asChild>
-                                <a
-                                    href={documents.labels.print.url({
-                                        query: { ids: [document.id] },
-                                    })}
-                                    target="_blank"
-                                    rel="noopener"
-                                >
-                                    Print label
-                                </a>
-                            </Button>
+                        Only this pair is indented. The facts panel below stays
+                        a sibling so it still spans the full card, as drawn.
+                    */}
+                    <div className="flex items-start gap-4 sm:gap-6">
+                        <DocumentMark className="mt-9 hidden w-8 shrink-0 sm:block" />
+
+                        <div className="min-w-0 flex-1">
+                            <h1 className="text-2xl font-bold text-navy">
+                                View Documents
+                            </h1>
+
+                            {/*
+                                The rail starts further in than the heading
+                                above it -- roughly the width of the mark in
+                                the gutter -- so the two do not stack on one
+                                left edge. Measured off the design.
+                            */}
+                            <div className="mt-6 overflow-x-auto pb-2 sm:pl-10">
+                                <StageStepper status={document.status} />
+                            </div>
                         </div>
                     </div>
 
-                    <div className="mt-6 overflow-x-auto pb-2">
-                        <StageStepper status={document.status} />
-                    </div>
-
-                    {showQr && (
-                        <div className="mt-6 flex w-fit flex-col items-center gap-2 rounded-xl border p-4">
-                            <img
-                                src={documents.qr.url({
-                                    document: document.id,
-                                })}
-                                alt={`QR code for ${document.control_number}`}
-                                className="size-40"
-                            />
-                            <p className="font-mono text-xs">
-                                {document.control_number}
-                            </p>
-                        </div>
-                    )}
-
-                    <div className="mt-8 grid gap-8 rounded-lg border border-[#E4EAF2] p-6 lg:grid-cols-2">
+                    {/*
+                        Inset from the card's own padding, not flush with it:
+                        the design floats this panel inside the sheet, and the
+                        margin here plus the card's padding is what reproduces
+                        that. The rule down the middle is drawn too, sitting
+                        just clear of the metrics box's own border.
+                    */}
+                    <div className="mt-8 grid gap-6 rounded-lg border border-[#E4EAF2] p-6 sm:mx-6 lg:mx-8 lg:grid-cols-[minmax(0,4fr)_minmax(0,5fr)]">
                         <DocumentFacts document={document} />
-                        <TrackingMetrics
-                            document={document}
-                            longestStage={longestStage}
-                        />
+
+                        <div className="lg:border-l lg:border-[#E4EAF2] lg:pl-4">
+                            <TrackingMetrics
+                                document={document}
+                                longestStage={longestStage}
+                            />
+                        </div>
                     </div>
                 </section>
 
                 {/*
-                    §9's routing plan. Rendered for the whole life of the
-                    document, not just while stops are pending: a five-office
-                    send has to keep LOOKING like a five-office send, including
-                    after a rejection cancelled the tail of it.
+                    §13 Audit trail, full width -- the client's View
+                    Documents design puts the stage timeline across the
+                    page. It is not decoration: ProgressTimeline lays the
+                    Processing Summary BESIDE the stages on a @2xl
+                    container, and in the old half-width column that query
+                    never fired, so the summary dropped underneath and the
+                    duration column had ~160px to work with.
                 */}
-                {document.route.length > 0 && (
-                    <section className="rounded-xl bg-white p-6 shadow-xl">
-                        <h3 className="mb-1 text-sm font-semibold">Route</h3>
-                        <p className="mb-3 text-xs text-copy">
-                            Where this document is scheduled to go, in order.
-                        </p>
+                <section className="rounded-xl bg-white p-6 shadow-xl sm:mx-6 sm:p-8 lg:mx-16">
+                    <ProgressTimeline
+                        timeline={timeline}
+                        summary={processingSummary}
+                        upcoming={upcomingStages(
+                            document.status,
+                            document.tracking.is_open,
+                        )}
+                    />
+                </section>
 
-                        <ol className="grid gap-2">
-                            {document.route.map((stop, index) => (
-                                <li
-                                    key={stop.id}
-                                    className="flex items-center gap-3 rounded-md border border-[#E4EAF2] px-3 py-2"
-                                >
-                                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#E8F0FB] text-xs font-bold text-navy tabular-nums">
-                                        {index + 1}
-                                    </span>
-                                    <span
-                                        className={`min-w-0 flex-1 truncate text-sm font-medium ${
-                                            stop.status === 'cancelled'
-                                                ? 'text-copy line-through'
-                                                : 'text-navy'
-                                        }`}
-                                    >
-                                        {stop.office ?? '—'}
-                                    </span>
-                                    <ToneBadge tone={stop.status_tone}>
-                                        {stop.status_label}
-                                    </ToneBadge>
-                                </li>
-                            ))}
-                        </ol>
-                    </section>
-                )}
-
-                {/* §9 Approval and routing */}
                 {/*
-                    §16. Archiving is not a workflow action -- it applies once a
-                    document is already finished -- so it sits apart from the
-                    routing buttons rather than inside them.
+                    Everything that is NOT on the client's "View Documents"
+                    sheet, folded behind one bar so the default view is that
+                    sheet exactly: two cards and then the skyline, with no
+                    stack of panels to scroll past. Nothing was removed --
+                    the QR label, routing, archiving, versions, signatures
+                    and comments are all one click inside this.
                 */}
-                {(document.can.archive || document.is_archived) && (
-                    <section className="rounded-xl bg-white p-6 shadow-xl">
-                        <h3 className="mb-3 text-sm font-semibold">Archive</h3>
-
-                        {document.is_archived ? (
-                            <div className="flex flex-wrap items-center gap-3">
-                                <p className="flex-1 text-sm text-copy">
-                                    This document is filed in the archive.
-                                    Nothing has been deleted.
-                                </p>
-                                {document.can.restore && (
-                                    <Button
-                                        variant="outline"
-                                        onClick={() =>
-                                            router.delete(
-                                                documents.restore.url({
-                                                    document: document.id,
-                                                }),
-                                                { preserveScroll: true },
-                                            )
-                                        }
-                                    >
-                                        Restore to active list
-                                    </Button>
-                                )}
-                            </div>
-                        ) : (
-                            <div className="flex flex-wrap items-end gap-3">
-                                <div className="min-w-56 flex-1">
-                                    <label
-                                        htmlFor="archive_reason"
-                                        className="text-sm font-medium"
-                                    >
-                                        Reason (optional)
-                                    </label>
-                                    <Input
-                                        id="archive_reason"
-                                        value={archiveReason}
-                                        onChange={(event) =>
-                                            setArchiveReason(event.target.value)
-                                        }
-                                        maxLength={500}
-                                        placeholder="Why is this being filed away?"
-                                        className="mt-1"
-                                    />
-                                </div>
-                                <Button
-                                    onClick={() =>
-                                        router.post(
-                                            documents.archive.url({
-                                                document: document.id,
-                                            }),
-                                            { reason: archiveReason },
-                                            { preserveScroll: true },
-                                        )
-                                    }
-                                >
-                                    Archive document
-                                </Button>
-                            </div>
-                        )}
-                    </section>
-                )}
-
-                {document.available_actions.length > 0 && (
-                    <section className="rounded-xl bg-white p-6 shadow-xl">
-                        <h3 className="mb-3 text-sm font-semibold">Actions</h3>
-
-                        <div className="mb-3 flex flex-wrap gap-2">
-                            {document.available_actions.map((available) => (
-                                <Button
-                                    key={available.value}
-                                    size="sm"
-                                    variant={
-                                        action.data.action === available.value
-                                            ? 'default'
-                                            : 'outline'
-                                    }
-                                    onClick={() =>
-                                        action.setData(
-                                            'action',
-                                            available.value,
-                                        )
-                                    }
-                                >
-                                    {available.value === 'forwarded'
-                                        ? 'Send to Another Office'
-                                        : available.label}
-                                </Button>
-                            ))}
-                        </div>
-
-                        {action.data.action && (
-                            <div className="space-y-3">
-                                {isForward && (
-                                    <div className="grid gap-2">
-                                        <OfficeRoutePicker
-                                            offices={offices}
-                                            value={action.data.to_office_ids}
-                                            disabled={action.processing}
-                                            onChange={(next) =>
-                                                action.setData(
-                                                    'to_office_ids',
-                                                    next,
-                                                )
-                                            }
-                                        />
-                                        <InputError
-                                            message={routeError(action.errors)}
-                                        />
-                                    </div>
-                                )}
-
-                                <div className="grid gap-2">
-                                    <label
-                                        htmlFor="remarks"
-                                        className="text-sm font-medium"
-                                    >
-                                        Remarks
-                                        {requiresRemarks(
-                                            document,
-                                            action.data.action,
-                                        )
-                                            ? ''
-                                            : ' (optional)'}
-                                    </label>
-                                    <textarea
-                                        id="remarks"
-                                        rows={3}
-                                        value={action.data.remarks}
-                                        onChange={(event) =>
-                                            action.setData(
-                                                'remarks',
-                                                event.target.value,
-                                            )
-                                        }
-                                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                                    />
-                                    <InputError
-                                        message={action.errors.remarks}
-                                    />
-                                    <InputError
-                                        message={action.errors.action}
-                                    />
-                                </div>
-
-                                <Button
-                                    onClick={() =>
-                                        submitAction(action.data.action)
-                                    }
-                                    disabled={action.processing}
-                                >
-                                    {action.processing ? 'Working…' : 'Confirm'}
-                                </Button>
-                            </div>
-                        )}
-                    </section>
-                )}
-
-                <div className="grid gap-4 lg:grid-cols-2">
-                    {/* §13 Audit trail */}
-                    <section className="rounded-xl bg-white p-6 shadow-xl sm:p-8">
-                        <ProgressTimeline
-                            timeline={timeline}
-                            summary={processingSummary}
+                <details className="group sm:mx-6 lg:mx-16">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-xl bg-white px-6 py-4 text-[15px] font-bold text-navy shadow-xl">
+                        Actions, files, signatures and comments
+                        <ChevronDown
+                            aria-hidden="true"
+                            className="size-5 shrink-0 text-[#3B72C4] transition group-open:rotate-180"
                         />
+                    </summary>
 
+                    <div className="mt-4 flex flex-col gap-4">
                         {/* §13: how long it stayed at each office. The design
-                            has no place for this, but it is what answers "which
-                            office is slow" -- the question §1 says the client
-                            actually has. */}
+                        has no place for this, but it is what answers "which
+                        office is slow" -- the question §1 says the client
+                        actually has. */}
                         {officeRollup.length > 0 && (
                             <details className="mt-6 rounded-lg bg-[#F4F7FC] p-4">
                                 <summary className="cursor-pointer text-sm font-bold text-navy">
@@ -439,354 +259,641 @@ export default function ShowDocument({
                                 </dl>
                             </details>
                         )}
-                    </section>
 
-                    <div className="space-y-4">
-                        {/* §14 Version Control */}
                         <section className="rounded-xl bg-white p-6 shadow-xl">
                             <h3 className="mb-3 text-sm font-semibold">
-                                Attachments
-                                {files.length > 1 && (
-                                    <span className="ml-2 font-normal text-muted-foreground">
-                                        {files.length} versions
-                                    </span>
-                                )}
+                                Label
                             </h3>
-
-                            {files.length === 0 && (
-                                <p className="text-sm text-muted-foreground">
-                                    No file was attached.
-                                </p>
-                            )}
-
-                            <ul className="space-y-2">
-                                {files.map((file, index) => (
-                                    <li
-                                        key={file.id}
-                                        className="flex items-center justify-between gap-2 text-sm"
-                                    >
-                                        <span className="min-w-0 flex-1 truncate">
-                                            <span className="font-medium">
-                                                v{file.version}
-                                            </span>
-                                            {/* files arrive newest-first */}
-                                            {index === 0 && (
-                                                <span className="ml-1 text-xs text-emerald-700 dark:text-emerald-400">
-                                                    current
-                                                </span>
-                                            )}{' '}
-                                            · {file.original_name}
-                                            <span className="text-muted-foreground">
-                                                {' '}
-                                                ({file.size})
-                                            </span>
-                                            {file.replace_reason && (
-                                                <span className="block text-xs text-muted-foreground">
-                                                    {file.replace_reason}
-                                                </span>
-                                            )}
-                                        </span>
-                                        {file.is_purged ? (
-                                            <span
-                                                className="text-xs text-muted-foreground"
-                                                title="The file itself was removed under the retention policy. The version record remains."
-                                            >
-                                                purged
-                                            </span>
-                                        ) : (
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                asChild
-                                            >
-                                                <a
-                                                    href={documents.files.download.url(
-                                                        {
-                                                            document:
-                                                                document.id,
-                                                            file: file.id,
-                                                        },
-                                                    )}
-                                                >
-                                                    <Download className="size-4" />
-                                                </a>
-                                            </Button>
-                                        )}
-                                    </li>
-                                ))}
-                            </ul>
-
-                            {document.can.uploadVersion && (
-                                <form
-                                    onSubmit={(event) => {
-                                        event.preventDefault();
-                                        version.post(
-                                            DocumentFileController.store.url({
-                                                document: document.id,
-                                            }),
-                                            {
-                                                preserveScroll: true,
-                                                forceFormData: true,
-                                                onSuccess: () =>
-                                                    version.reset(),
-                                            },
-                                        );
-                                    }}
-                                    className="mt-4 space-y-2 border-t pt-4"
+                            <div className="flex flex-wrap gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setShowQr((value) => !value)}
                                 >
-                                    <label
-                                        htmlFor="version-file"
-                                        className="text-sm font-medium"
+                                    <QrCode className="size-4" />
+                                    {showQr ? 'Hide QR' : 'Show QR'}
+                                </Button>
+                                <Button variant="outline" size="sm" asChild>
+                                    <a
+                                        href={documents.labels.print.url({
+                                            query: { ids: [document.id] },
+                                        })}
+                                        target="_blank"
+                                        rel="noopener"
                                     >
-                                        Upload a corrected version
-                                    </label>
-                                    <Input
-                                        id="version-file"
-                                        type="file"
-                                        onChange={(event) =>
-                                            version.setData(
-                                                'file',
-                                                event.target.files?.[0] ?? null,
-                                            )
-                                        }
+                                        Print label
+                                    </a>
+                                </Button>
+                            </div>
+                            {showQr && (
+                                <div className="mt-6 flex w-fit flex-col items-center gap-2 rounded-xl border p-4">
+                                    <img
+                                        src={documents.qr.url({
+                                            document: document.id,
+                                        })}
+                                        alt={`QR code for ${document.control_number}`}
+                                        className="size-40"
                                     />
-                                    <InputError message={version.errors.file} />
-                                    <Input
-                                        placeholder="What changed? (optional)"
-                                        value={version.data.replace_reason}
-                                        onChange={(event) =>
-                                            version.setData(
-                                                'replace_reason',
-                                                event.target.value,
-                                            )
-                                        }
-                                    />
-                                    <p className="text-xs text-muted-foreground">
-                                        Earlier versions stay downloadable —
-                                        nothing is overwritten.
+                                    <p className="font-mono text-xs">
+                                        {document.control_number}
                                     </p>
-                                    <Button
-                                        size="sm"
-                                        type="submit"
-                                        disabled={
-                                            version.processing ||
-                                            !version.data.file
-                                        }
-                                    >
-                                        {version.processing
-                                            ? 'Uploading…'
-                                            : 'Upload version'}
-                                    </Button>
-                                </form>
+                                </div>
                             )}
                         </section>
 
-                        {/* §15 Digital Signatures */}
-                        <section className="rounded-xl bg-white p-6 shadow-xl">
-                            <h3 className="mb-3 text-sm font-semibold">
-                                Signatures
-                            </h3>
-
-                            {signatures.length === 0 && (
-                                <p className="text-sm text-muted-foreground">
-                                    Not signed yet.
+                        {/*
+                    §9's routing plan. Rendered for the whole life of the
+                    document, not just while stops are pending: a five-office
+                    send has to keep LOOKING like a five-office send, including
+                    after a rejection cancelled the tail of it.
+                */}
+                        {document.route.length > 0 && (
+                            <section className="rounded-xl bg-white p-6 shadow-xl">
+                                <h3 className="mb-1 text-sm font-semibold">
+                                    Route
+                                </h3>
+                                <p className="mb-3 text-xs text-copy">
+                                    Where this document is scheduled to go, in
+                                    order.
                                 </p>
-                            )}
 
-                            <ul className="space-y-3">
-                                {signatures.map((item) => (
-                                    <li key={item.id} className="text-sm">
-                                        <div className="flex items-start justify-between gap-2">
-                                            <div className="min-w-0">
-                                                <p className="font-medium">
-                                                    {item.signer_name}
-                                                </p>
-                                                <p className="text-xs text-muted-foreground">
-                                                    {item.signer_position ??
-                                                        'Signatory'}
-                                                    {item.signer_office &&
-                                                        ` · ${item.signer_office}`}
-                                                </p>
-                                                <p className="text-xs text-muted-foreground">
-                                                    {new Date(
-                                                        item.signed_at,
-                                                    ).toLocaleString()}
-                                                    {item.file_version !==
-                                                        null &&
-                                                        ` · signed v${item.file_version}`}
-                                                </p>
-                                            </div>
-                                            <ToneBadge
-                                                tone={
-                                                    !item.valid
-                                                        ? 'red'
-                                                        : item.superseded
-                                                          ? 'amber'
-                                                          : 'emerald'
+                                <ol className="grid gap-2">
+                                    {document.route.map((stop, index) => (
+                                        <li
+                                            key={stop.id}
+                                            className="flex items-center gap-3 rounded-md border border-[#E4EAF2] px-3 py-2"
+                                        >
+                                            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#E8F0FB] text-xs font-bold text-navy tabular-nums">
+                                                {index + 1}
+                                            </span>
+                                            <span
+                                                className={`min-w-0 flex-1 truncate text-sm font-medium ${
+                                                    stop.status === 'cancelled'
+                                                        ? 'text-copy line-through'
+                                                        : 'text-navy'
+                                                }`}
+                                            >
+                                                {stop.office ?? '—'}
+                                            </span>
+                                            <ToneBadge tone={stop.status_tone}>
+                                                {stop.status_label}
+                                            </ToneBadge>
+                                        </li>
+                                    ))}
+                                </ol>
+                            </section>
+                        )}
+
+                        {/* §9 Approval and routing */}
+                        {/*
+                    §16. Archiving is not a workflow action -- it applies once a
+                    document is already finished -- so it sits apart from the
+                    routing buttons rather than inside them.
+                */}
+                        {(document.can.archive || document.is_archived) && (
+                            <section className="rounded-xl bg-white p-6 shadow-xl">
+                                <h3 className="mb-3 text-sm font-semibold">
+                                    Archive
+                                </h3>
+
+                                {document.is_archived ? (
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        <p className="flex-1 text-sm text-copy">
+                                            This document is filed in the
+                                            archive. Nothing has been deleted.
+                                        </p>
+                                        {document.can.restore && (
+                                            <Button
+                                                variant="outline"
+                                                onClick={() =>
+                                                    router.delete(
+                                                        documents.restore.url({
+                                                            document:
+                                                                document.id,
+                                                        }),
+                                                        {
+                                                            preserveScroll: true,
+                                                        },
+                                                    )
                                                 }
                                             >
-                                                {!item.valid
-                                                    ? 'Mismatch'
-                                                    : item.superseded
-                                                      ? 'Superseded'
-                                                      : 'Valid'}
-                                            </ToneBadge>
+                                                Restore to active list
+                                            </Button>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-wrap items-end gap-3">
+                                        <div className="min-w-56 flex-1">
+                                            <label
+                                                htmlFor="archive_reason"
+                                                className="text-sm font-medium"
+                                            >
+                                                Reason (optional)
+                                            </label>
+                                            <Input
+                                                id="archive_reason"
+                                                value={archiveReason}
+                                                onChange={(event) =>
+                                                    setArchiveReason(
+                                                        event.target.value,
+                                                    )
+                                                }
+                                                maxLength={500}
+                                                placeholder="Why is this being filed away?"
+                                                className="mt-1"
+                                            />
                                         </div>
-                                        <a
-                                            href={documents.signatures.certificate.url(
-                                                {
-                                                    document: document.id,
-                                                    signature: item.serial,
-                                                },
-                                            )}
-                                            target="_blank"
-                                            rel="noopener"
-                                            className="text-xs underline"
+                                        <Button
+                                            onClick={() =>
+                                                router.post(
+                                                    documents.archive.url({
+                                                        document: document.id,
+                                                    }),
+                                                    { reason: archiveReason },
+                                                    { preserveScroll: true },
+                                                )
+                                            }
                                         >
-                                            Signature certificate (PDF)
-                                        </a>
-                                    </li>
-                                ))}
-                            </ul>
+                                            Archive document
+                                        </Button>
+                                    </div>
+                                )}
+                            </section>
+                        )}
 
-                            {document.can.sign && (
-                                <form
-                                    onSubmit={(event) => {
-                                        event.preventDefault();
-                                        signature.post(
-                                            DocumentSignatureController.store.url(
-                                                { document: document.id },
-                                            ),
-                                            {
-                                                preserveScroll: true,
-                                                onSuccess: () =>
-                                                    signature.reset(),
-                                            },
-                                        );
-                                    }}
-                                    className="mt-4 space-y-3 border-t pt-4"
-                                >
-                                    <SignaturePad
-                                        onChange={(dataUrl) =>
-                                            signature.setData('image', dataUrl)
-                                        }
-                                    />
-                                    <InputError
-                                        message={signature.errors.image}
-                                    />
-                                    {/*
+                        {document.available_actions.length > 0 && (
+                            <section className="rounded-xl bg-white p-6 shadow-xl">
+                                <h3 className="mb-3 text-sm font-semibold">
+                                    Actions
+                                </h3>
+
+                                <div className="mb-3 flex flex-wrap gap-2">
+                                    {document.available_actions.map(
+                                        (available) => (
+                                            <Button
+                                                key={available.value}
+                                                size="sm"
+                                                variant={
+                                                    action.data.action ===
+                                                    available.value
+                                                        ? 'default'
+                                                        : 'outline'
+                                                }
+                                                onClick={() =>
+                                                    action.setData(
+                                                        'action',
+                                                        available.value,
+                                                    )
+                                                }
+                                            >
+                                                {available.value === 'forwarded'
+                                                    ? 'Send to Another Office'
+                                                    : available.label}
+                                            </Button>
+                                        ),
+                                    )}
+                                </div>
+
+                                {action.data.action && (
+                                    <div className="space-y-3">
+                                        {isForward && (
+                                            <div className="grid gap-2">
+                                                <OfficeRoutePicker
+                                                    offices={offices}
+                                                    value={
+                                                        action.data
+                                                            .to_office_ids
+                                                    }
+                                                    disabled={action.processing}
+                                                    onChange={(next) =>
+                                                        action.setData(
+                                                            'to_office_ids',
+                                                            next,
+                                                        )
+                                                    }
+                                                />
+                                                <InputError
+                                                    message={routeError(
+                                                        action.errors,
+                                                    )}
+                                                />
+                                            </div>
+                                        )}
+
+                                        <div className="grid gap-2">
+                                            <label
+                                                htmlFor="remarks"
+                                                className="text-sm font-medium"
+                                            >
+                                                Remarks
+                                                {requiresRemarks(
+                                                    document,
+                                                    action.data.action,
+                                                )
+                                                    ? ''
+                                                    : ' (optional)'}
+                                            </label>
+                                            <textarea
+                                                id="remarks"
+                                                rows={3}
+                                                value={action.data.remarks}
+                                                onChange={(event) =>
+                                                    action.setData(
+                                                        'remarks',
+                                                        event.target.value,
+                                                    )
+                                                }
+                                                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                            />
+                                            <InputError
+                                                message={action.errors.remarks}
+                                            />
+                                            <InputError
+                                                message={action.errors.action}
+                                            />
+                                        </div>
+
+                                        <Button
+                                            onClick={() =>
+                                                submitAction(action.data.action)
+                                            }
+                                            disabled={action.processing}
+                                        >
+                                            {action.processing
+                                                ? 'Working…'
+                                                : 'Confirm'}
+                                        </Button>
+                                    </div>
+                                )}
+                            </section>
+                        )}
+                        <div className="grid gap-4 lg:grid-cols-2">
+                            <section className="rounded-xl bg-white p-6 shadow-xl">
+                                <h3 className="mb-3 text-sm font-semibold">
+                                    Attachments
+                                    {files.length > 1 && (
+                                        <span className="ml-2 font-normal text-muted-foreground">
+                                            {files.length} versions
+                                        </span>
+                                    )}
+                                </h3>
+
+                                {files.length === 0 && (
+                                    <p className="text-sm text-muted-foreground">
+                                        No file was attached.
+                                    </p>
+                                )}
+
+                                <ul className="space-y-2">
+                                    {files.map((file, index) => (
+                                        <li
+                                            key={file.id}
+                                            className="flex items-center justify-between gap-2 text-sm"
+                                        >
+                                            <span className="min-w-0 flex-1 truncate">
+                                                <span className="font-medium">
+                                                    v{file.version}
+                                                </span>
+                                                {/* files arrive newest-first */}
+                                                {index === 0 && (
+                                                    <span className="ml-1 text-xs text-emerald-700 dark:text-emerald-400">
+                                                        current
+                                                    </span>
+                                                )}{' '}
+                                                · {file.original_name}
+                                                <span className="text-muted-foreground">
+                                                    {' '}
+                                                    ({file.size})
+                                                </span>
+                                                {file.replace_reason && (
+                                                    <span className="block text-xs text-muted-foreground">
+                                                        {file.replace_reason}
+                                                    </span>
+                                                )}
+                                            </span>
+                                            {file.is_purged ? (
+                                                <span
+                                                    className="text-xs text-muted-foreground"
+                                                    title="The file itself was removed under the retention policy. The version record remains."
+                                                >
+                                                    purged
+                                                </span>
+                                            ) : (
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    asChild
+                                                >
+                                                    <a
+                                                        href={documents.files.download.url(
+                                                            {
+                                                                document:
+                                                                    document.id,
+                                                                file: file.id,
+                                                            },
+                                                        )}
+                                                    >
+                                                        <Download className="size-4" />
+                                                    </a>
+                                                </Button>
+                                            )}
+                                        </li>
+                                    ))}
+                                </ul>
+
+                                {document.can.uploadVersion && (
+                                    <form
+                                        onSubmit={(event) => {
+                                            event.preventDefault();
+                                            version.post(
+                                                DocumentFileController.store.url(
+                                                    {
+                                                        document: document.id,
+                                                    },
+                                                ),
+                                                {
+                                                    preserveScroll: true,
+                                                    forceFormData: true,
+                                                    onSuccess: () =>
+                                                        version.reset(),
+                                                },
+                                            );
+                                        }}
+                                        className="mt-4 space-y-2 border-t pt-4"
+                                    >
+                                        <label
+                                            htmlFor="version-file"
+                                            className="text-sm font-medium"
+                                        >
+                                            Upload a corrected version
+                                        </label>
+                                        <Input
+                                            id="version-file"
+                                            type="file"
+                                            onChange={(event) =>
+                                                version.setData(
+                                                    'file',
+                                                    event.target.files?.[0] ??
+                                                        null,
+                                                )
+                                            }
+                                        />
+                                        <InputError
+                                            message={version.errors.file}
+                                        />
+                                        <Input
+                                            placeholder="What changed? (optional)"
+                                            value={version.data.replace_reason}
+                                            onChange={(event) =>
+                                                version.setData(
+                                                    'replace_reason',
+                                                    event.target.value,
+                                                )
+                                            }
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            Earlier versions stay downloadable —
+                                            nothing is overwritten.
+                                        </p>
+                                        <Button
+                                            size="sm"
+                                            type="submit"
+                                            disabled={
+                                                version.processing ||
+                                                !version.data.file
+                                            }
+                                        >
+                                            {version.processing
+                                                ? 'Uploading…'
+                                                : 'Upload version'}
+                                        </Button>
+                                    </form>
+                                )}
+                            </section>
+
+                            <div className="space-y-4">
+                                {/* §15 Digital Signatures */}
+                                <section className="rounded-xl bg-white p-6 shadow-xl">
+                                    <h3 className="mb-3 text-sm font-semibold">
+                                        Signatures
+                                    </h3>
+
+                                    {signatures.length === 0 && (
+                                        <p className="text-sm text-muted-foreground">
+                                            Not signed yet.
+                                        </p>
+                                    )}
+
+                                    <ul className="space-y-3">
+                                        {signatures.map((item) => (
+                                            <li
+                                                key={item.id}
+                                                className="text-sm"
+                                            >
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="min-w-0">
+                                                        <p className="font-medium">
+                                                            {item.signer_name}
+                                                        </p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {item.signer_position ??
+                                                                'Signatory'}
+                                                            {item.signer_office &&
+                                                                ` · ${item.signer_office}`}
+                                                        </p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {new Date(
+                                                                item.signed_at,
+                                                            ).toLocaleString()}
+                                                            {item.file_version !==
+                                                                null &&
+                                                                ` · signed v${item.file_version}`}
+                                                        </p>
+                                                    </div>
+                                                    <ToneBadge
+                                                        tone={
+                                                            !item.valid
+                                                                ? 'red'
+                                                                : item.superseded
+                                                                  ? 'amber'
+                                                                  : 'emerald'
+                                                        }
+                                                    >
+                                                        {!item.valid
+                                                            ? 'Mismatch'
+                                                            : item.superseded
+                                                              ? 'Superseded'
+                                                              : 'Valid'}
+                                                    </ToneBadge>
+                                                </div>
+                                                <a
+                                                    href={documents.signatures.certificate.url(
+                                                        {
+                                                            document:
+                                                                document.id,
+                                                            signature:
+                                                                item.serial,
+                                                        },
+                                                    )}
+                                                    target="_blank"
+                                                    rel="noopener"
+                                                    className="text-xs underline"
+                                                >
+                                                    Signature certificate (PDF)
+                                                </a>
+                                            </li>
+                                        ))}
+                                    </ul>
+
+                                    {document.can.sign && (
+                                        <form
+                                            onSubmit={(event) => {
+                                                event.preventDefault();
+                                                signature.post(
+                                                    DocumentSignatureController.store.url(
+                                                        {
+                                                            document:
+                                                                document.id,
+                                                        },
+                                                    ),
+                                                    {
+                                                        preserveScroll: true,
+                                                        onSuccess: () =>
+                                                            signature.reset(),
+                                                    },
+                                                );
+                                            }}
+                                            className="mt-4 space-y-3 border-t pt-4"
+                                        >
+                                            <SignaturePad
+                                                onChange={(dataUrl) =>
+                                                    signature.setData(
+                                                        'image',
+                                                        dataUrl,
+                                                    )
+                                                }
+                                            />
+                                            <InputError
+                                                message={signature.errors.image}
+                                            />
+                                            {/*
                                         Stated up front, not buried in a manual.
                                         The client's expectations are the main
                                         risk in this feature, not the code.
                                     */}
-                                    <p className="text-xs text-muted-foreground">
-                                        You will be asked to confirm your
-                                        password. Your signature is recorded
-                                        against this exact file version — it is
-                                        not printed onto the document itself.
-                                    </p>
-                                    <Button
-                                        size="sm"
-                                        type="submit"
-                                        disabled={
-                                            signature.processing ||
-                                            !signature.data.image
-                                        }
-                                    >
-                                        {signature.processing
-                                            ? 'Signing…'
-                                            : 'Sign document'}
-                                    </Button>
-                                </form>
-                            )}
-                        </section>
+                                            <p className="text-xs text-muted-foreground">
+                                                You will be asked to confirm
+                                                your password. Your signature is
+                                                recorded against this exact file
+                                                version — it is not printed onto
+                                                the document itself.
+                                            </p>
+                                            <Button
+                                                size="sm"
+                                                type="submit"
+                                                disabled={
+                                                    signature.processing ||
+                                                    !signature.data.image
+                                                }
+                                            >
+                                                {signature.processing
+                                                    ? 'Signing…'
+                                                    : 'Sign document'}
+                                            </Button>
+                                        </form>
+                                    )}
+                                </section>
 
-                        {/* §16 Comments */}
-                        <section className="rounded-xl bg-white p-6 shadow-xl">
-                            <h3 className="mb-3 text-sm font-semibold">
-                                Comments
-                            </h3>
+                                {/* §16 Comments */}
+                                <section className="rounded-xl bg-white p-6 shadow-xl">
+                                    <h3 className="mb-3 text-sm font-semibold">
+                                        Comments
+                                    </h3>
 
-                            <ul className="mb-3 space-y-3">
-                                {comments.map((item) => (
-                                    <li key={item.id} className="text-sm">
-                                        <p className="font-medium">
-                                            {item.author ?? 'Unknown'}
-                                            {item.is_internal && (
-                                                <span className="ml-2 text-xs text-muted-foreground">
-                                                    internal
-                                                </span>
-                                            )}
-                                            {item.context !== 'comment' && (
-                                                <span className="ml-2 text-xs text-muted-foreground">
-                                                    {item.context}
-                                                </span>
-                                            )}
-                                        </p>
-                                        <p>{item.body}</p>
-                                        <p className="text-xs text-muted-foreground">
-                                            {formatDateTime(item.created_at)}
-                                        </p>
-                                    </li>
-                                ))}
-                                {comments.length === 0 && (
-                                    <li className="text-sm text-muted-foreground">
-                                        No comments yet.
-                                    </li>
-                                )}
-                            </ul>
+                                    <ul className="mb-3 space-y-3">
+                                        {comments.map((item) => (
+                                            <li
+                                                key={item.id}
+                                                className="text-sm"
+                                            >
+                                                <p className="font-medium">
+                                                    {item.author ?? 'Unknown'}
+                                                    {item.is_internal && (
+                                                        <span className="ml-2 text-xs text-muted-foreground">
+                                                            internal
+                                                        </span>
+                                                    )}
+                                                    {item.context !==
+                                                        'comment' && (
+                                                        <span className="ml-2 text-xs text-muted-foreground">
+                                                            {item.context}
+                                                        </span>
+                                                    )}
+                                                </p>
+                                                <p>{item.body}</p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {formatDateTime(
+                                                        item.created_at,
+                                                    )}
+                                                </p>
+                                            </li>
+                                        ))}
+                                        {comments.length === 0 && (
+                                            <li className="text-sm text-muted-foreground">
+                                                No comments yet.
+                                            </li>
+                                        )}
+                                    </ul>
 
-                            {document.can.comment && (
-                                <form
-                                    onSubmit={(event) => {
-                                        event.preventDefault();
-                                        comment.post(
-                                            DocumentCommentController.store.url(
-                                                {
-                                                    document: document.id,
-                                                },
-                                            ),
-                                            {
-                                                preserveScroll: true,
-                                                onSuccess: () =>
-                                                    comment.reset(),
-                                            },
-                                        );
-                                    }}
-                                    className="space-y-2"
-                                >
-                                    <textarea
-                                        rows={2}
-                                        value={comment.data.body}
-                                        onChange={(event) =>
-                                            comment.setData(
-                                                'body',
-                                                event.target.value,
-                                            )
-                                        }
-                                        placeholder="Add a remark…"
-                                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                                    />
-                                    <InputError message={comment.errors.body} />
-                                    <Button
-                                        size="sm"
-                                        type="submit"
-                                        disabled={comment.processing}
-                                    >
-                                        Comment
-                                    </Button>
-                                </form>
-                            )}
-                        </section>
+                                    {document.can.comment && (
+                                        <form
+                                            onSubmit={(event) => {
+                                                event.preventDefault();
+                                                comment.post(
+                                                    DocumentCommentController.store.url(
+                                                        {
+                                                            document:
+                                                                document.id,
+                                                        },
+                                                    ),
+                                                    {
+                                                        preserveScroll: true,
+                                                        onSuccess: () =>
+                                                            comment.reset(),
+                                                    },
+                                                );
+                                            }}
+                                            className="space-y-2"
+                                        >
+                                            <textarea
+                                                rows={2}
+                                                value={comment.data.body}
+                                                onChange={(event) =>
+                                                    comment.setData(
+                                                        'body',
+                                                        event.target.value,
+                                                    )
+                                                }
+                                                placeholder="Add a remark…"
+                                                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                            />
+                                            <InputError
+                                                message={comment.errors.body}
+                                            />
+                                            <Button
+                                                size="sm"
+                                                type="submit"
+                                                disabled={comment.processing}
+                                            >
+                                                Comment
+                                            </Button>
+                                        </form>
+                                    )}
+                                </section>
+                            </div>
+                        </div>
                     </div>
-                </div>
-
-                <Link
-                    href={documents.index()}
-                    className="text-sm text-muted-foreground hover:underline"
-                >
-                    ← Back to Track Documents
-                </Link>
+                </details>
             </div>
         </>
     );
