@@ -93,8 +93,6 @@
     --color-navy-soft: #182663; /* nav links */
     --color-danger: #df1c12; /* Login / Logout button */
     --color-copy: #4a4a4a; /* card body text */
-    --color-city-back: #93c5ff; /* skyline, far layer */
-    --color-city-front: #b5d6fc; /* skyline, near layer */
 }
 
 :root {
