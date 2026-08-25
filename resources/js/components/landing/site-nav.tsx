@@ -5,8 +5,12 @@ import { NAV } from './content';
 
 /**
  * The nav sits directly on the hero gradient, exactly as the Figma has it --
- * no white bar. Link colours are the sampled values: the current item is
- * #1079CF and the rest are #182663.
+ * no white bar. The links are white rather than the Figma's sampled #182663
+ * and #1079CF: both were sampled off a lighter comp, and on the shipped
+ * gradient top (--color-brand, #2D6FCB) they measure 2.8:1 and 1.1:1, so the
+ * three feature links read as near-black smudges and "Home" is invisible.
+ * White is 4.9:1 there and matches the hero copy directly below. Colour alone
+ * cannot carry the current item at that point, so it takes an underline.
  *
  * The nav carries no auth action. The client asked for the Login button to sit
  * in the hero copy, under the "Welcome to CICTO Document Tracking System"
@@ -51,10 +55,10 @@ export function SiteNav() {
                 >
                     {NAV.map((item) => {
                         const className = cn(
-                            'text-[13px] font-medium whitespace-nowrap transition-opacity hover:opacity-70',
+                            'text-[13px] font-medium whitespace-nowrap transition',
                             item.current
-                                ? 'text-link-active'
-                                : 'text-navy-soft',
+                                ? 'text-white underline decoration-2 underline-offset-[6px]'
+                                : 'text-white/80 hover:text-white',
                         );
 
                         /*
