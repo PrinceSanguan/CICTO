@@ -16,7 +16,7 @@ import {
     UserCog,
     Users,
 } from 'lucide-react';
-import { dashboard } from '@/routes';
+import { dashboard, home } from '@/routes';
 import admin from '@/routes/admin';
 import archive from '@/routes/archive';
 import documents from '@/routes/documents';
@@ -48,7 +48,20 @@ import type { NavItem, RoleNav } from '@/types/navigation';
  * makes the section coherent -- it needs written confirmation.
  */
 const mainNav: NavItem[] = [
-    { title: 'Home', href: dashboard(), icon: Home },
+    /*
+        Home is `/` for EVERYBODY now, not the dashboard for a signed-in user.
+        The client asked on 2026-08-26 for the signed-in home page to be the
+        landing page with the app nav on it, which makes `/` the destination
+        the label already promised -- and removes the old split where the same
+        word meant two different screens depending on who was reading it.
+
+        §18's dashboard keeps its route and its sidebar entry, and the user
+        menu now carries "My Dashboard" as well: the top-nav shell has no
+        sidebar, so without that entry a plain user would have had no way back
+        to it. §4 fixes these four labels as acceptance criteria, so the
+        dashboard could not simply become a fifth.
+    */
+    { title: 'Home', href: home(), icon: Home },
     { title: 'Track Documents', href: documents.index(), icon: FileSearch },
     { title: 'Reports', href: reports.index(), icon: BarChart3 },
     { title: 'Help', href: help.index(), icon: LifeBuoy },
@@ -232,3 +245,19 @@ const PANEL_HOME: Record<Role, NavItem | null> = {
 export function panelHomeFor(role: Role | null | undefined): NavItem | null {
     return PANEL_HOME[role ?? 'user'] ?? null;
 }
+
+/**
+ * What a plain user gets in the slot beside Logout, where the other two roles
+ * get their panel.
+ *
+ * It exists because Home stopped pointing at the dashboard on 2026-08-26 (see
+ * mainNav). The top-nav shell has no sidebar and no user menu, so a clerk on
+ * Track Documents had nothing left that reached §18. This is not a panel and
+ * is deliberately NOT in PANEL_HOME: that map answers "which panel does this
+ * role own", and a plain user still owns none. AppTopNav picks between the two.
+ */
+export const DASHBOARD_HOME: NavItem = {
+    title: 'My Dashboard',
+    href: dashboard(),
+    icon: Home,
+};

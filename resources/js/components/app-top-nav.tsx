@@ -3,7 +3,7 @@ import { Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import { CictoLockup } from '@/components/auth/cicto-lockup';
 import { useCurrentUrl } from '@/hooks/use-current-url';
-import { navFor, panelHomeFor } from '@/lib/nav';
+import { DASHBOARD_HOME, navFor, panelHomeFor } from '@/lib/nav';
 import { login, logout } from '@/routes';
 
 /**
@@ -24,20 +24,27 @@ export function AppTopNav() {
     const [open, setOpen] = useState(false);
 
     /*
-        §23's Help pages are readable with no session, so this shell now
-        renders for guests too -- see the public Help block in routes/web.php.
-        `Home` means different things to the two audiences: the dashboard to
-        somebody signed in, the landing page to somebody who is not. Pointing a
-        visitor's Home at /dashboard would bounce them to login from a page
-        that did not need one, which is the whole complaint this fixes.
+        No Home override any more. It used to rewrite the item's href to '/'
+        for a signed-out visitor, because `Home` meant the dashboard to one
+        audience and the landing page to the other, and pointing a visitor at
+        /dashboard bounced them to login from a page that did not need one.
 
-        The four LABELS are untouched: §4 names them and they are contract
-        acceptance criteria. Only the destination moves.
+        lib/nav.ts now points Home at '/' for both, so the two audiences share
+        one destination and there is nothing left to patch here. See the note
+        there for where the dashboard went.
     */
-    const items = navFor(auth?.role).main.map((item) =>
-        !auth?.user && item.title === 'Home' ? { ...item, href: '/' } : item,
-    );
-    const panel = panelHomeFor(auth?.role);
+    const items = navFor(auth?.role).main;
+    /*
+        The contextual button beside Logout: an Admin or Super Admin gets their
+        panel, a plain user gets their dashboard, a guest gets nothing.
+
+        The guest case is the reason this is not just a `??` in nav.ts -- a
+        visitor reaches this shell through the public Help pages, and offering
+        them "My Dashboard" is the same lie as offering them a Logout.
+    */
+    const panel = auth?.user
+        ? (panelHomeFor(auth.role) ?? DASHBOARD_HOME)
+        : null;
     const PanelIcon = panel?.icon;
 
     return (

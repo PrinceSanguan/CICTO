@@ -22,8 +22,10 @@ import { cn } from '@/lib/utils';
  * fixed height and crops horizontally instead -- `object-bottom` keeps the
  * ground strip and the skyline simply shows fewer towers.
  *
- * `shrink-0` because AppTopLayout mounts this as a flex-column child: without
- * it a long document list compresses the band instead of scrolling past it.
+ * `shrink-0` is vestigial for the two callers that position this absolutely
+ * (AppTopLayout and the landing page's GetStarted) -- it costs nothing there
+ * and still guards any future caller that drops the band into a flex column,
+ * where a long list would otherwise compress it rather than scroll past it.
  */
 export function Skyline({ className }: { className?: string }) {
     return (

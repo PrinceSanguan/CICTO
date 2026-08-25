@@ -1,31 +1,46 @@
 import { Head, Link, usePage } from '@inertiajs/react';
 import { useEffect } from 'react';
+import { AppTopNav } from '@/components/app-top-nav';
 import { GET_STARTED, HERO, ORG } from '@/components/landing/content';
 import {
     GetStarted,
     getStartedActionClass,
 } from '@/components/landing/get-started';
 import { Hero, heroActionClass } from '@/components/landing/hero';
+import { SiteNav } from '@/components/landing/site-nav';
+import { Skyline } from '@/components/landing/skyline';
 import { WhyChoose } from '@/components/landing/why-choose';
-import { login, logout } from '@/routes';
+import { login } from '@/routes';
 
 /**
- * CICTO landing page, built to the client's Figma.
+ * Home, for both audiences. One route, one composition, two states.
+ *
+ * The client asked on 2026-08-26 for the signed-in home page to be this page
+ * -- "ganito rin dapat yung home page, same as the home/login page" -- with
+ * three things changed: no "Login to Your Account", no "Ready to Get Started?"
+ * or "Login Now", the feature cards clickable, and the app's own top
+ * navigation instead of the landing bar. That is what `signedIn` switches:
+ *
+ *   nav      SiteNav (logo only)        ->  AppTopNav (Home/Track/Reports/Help)
+ *   hero     "Login to Your Account"    ->  nothing under the sub-line
+ *   cards    inert articles             ->  links to the screen each names
+ *   closing  "Ready to Get Started?"    ->  the skyline alone
+ *
+ * Everything else -- the gradient, the art, the panel, "Why Choose CICTO" --
+ * is shared, which is the point: the two are the same page.
+ *
+ * Because this is now Home for a signed-in user too, `lib/nav.ts` points the
+ * Home item at `/` for everybody rather than at the dashboard, and the user
+ * menu carries "My Dashboard" so §18 stays reachable. See both files.
  *
  * The design carries a single action, in brand blue, so there is no Register
- * link and therefore no `register()` call anywhere on this page. That is also why the
- * Chisel `registration` markers are gone: with nothing to guard they would be
- * noise, and `php artisan chisel` simply finds no section to strip either way.
- * If a Register link is added later it must live in THIS file wrapped in
- * `/* @chisel-registration *` markers -- `chisel-paths.php` maps the `welcome`
- * key to this exact path and knows nothing about `components/landing/`.
- *
- * Both the Hero and the closing GetStarted band take their action as a prop
- * so that constraint stays easy to honour -- every auth link on the page is
- * built here. The Hero, not the nav, is where that action is rendered: the client
- * asked on 2026-08-23 for the Login button to sit in the hero copy, beneath
- * the "Welcome to CICTO Document Tracking System" line, instead of in the
- * top-right corner of the nav where it was easy to miss.
+ * link and therefore no `register()` call anywhere on this page. That is also
+ * why the Chisel `registration` markers are gone: with nothing to guard they
+ * would be noise, and `php artisan chisel` simply finds no section to strip
+ * either way. If a Register link is added later it must live in THIS file
+ * wrapped in `/* @chisel-registration *` markers -- `chisel-paths.php` maps
+ * the `welcome` key to this exact path and knows nothing about
+ * `components/landing/`.
  *
  * The `cicto-landing` class also has to be managed here: `app.blade.php` sets
  * it server-side for the first paint, but an Inertia visit to /login never
@@ -33,6 +48,7 @@ import { login, logout } from '@/routes';
  */
 export default function Welcome() {
     const { auth } = usePage().props;
+    const signedIn = Boolean(auth.user);
 
     useEffect(() => {
         const root = document.documentElement;
@@ -51,17 +67,12 @@ export default function Welcome() {
                 />
             </Head>
 
+            {signedIn ? <AppTopNav /> : <SiteNav />}
+
             <Hero
+                linked={signedIn}
                 authSlot={
-                    auth.user ? (
-                        <Link
-                            href={logout()}
-                            as="button"
-                            className={heroActionClass}
-                        >
-                            Logout
-                        </Link>
-                    ) : (
+                    signedIn ? null : (
                         <Link href={login()} className={heroActionClass}>
                             {HERO.action}
                         </Link>
@@ -69,25 +80,26 @@ export default function Welcome() {
                 }
             />
 
-            <WhyChoose />
+            <WhyChoose linked={signedIn} />
 
-            <GetStarted
-                actionSlot={
-                    auth.user ? (
-                        <Link
-                            href={logout()}
-                            as="button"
-                            className={getStartedActionClass}
-                        >
-                            Logout
-                        </Link>
-                    ) : (
+            {/*
+                A signed-in visitor is already started, so the closing band is
+                the skyline on its own -- the same art GetStarted paints behind
+                its heading, just without the heading and the button. It needs
+                its own top margin because GetStarted's padding was what stood
+                the band off the "Why Choose" cards.
+            */}
+            {signedIn ? (
+                <Skyline className="mt-16 lg:mt-24" />
+            ) : (
+                <GetStarted
+                    actionSlot={
                         <Link href={login()} className={getStartedActionClass}>
                             {GET_STARTED.action}
                         </Link>
-                    )
-                }
-            />
+                    }
+                />
+            )}
         </>
     );
 }

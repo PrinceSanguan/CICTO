@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { HERO } from './content';
 import { FeatureStrip } from './feature-strip';
 import { HeroBackdrop, HeroScene } from './hero-scene';
-import { SiteNav } from './site-nav';
 
 /**
  * Hero band, built to the proportions measured off the client's Figma.
@@ -30,7 +29,20 @@ import { SiteNav } from './site-nav';
  * Below `lg` the whole thing collapses to ordinary stacked flow, since the
  * Figma only specifies this one desktop frame.
  */
-export function Hero({ authSlot }: { authSlot: ReactNode }) {
+export function Hero({
+    authSlot,
+    linked = false,
+}: {
+    /**
+     * The call to action beneath the sub-line. Omitted entirely for a
+     * signed-in visitor -- the client struck "Login to Your Account" from
+     * that spot on 2026-08-26 -- and the wrapper goes with it rather than
+     * leaving an `mt-8` hole where the button used to be.
+     */
+    authSlot?: ReactNode;
+    /** Passed through to FeatureStrip; see the note there. */
+    linked?: boolean;
+}) {
     return (
         // `/srgb` matters: Tailwind v4 interpolates gradients in oklab by
         // default, but Figma works in sRGB. Without it the midtones drift away
@@ -39,7 +51,14 @@ export function Hero({ authSlot }: { authSlot: ReactNode }) {
             id="home"
             className="relative scroll-mt-20 overflow-x-clip bg-linear-to-b/srgb from-brand to-brand-soft"
         >
-            <SiteNav />
+            {/*
+              The nav used to be mounted HERE, inside the gradient. It moved out
+              to pages/welcome.tsx because the page now picks between two of
+              them: SiteNav's logo-only white bar for a visitor, and the app's
+              own AppTopNav once somebody is signed in. Both are opaque, so the
+              gradient reads the same either way -- it simply starts at full
+              `from-brand` below the bar now instead of behind it.
+            */}
 
             {/*
               No max-width container here. In the Figma the art runs to the
@@ -86,8 +105,14 @@ export function Hero({ authSlot }: { authSlot: ReactNode }) {
                       `w-fit` because the column is a grid cell: without it the
                       link would stretch to the full 36% track and the blue
                       would read as a bar rather than a button.
+
+                      Rendered only when there IS an action, so the signed-in
+                      page closes on the sub-line rather than on 32px of empty
+                      gradient.
                     */}
-                    <div className="mt-8 w-fit">{authSlot}</div>
+                    {authSlot !== undefined && authSlot !== null && (
+                        <div className="mt-8 w-fit">{authSlot}</div>
+                    )}
                 </div>
 
                 <HeroScene className="mt-10 w-full lg:mt-0" />
@@ -105,7 +130,7 @@ export function Hero({ authSlot }: { authSlot: ReactNode }) {
               the page's grid and makes the band symmetric in one move.
             */}
             <div className="relative z-10 mt-6 bg-surface pt-10 pb-10 lg:mt-[-6vw] lg:pt-[6.5vw] lg:pb-[5vw]">
-                <FeatureStrip />
+                <FeatureStrip linked={linked} />
             </div>
 
             {/* The gradient shows again beneath the panel before the next section. */}

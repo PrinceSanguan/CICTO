@@ -45,7 +45,19 @@ enum Role: string
     public function homeRoute(): string
     {
         return match ($this) {
-            self::User => 'dashboard',
+            /*
+             * A plain user lands on Home, not §18's dashboard. The client
+             * asked for it on 2026-08-26: Home is now the landing page with
+             * the app's top navigation on it, and it is where signing in
+             * should put a clerk.
+             *
+             * The two panel roles are unchanged. §3's "separate login entry
+             * points" is exactly this match, and an Admin who lands on the
+             * marketing home instead of their panel has to click twice to
+             * reach the work they signed in to do. The dashboard is still
+             * reachable for everybody -- see DASHBOARD_HOME in lib/nav.ts.
+             */
+            self::User => 'home',
             self::Admin => 'admin.dashboard',
             self::SuperAdmin => 'super-admin.dashboard',
         };

@@ -80,13 +80,34 @@ export default function AuthSimpleLayout({
                 */}
                 <main className="mx-auto flex w-full flex-col justify-center sm:max-w-[600px] lg:mx-0 lg:w-[600px] lg:shrink-0">
                     {/*
-                        Bottom-heavy padding, straight off the comp: it sets
-                        ~108px above the lockup and ~158px below the last line,
-                        so the card reads as a panel the content sits high in
-                        rather than as a box wrapped tight around it. Symmetric
-                        padding cannot express that.
+                        The card FILLS the row's height and centres its content,
+                        rather than sizing to its content inside fat padding.
+
+                        That padding is what broke the login screen: the comp
+                        for the verify page has ~108px above the lockup and
+                        ~158px below the last line, and reproducing it literally
+                        made every card 266px taller than its content. Verify
+                        has ~474px of content and survived it; login has ~534px
+                        and the card ran off the bottom of an 800px viewport
+                        with a scrollbar. There is no fixed padding that can
+                        satisfy both -- the comp's own numbers do not fit the
+                        login form at the height the comp was drawn at.
+
+                        Filling the height satisfies both at once. A short form
+                        gets the comp's generous card, because the leftover
+                        space becomes padding automatically; a long form gets
+                        the same card with the space squeezed out, and it always
+                        fits the viewport exactly. The comp agrees: its card is
+                        760px in an 854px frame, which is the full height less
+                        the row's own py-8.
+
+                        `flex-1` cannot clip anything. Flex items default to
+                        `min-height: auto`, so the card grows past the row when
+                        the content genuinely needs it -- the tallest form
+                        (Register) on a short phone still scrolls rather than
+                        losing its top edge.
                     */}
-                    <div className="rounded-2xl bg-white px-6 pt-16 pb-20 shadow-xl sm:px-12 sm:pt-24 sm:pb-32">
+                    <div className="flex flex-1 flex-col justify-center rounded-2xl bg-white px-6 py-10 shadow-xl sm:px-12 sm:py-14">
                         {/*
                             Centred and scaled up, per the comp. It was
                             left-aligned at its natural size, which read as a

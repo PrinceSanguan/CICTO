@@ -34,6 +34,9 @@ class RegistrationTest extends TestCase
         ]);
 
         $this->assertAuthenticated();
-        $response->assertRedirect(route('dashboard', absolute: false));
+
+        // Registration goes through the same RoleAwareLoginResponse as login,
+        // so a new account lands on Home like every other plain user.
+        $response->assertRedirect(route('home', absolute: false));
     }
 }

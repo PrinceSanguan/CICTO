@@ -29,7 +29,41 @@ class AuthenticationTest extends TestCase
         ]);
 
         $this->assertAuthenticated();
-        $response->assertRedirect(route('dashboard', absolute: false));
+
+        // Home, not the dashboard: Role::homeRoute() sends a plain user to
+        // the landing page as of 2026-08-26. The two panel roles still land on
+        // their own panels -- see the two tests below.
+        $response->assertRedirect(route('home', absolute: false));
+    }
+
+    /*
+     * The other half of Role::homeRoute(). Untested until 2026-08-26, when the
+     * plain-user destination changed and the split became load-bearing: the
+     * three arms of that match are now the whole of §3's "separate login entry
+     * points", and nothing else pins two of them.
+     */
+    public function test_an_admin_lands_on_the_admin_panel_after_login()
+    {
+        $user = User::factory()->admin()->create();
+
+        $this->post(route('login.store'), [
+            'email' => $user->email,
+            'password' => 'password',
+        ])->assertRedirect(route('admin.dashboard', absolute: false));
+
+        $this->assertAuthenticated();
+    }
+
+    public function test_a_super_admin_lands_on_the_super_admin_panel_after_login()
+    {
+        $user = User::factory()->superAdmin()->create();
+
+        $this->post(route('login.store'), [
+            'email' => $user->email,
+            'password' => 'password',
+        ])->assertRedirect(route('super-admin.dashboard', absolute: false));
+
+        $this->assertAuthenticated();
     }
 
     public function test_users_with_two_factor_enabled_are_redirected_to_two_factor_challenge()
