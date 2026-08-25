@@ -12,9 +12,10 @@ import { HeroBackdrop, HeroScene } from './hero-scene';
  *   hero height          0.700 x width
  *   art width            0.645 x width, bleeding to the right edge
  *   panel top            62.4% down the hero
- *   panel bottom         89.5% down the hero  (the gradient shows again below
- *                        it -- the panel is a floating card, not the next
- *                        section arriving early)
+ *   panel bottom         89.5% down the hero  (measured when the panel was a
+ *                        floating card with gradient beneath it; the client
+ *                        has since asked for one continuous surface colour
+ *                        from the cards down, so nothing follows the panel)
  *   copy left inset      9.0% of width
  *   copy top inset       8.2% of width, measured from the nav's lower edge
  *
@@ -151,8 +152,22 @@ export function Hero({
                 <FeatureStrip linked={linked} />
             </div>
 
-            {/* The gradient shows again beneath the panel before the next section. */}
-            <div aria-hidden="true" className="hidden lg:block lg:h-[7.4vw]" />
+            {/*
+              Nothing follows the panel. There used to be a `lg:h-[7.4vw]`
+              spacer here whose entire job was to let the gradient show again
+              below the feature cards -- an earlier Figma had the panel floating
+              as a card with brand-soft beneath it. On the shipped page that
+              rendered as a ~107px band of #b2cbec between the cards and "Why
+              Choose CICTO", both of which sit on #eff6fe, so it read as a
+              rendering fault rather than as a design: the client asked for the
+              background to carry one colour down the page.
+
+              Deleted rather than repainted `bg-surface`. With no gradient left
+              to reveal it had no job, and a 107px invisible spacer would just
+              be a thing for the next person to wonder about -- the panel's own
+              `lg:pb-[5vw]` and WhyChoose's `lg:pt-24` already stand the two
+              apart by ~168px at 1440.
+            */}
         </section>
     );
 }
