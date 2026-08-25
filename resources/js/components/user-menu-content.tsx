@@ -1,5 +1,5 @@
 import { Link, router } from '@inertiajs/react';
-import { Home, LogOut, Settings } from 'lucide-react';
+import { LogOut, Settings } from 'lucide-react';
 import {
     DropdownMenuGroup,
     DropdownMenuItem,
@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { UserInfo } from '@/components/user-info';
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
-import { dashboard, logout } from '@/routes';
+import { logout } from '@/routes';
 import { edit } from '@/routes/profile';
 import type { User } from '@/types';
 
@@ -33,27 +33,6 @@ export function UserMenuContent({ user }: Props) {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-                {/*
-                    §18's dashboard. It is here because the top-nav shell has
-                    no sidebar and, since 2026-08-26, no longer reaches it
-                    through Home either -- Home is the landing page for both
-                    audiences now (see lib/nav.ts). Without this entry a plain
-                    user on Track Documents or Reports would have had no way
-                    back to their own dashboard at all. The label matches the
-                    one the sidebar already uses.
-                */}
-                <DropdownMenuItem asChild>
-                    <Link
-                        className="block w-full cursor-pointer"
-                        href={dashboard()}
-                        prefetch
-                        onClick={cleanup}
-                    >
-                        <Home className="mr-2" />
-                        My Dashboard
-                    </Link>
-                </DropdownMenuItem>
-
                 <DropdownMenuItem asChild>
                     <Link
                         className="block w-full cursor-pointer"

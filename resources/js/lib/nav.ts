@@ -16,7 +16,7 @@ import {
     UserCog,
     Users,
 } from 'lucide-react';
-import { dashboard, home } from '@/routes';
+import { home } from '@/routes';
 import admin from '@/routes/admin';
 import archive from '@/routes/archive';
 import documents from '@/routes/documents';
@@ -49,17 +49,16 @@ import type { NavItem, RoleNav } from '@/types/navigation';
  */
 const mainNav: NavItem[] = [
     /*
-        Home is `/` for EVERYBODY now, not the dashboard for a signed-in user.
-        The client asked on 2026-08-26 for the signed-in home page to be the
+        Home is `/` for EVERYBODY, not the dashboard for a signed-in user. The
+        client asked on 2026-08-26 for the signed-in home page to be the
         landing page with the app nav on it, which makes `/` the destination
         the label already promised -- and removes the old split where the same
         word meant two different screens depending on who was reading it.
 
-        §18's dashboard keeps its route and its sidebar entry, and the user
-        menu now carries "My Dashboard" as well: the top-nav shell has no
-        sidebar, so without that entry a plain user would have had no way back
-        to it. §4 fixes these four labels as acceptance criteria, so the
-        dashboard could not simply become a fifth.
+        These four are the WHOLE of the signed-in menu now. §18's dashboard was
+        briefly given a button beside Logout so it stayed reachable; the client
+        struck it the same day, asking for these four and nothing else. Its
+        route still resolves for anyone who types it.
     */
     { title: 'Home', href: home(), icon: Home },
     { title: 'Track Documents', href: documents.index(), icon: FileSearch },
@@ -82,13 +81,13 @@ export const NAV_BY_ROLE: Record<Role, RoleNav> = {
     user: {
         main: mainNav,
         sidebar: [
-            {
-                label: 'Workspace',
-                items: [
-                    { title: 'My Dashboard', href: dashboard(), icon: Home },
-                    ...workspace,
-                ],
-            },
+            /*
+                No dashboard entry. §18's screen was removed from every menu on
+                2026-08-26 -- the client asked for exactly four destinations,
+                "Home, Track Documents, Reports, Help", and nothing else. The
+                route and the page are untouched; only the ways in are gone.
+            */
+            { label: 'Workspace', items: workspace },
         ],
     },
 
@@ -245,19 +244,3 @@ const PANEL_HOME: Record<Role, NavItem | null> = {
 export function panelHomeFor(role: Role | null | undefined): NavItem | null {
     return PANEL_HOME[role ?? 'user'] ?? null;
 }
-
-/**
- * What a plain user gets in the slot beside Logout, where the other two roles
- * get their panel.
- *
- * It exists because Home stopped pointing at the dashboard on 2026-08-26 (see
- * mainNav). The top-nav shell has no sidebar and no user menu, so a clerk on
- * Track Documents had nothing left that reached §18. This is not a panel and
- * is deliberately NOT in PANEL_HOME: that map answers "which panel does this
- * role own", and a plain user still owns none. AppTopNav picks between the two.
- */
-export const DASHBOARD_HOME: NavItem = {
-    title: 'My Dashboard',
-    href: dashboard(),
-    icon: Home,
-};

@@ -78,9 +78,24 @@ export default function DocumentsIndex({
                     Track Documents
                 </h1>
 
+                {/*
+                    #3B6FE0, not the #3B72C4 every other action on the app uses.
+
+                    That colour is fine on a white card and invisible here: this
+                    is the ONE primary action that sits directly on the hero
+                    gradient, and #3B72C4 is rgb(59,114,196) against a gradient
+                    that starts at rgb(45,111,203). Same hue, near-identical
+                    value -- the button read as a faint rectangle rather than a
+                    control, which is what the client screenshotted.
+
+                    The fix is chroma, not darkness: same hue family, ~15% more
+                    saturation and slightly deeper, so it separates from the
+                    field behind it at every point of the gradient without
+                    turning into a second, competing brand colour.
+                */}
                 <Link
                     href={documents.create()}
-                    className="flex items-center gap-2 rounded-lg bg-[#3B72C4] px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-[#31629F]"
+                    className="flex items-center gap-2 rounded-lg bg-[#3B6FE0] px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-[#2F5CC0]"
                 >
                     <Plus className="size-5" />
                     Submit Document

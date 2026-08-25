@@ -84,10 +84,22 @@ export default function ScanConsole() {
 
             <div className="flex flex-col items-center gap-10 lg:flex-row lg:items-start lg:justify-between lg:gap-16">
                 <div className="w-full max-w-md">
-                    <h1 className="text-4xl font-extrabold tracking-tight text-navy sm:text-5xl">
+                    {/*
+                        White, like every other heading in this shell. It was
+                        `text-navy` on `text-navy-soft/70` -- navy on the TOP of
+                        the hero gradient, which is `--color-brand` #2d6fcb, so
+                        the title of the page was the least legible text on it.
+                        Track Documents, Reports and Help all set their h1 white
+                        here; this page was the one that did not.
+
+                        The helper line further down stays muted and dark on
+                        purpose: it sits low enough that the gradient has faded
+                        to the pale ground, where white would vanish instead.
+                    */}
+                    <h1 className="text-4xl font-extrabold tracking-tight text-white sm:text-5xl">
                         Scan QR Code
                     </h1>
-                    <p className="mt-2 text-sm text-navy-soft/70">
+                    <p className="mt-2 text-sm font-medium text-white/90">
                         Align the QR code within the frame to scan.
                     </p>
 

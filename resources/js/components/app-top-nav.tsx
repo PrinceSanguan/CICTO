@@ -3,8 +3,9 @@ import { Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import { CictoLockup } from '@/components/auth/cicto-lockup';
 import { useCurrentUrl } from '@/hooks/use-current-url';
-import { DASHBOARD_HOME, navFor, panelHomeFor } from '@/lib/nav';
-import { login, logout } from '@/routes';
+import { navFor, panelHomeFor } from '@/lib/nav';
+import { toUrl } from '@/lib/utils';
+import { home, login, logout } from '@/routes';
 
 /**
  * §4's main navigation: Home, Track Documents, Reports, Help.
@@ -32,19 +33,34 @@ export function AppTopNav() {
         lib/nav.ts now points Home at '/' for both, so the two audiences share
         one destination and there is nothing left to patch here. See the note
         there for where the dashboard went.
+
+        What IS still conditional: Home drops out of the row while you are on
+        Home. The client's comp for that page shows three items, not four, and
+        it is the only page where the current item is hidden rather than
+        highlighted -- Track Documents, Reports and Help all stay put and turn
+        blue on their own screens. The reason it works here and nowhere else is
+        that the lockup to the left already links to `/`, so the destination is
+        not lost; on the other three there would be no other way back.
+
+        Matched on the resolved URL rather than on the label. §4 fixes these
+        four strings as acceptance criteria so `item.title === 'Home'` would
+        work, but the thing being tested is "does this item point at the page
+        we are on", and that is a question about the href.
     */
-    const items = navFor(auth?.role).main;
+    const homeUrl = toUrl(home());
+    const onHome = isCurrentUrl(home());
+
+    const items = navFor(auth?.role).main.filter(
+        (item) => !onHome || toUrl(item.href) !== homeUrl,
+    );
     /*
         The contextual button beside Logout: an Admin or Super Admin gets their
-        panel, a plain user gets their dashboard, a guest gets nothing.
-
-        The guest case is the reason this is not just a `??` in nav.ts -- a
-        visitor reaches this shell through the public Help pages, and offering
-        them "My Dashboard" is the same lie as offering them a Logout.
+        panel, everybody else gets nothing. A plain user briefly got a "My
+        Dashboard" button here so §18 stayed reachable once Home stopped
+        pointing at it; the client struck that on 2026-08-26, asking for the
+        four main items and nothing else.
     */
-    const panel = auth?.user
-        ? (panelHomeFor(auth.role) ?? DASHBOARD_HOME)
-        : null;
+    const panel = panelHomeFor(auth?.role);
     const PanelIcon = panel?.icon;
 
     return (
@@ -58,11 +74,21 @@ export function AppTopNav() {
                     gap-6 at `lg`, not gap-8: the Admin Panel button in the
                     right-hand cluster costs ~180px, and at exactly 1024px the
                     old spacing left "Track Documents" wrapping inside the
-                    fixed h-20 bar.
+                    fixed h-20 bar. The gaps are a FLOOR, not the spacing --
+                    `justify-evenly` shares out whatever is left over.
+
+                    Evenly, not centred. Centring packs the items at their gap
+                    width in the middle of the track and dumps the remainder in
+                    one lump against the divider: on Home, where the row drops
+                    to three items, that lump was ~310px and the nav read as
+                    left-aligned with a hole in it. Every comp the client has
+                    sent spaces these ~150px apart with a comparable gap before
+                    the divider, which is what evenly produces -- at three items
+                    and at four, without a per-count width to maintain.
                 */}
                 <nav
                     aria-label="Main"
-                    className="hidden flex-1 items-center justify-center gap-6 lg:flex xl:gap-14"
+                    className="hidden flex-1 items-center justify-evenly gap-6 lg:flex xl:gap-14"
                 >
                     {items.map((item) => {
                         const current = isCurrentUrl(item.href);

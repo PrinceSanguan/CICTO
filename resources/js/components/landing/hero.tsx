@@ -115,7 +115,25 @@ export function Hero({
                     )}
                 </div>
 
-                <HeroScene className="mt-10 w-full lg:mt-0" />
+                {/*
+                  `z-20` puts the art ABOVE the surface panel below, which is
+                  z-10. Without it the panel's top edge sliced the bottom of the
+                  scene: the whole hero is one SVG, and the panel is pulled up
+                  `-6vw` over it, so everything in the last 6vw of the artwork
+                  was painted over. The man stands lowest, so his feet went
+                  first -- which is exactly what the client screenshotted.
+
+                  This is also what the Figma draws: both figures and the
+                  right-hand window overhang the pale band and stand ON it,
+                  rather than being cut off at its edge.
+
+                  Safe against the cards: the panel carries `pt-[6.5vw]` before
+                  FeatureStrip, so the 6vw of overlap lands entirely in its top
+                  padding. `pointer-events-none` guarantees the rest -- the
+                  scene is decorative and must never swallow a click meant for
+                  a card underneath it.
+                */}
+                <HeroScene className="pointer-events-none relative z-20 mt-10 w-full lg:mt-0" />
             </div>
 
             {/*
