@@ -66,13 +66,39 @@ export default function AuthSimpleLayout({
 
             <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 items-stretch gap-6 px-4 py-8 lg:px-8">
                 {/*
-                    max-w-[480px] from `sm` up, not only at `lg`. Without it the
+                    max-w-[600px] from `sm` up, not only at `lg`. Without it the
                     card grew to the full container between 768px and 1023px and
-                    then snapped back to 480px at a single pixel of resize.
+                    then snapped back at a single pixel of resize.
+
+                    600 rather than the comp's measured ~648: the row is
+                    max-w-6xl, so every pixel the card takes comes off the
+                    welcome panel beside it, and "CICTO Document" needs ~400px
+                    on one line. 600 leaves the panel ~464px -- comfortable --
+                    where 648 leaves ~416px and puts the title one font-metric
+                    difference away from wrapping. The card still grows 25% and
+                    reads as the comp's dominant element.
                 */}
-                <main className="mx-auto flex w-full flex-col justify-center sm:max-w-[480px] lg:mx-0 lg:w-[480px] lg:shrink-0">
-                    <div className="rounded-2xl bg-white px-6 py-10 shadow-xl sm:px-10 sm:py-14">
-                        <CictoLockup />
+                <main className="mx-auto flex w-full flex-col justify-center sm:max-w-[600px] lg:mx-0 lg:w-[600px] lg:shrink-0">
+                    {/*
+                        Bottom-heavy padding, straight off the comp: it sets
+                        ~108px above the lockup and ~158px below the last line,
+                        so the card reads as a panel the content sits high in
+                        rather than as a box wrapped tight around it. Symmetric
+                        padding cannot express that.
+                    */}
+                    <div className="rounded-2xl bg-white px-6 pt-16 pb-20 shadow-xl sm:px-12 sm:pt-24 sm:pb-32">
+                        {/*
+                            Centred and scaled up, per the comp. It was
+                            left-aligned at its natural size, which read as a
+                            letterhead rather than as the head of a centred
+                            card -- every other thing in here is centred.
+                            `scale-125` is the same idiom app-top-nav.tsx uses
+                            to take it the other way (`scale-90`), and it does
+                            not affect layout: the 56px mark still reserves
+                            56px, and the 70px it paints eats into the gap
+                            below, which is why that gap grew to `mt-12`.
+                        */}
+                        <CictoLockup className="scale-125 justify-center" />
 
                         {/*
                             Rendered only when a page supplies one. The login
@@ -85,7 +111,7 @@ export default function AuthSimpleLayout({
                             centred block and a heading above it would repeat it.
                         */}
                         {title && (
-                            <div className="mt-8 text-center">
+                            <div className="mt-16 text-center">
                                 <h1 className="text-2xl font-bold text-navy">
                                     {title}
                                 </h1>
@@ -97,7 +123,7 @@ export default function AuthSimpleLayout({
                             </div>
                         )}
 
-                        <div className={title ? 'mt-6' : 'mt-10'}>
+                        <div className={title ? 'mt-16' : 'mt-20'}>
                             {children}
                         </div>
                     </div>

@@ -16,7 +16,16 @@ import { SiteNav } from './site-nav';
  *   panel bottom         89.5% down the hero  (the gradient shows again below
  *                        it -- the panel is a floating card, not the next
  *                        section arriving early)
- *   copy left inset      13.8% of width
+ *   copy left inset      9.0% of width
+ *   copy top inset       8.2% of width, measured from the nav's lower edge
+ *
+ * The last two were 13.8% and 1.6%, taken off the original Figma. The client
+ * sent three fresh renders on 2026-08-25 and all three put the copy further
+ * left and much further down: 8.7%/8.6%, 9.5%/8.4% and 9.0%/8.2%. Those are
+ * ratios of the frame width, so they hold whatever scale each render was
+ * captured at -- which is what makes them worth trusting over a single
+ * measurement. The copy column's own internal rhythm was left alone: its
+ * eyebrow-to-button height already measures within 3% of the renders.
  *
  * Below `lg` the whole thing collapses to ordinary stacked flow, since the
  * Figma only specifies this one desktop frame.
@@ -47,7 +56,7 @@ export function Hero({ authSlot }: { authSlot: ReactNode }) {
                 */}
                 <HeroBackdrop className="pointer-events-none absolute bottom-0 left-0 hidden w-[46%] lg:block" />
 
-                <div className="pt-4 lg:pt-[1.6vw] lg:pl-[13.8vw]">
+                <div className="pt-4 lg:pt-[8.2vw] lg:pl-[9vw]">
                     <p className="text-[13px] font-medium text-white">
                         {HERO.eyebrow}
                     </p>
@@ -75,7 +84,7 @@ export function Hero({ authSlot }: { authSlot: ReactNode }) {
                       circled on the screenshot.
 
                       `w-fit` because the column is a grid cell: without it the
-                      link would stretch to the full 36% track and the red
+                      link would stretch to the full 36% track and the blue
                       would read as a bar rather than a button.
                     */}
                     <div className="mt-8 w-fit">{authSlot}</div>
@@ -106,14 +115,18 @@ export function Hero({ authSlot }: { authSlot: ReactNode }) {
 }
 
 /**
- * Shared styling for the red action, so the Login and Logout states are
- * identical. This is the Figma's nav-chip treatment (#df1c12 at a 3px radius)
- * scaled up for its new home: at hero size the 13px chip read as a stray
- * control rather than the page's primary call to action.
+ * Shared styling for the hero action, so the Login and Logout states are
+ * identical.
+ *
+ * Brand blue at a 6px radius, per the client's 2026-08-25 comp. It was
+ * `--color-danger` at 3px -- the old Figma's nav-chip treatment, scaled up
+ * when the button moved into the hero -- and red is now the one colour on the
+ * page that appears nowhere in the comp. `--color-danger` itself stays in the
+ * palette; it just no longer has a job on the landing page.
  *
  * It lives here, and not in site-nav.tsx, because the hero is what renders it
  * now. It is still exported rather than applied internally because the link
  * itself is built in pages/welcome.tsx -- see the note there.
  */
 export const heroActionClass =
-    'inline-flex items-center rounded-[3px] bg-danger px-6 py-2.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90';
+    'inline-flex items-center rounded-[6px] bg-brand px-7 py-3 text-[15px] font-semibold text-white shadow-[0_1px_2px_rgb(16_42_82/0.15)] transition-opacity hover:opacity-90';

@@ -1,95 +1,55 @@
-import { Link } from '@inertiajs/react';
-import { cn } from '@/lib/utils';
-import { BrandLogo } from './brand-logo';
-import { NAV } from './content';
+import { CictoLockup } from '@/components/auth/cicto-lockup';
 
 /**
- * The nav sits directly on the hero gradient, exactly as the Figma has it --
- * no white bar. The links are white rather than the Figma's sampled #182663
- * and #1079CF: both were sampled off a lighter comp, and on the shipped
- * gradient top (--color-brand, #2D6FCB) they measure 2.8:1 and 1.1:1, so the
- * three feature links read as near-black smudges and "Home" is invisible.
- * White is 4.9:1 there and matches the hero copy directly below. Colour alone
- * cannot carry the current item at that point, so it takes an underline.
+ * A white bar carrying the lockup, sitting above the hero gradient.
  *
- * The nav carries no auth action. The client asked for the Login button to sit
- * in the hero copy, under the "Welcome to CICTO Document Tracking System"
- * line, so `Hero` renders `authSlot` there instead of handing it to this
- * component. See hero.tsx.
+ * It used to be transparent -- the nav painted straight onto the gradient --
+ * with four centred links: Home, Track Documents, Reports and Help. Both went
+ * on 2026-08-25, when the client supplied a comp showing a plain white bar
+ * with nothing in it but the logo. `NAV` has been deleted from content.ts
+ * rather than left as an unreferenced export.
  *
- * That is also why the row is a three-column grid from `lg` up rather than a
- * flex row: the Figma centres the links against the frame, and it only looked
- * centred before because the logo on the left and the Login button on the
- * right happened to weigh the same. With the button gone, `justify-center`
- * inside a single flexible track would push the links ~56px to the right of
- * true centre. `1fr auto 1fr` with an empty third column centres them against
- * the frame whatever the logo measures.
+ * Dropping the links costs the landing page nothing structurally: every one of
+ * the three feature links pointed at a screen behind auth, so a visitor still
+ * reaches them the same way they always did in practice -- through the Login
+ * action, after which RoleAwareLoginResponse replays the intended URL. `#home`
+ * scrolled to the top of a page that opens at the top.
+ *
+ * The logo is `CictoLockup`, the same horizontal mark-plus-wordmark the auth
+ * screens and the signed-in top nav use, and that is what the comp draws: the
+ * mark on the left with a navy "CICTO" over "Baliwag City". It replaced
+ * `BrandLogo`, which drew the client's raw artwork instead -- a SQUARE,
+ * vertically stacked lockup with a *green* "CICTO" over "BALIWAG". That was
+ * both the wrong arrangement and, at `h-12`, visibly smaller than the comp;
+ * the swap fixes the proportion and the size in one move, and it means a
+ * visitor sees the same lockup on the landing page and on the login screen
+ * they are sent to. `brand-logo.tsx` had no other caller and is deleted.
+ *
+ * `py-4` rather than `py-3` because the lockup is 56px tall against the old
+ * image's 48px: the comp's bar is a little over 1.5x the lockup's height, and
+ * 16px of padding reproduces that. It is the whole reason the bar grew.
+ *
+ * Full-bleed padding rather than the page's `max-w-7xl` container, because the
+ * comp sets the logo ~30px from the frame edge -- well left of the feature
+ * cards below it, which do sit on the centred grid.
+ *
+ * The bar is opaque, so it covers the top of the gradient it is mounted on
+ * (see hero.tsx). That is intentional and cheaper than lifting the nav out of
+ * the hero section: the gradient simply becomes visible from the bar's lower
+ * edge down.
  */
 export function SiteNav() {
     return (
-        <header className="relative z-20">
-            <div className="mx-auto flex max-w-7xl flex-col gap-3 px-6 py-3 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-8">
-                <a
-                    href="#home"
-                    className="shrink-0 self-start lg:self-auto lg:justify-self-start"
-                >
-                    {/*
-                      The lockup is square with a stacked wordmark, so it needs
-                      real height for "BALIWAG" to stay legible.
-
-                      `lg:justify-self-start` is load-bearing, not tidying. In
-                      the grid the anchor is a blockified grid item, so it
-                      stretches across the whole 1fr track -- ~390px at 1440 --
-                      while the image inside stays 48px wide at the left edge.
-                      That looks identical in a screenshot but leaves the rest
-                      of the track as an invisible #home click target with the
-                      focus ring drawn around all of it. `shrink-0` does not
-                      prevent it: flex-shrink is inert under grid.
-                    */}
-                    <BrandLogo className="h-11 lg:h-12" />
+        <header className="relative z-20 bg-white shadow-[0_1px_3px_rgb(16_42_82/0.06)]">
+            <div className="flex items-center px-6 py-4 lg:px-8">
+                {/*
+                  No `alt` to manage here: CictoLockup hides the cropped mark
+                  from the accessibility tree and sets the wordmark as real
+                  text, so the link names itself "CICTO Baliwag City".
+                */}
+                <a href="#home" className="shrink-0">
+                    <CictoLockup />
                 </a>
-
-                <nav
-                    aria-label="Main"
-                    className="flex flex-wrap items-center justify-start gap-x-6 gap-y-2 lg:gap-x-14"
-                >
-                    {NAV.map((item) => {
-                        const className = cn(
-                            'text-[13px] font-medium whitespace-nowrap transition',
-                            item.current
-                                ? 'text-white underline decoration-2 underline-offset-[6px]'
-                                : 'text-white/80 hover:text-white',
-                        );
-
-                        /*
-                            An in-page anchor stays a plain <a>: Inertia would
-                            treat "#home" as a visit to a URL rather than a
-                            scroll. The three feature items are real screens, so
-                            they are Inertia visits -- the same as the Login
-                            action in the hero below, which is what proves the
-                            landing page's `cicto-landing` cleanup runs on the
-                            way out.
-                        */
-                        return item.kind === 'anchor' ? (
-                            <a
-                                key={item.label}
-                                href={item.href}
-                                aria-current={item.current ? 'page' : undefined}
-                                className={className}
-                            >
-                                {item.label}
-                            </a>
-                        ) : (
-                            <Link
-                                key={item.label}
-                                href={item.href}
-                                className={className}
-                            >
-                                {item.label}
-                            </Link>
-                        );
-                    })}
-                </nav>
             </div>
         </header>
     );

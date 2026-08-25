@@ -183,24 +183,44 @@ export function AuthWelcome() {
         >
             <CloudBank />
 
-            <div className="relative z-10 pt-14 pl-4 xl:pl-10">
+            {/*
+                `mx-auto w-fit` centres the title BLOCK in the panel while its
+                lines stay left-aligned to each other, which is how the comp
+                sets it. It used to be `pl-4 xl:pl-10`, pinning the block to the
+                panel's left edge -- so on a wide screen it sat hard against the
+                card with the whole right half of the panel empty, and the
+                client marked it up on 2026-08-25: "dapat nasa center o katapat
+                mismo nito". `w-fit` takes its width from "CICTO Document", the
+                longest line, so the centring is measured off the title mass
+                rather than off the panel.
+            */}
+            <div className="relative z-10 mx-auto w-fit px-4 pt-28">
                 {/*
                     "Welcome to" is deliberately smaller than the three lines
                     under it -- roughly three quarters -- and the whole block is
                     set tight, so the title reads as one mass rather than four
                     separate sentences.
                 */}
-                <p className="text-4xl font-extrabold tracking-tight text-navy xl:text-[2.75rem]">
+                {/*
+                    No `xl:` step up any more. The card is 600px from `lg` up
+                    rather than 480px, which leaves this panel about 464px
+                    inside the max-w-6xl row; "CICTO Document" measures ~400px
+                    at text-5xl and ~500px at text-6xl, so the old xl bump would
+                    have wrapped the title the moment the card grew. The comp
+                    sets it at text-5xl at every width, so matching it and
+                    fixing the overflow are the same edit.
+                */}
+                <p className="text-4xl font-extrabold tracking-tight text-navy">
                     Welcome to
                 </p>
 
-                <p className="mt-1 text-5xl leading-[1.05] font-extrabold tracking-tight xl:text-6xl">
+                <p className="mt-1 text-5xl leading-[1.05] font-extrabold tracking-tight">
                     {/* Grey, not a translucent white -- against the gradient a
                         70% white reads as pale blue rather than silver. */}
                     <span className="text-[#9AA3B4]">CICTO</span>{' '}
                     <span className="text-[#F0B94A]">Document</span>
                 </p>
-                <p className="text-5xl leading-[1.05] font-extrabold tracking-tight text-[#F0B94A] xl:text-6xl">
+                <p className="text-5xl leading-[1.05] font-extrabold tracking-tight text-[#F0B94A]">
                     Tracking System
                 </p>
 
@@ -215,16 +235,49 @@ export function AuthWelcome() {
             </div>
 
             {/*
-                Anchored to the panel's bottom-right corner with a CAPPED
-                height. Sizing purely in percent made the same figure a
+                Anchored to the panel's bottom-LEFT corner, mirrored, with a
+                CAPPED height. Sizing purely in percent made the same figure a
                 different size on every screen, because the panel's height is
                 driven by whichever form sits beside it.
+            */}
+            {/*
+                `-scale-x-100` and the move from `right-0` to `left-0` are one
+                change, not two. The artwork has her turned to the viewer's
+                right with the laptop out on that side, so at the panel's right
+                edge she faced the empty margin and read as walking off the
+                page -- "nakaharap rin dapat 'to sa may verification" on the
+                client's markup. Mirrored at the left edge she stands beside
+                the card and looks into it.
+
+                The flip is applied here rather than to the file because
+                hero-scene.tsx uses the same asset on the landing page, where
+                she faces the document art on her right and is already correct.
+            */}
+            {/*
+                Sizing has to account for the ASSET, not just the box: the PNG
+                is 360x640 with the figure occupying only rows 85-574, so she
+                fills 76.4% of whatever height is set here and the rest is
+                transparent. That is why `max-h-[460px]` drew a 351px woman
+                rather than a 460px one. 72% of the panel the taller card now
+                drives to ~700px is ~503px of box and ~384px of figure, which
+                is what the comp measures; the cap is 520 so the longer forms
+                (register, reset) grow her rather than clipping.
+
+                `-bottom-14` cancels that same transparency at the foot -- the
+                asset leaves ~10% of its height empty below her shoes, so
+                without it she floats above the ground band instead of standing
+                on it.
+
+                `-left-8` is the comp's overlap: the row already puts a 24px
+                gap between the card and this panel, so -32px leaves her
+                standing 8px in FRONT of the card's right edge -- well inside
+                the card's own 48px gutter, so she can never cover a field.
             */}
             <img
                 src={womanSrc}
                 alt=""
                 aria-hidden="true"
-                className="pointer-events-none absolute right-0 -bottom-8 z-10 h-[70%] max-h-[420px] min-h-[280px] w-auto object-contain object-bottom xl:right-6"
+                className="pointer-events-none absolute -bottom-14 -left-8 z-10 h-[72%] max-h-[520px] min-h-[300px] w-auto -scale-x-100 object-contain object-bottom"
             />
         </div>
     );

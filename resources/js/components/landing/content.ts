@@ -1,7 +1,3 @@
-import documents from '@/routes/documents';
-import help from '@/routes/help';
-import reports from '@/routes/reports';
-
 /**
  * Every string on the landing page, transcribed verbatim from the client's
  * Figma. Copy edits during a review should only touch this file.
@@ -17,41 +13,6 @@ export const ORG = {
     system: 'CICTO Document Tracking System',
 } as const;
 
-/**
- * The nav's four items, from the Figma.
- *
- * Three of them are FEATURES, not page sections, and they now say so. They were
- * all in-page anchors -- `#home`, `#track`, `#reports`, `#help` -- but only two
- * of those targets ever existed: `#home` on the hero, and `#reports`, which was
- * pinned to the "Why Choose CICTO" block and so scrolled to something that is
- * not a report. `#track` and `#help` matched nothing at all, which is what the
- * client reported on 2026-08-17: clicking them did nothing.
- *
- * Rather than invent three marketing sections the Figma does not have, the
- * three feature items now open the real screens. A visitor with no session is
- * sent to the login page and lands on the screen they asked for once they sign
- * in -- Laravel stores the intended URL and RoleAwareLoginResponse replays it.
- *
- * `kind` decides the element: 'anchor' scrolls within the page, 'route' is an
- * Inertia visit. See SiteNav.
- */
-export const NAV = [
-    { label: 'Home', href: '#home', kind: 'anchor', current: true },
-    {
-        label: 'Track Documents',
-        href: documents.index().url,
-        kind: 'route',
-        current: false,
-    },
-    {
-        label: 'Reports',
-        href: reports.index().url,
-        kind: 'route',
-        current: false,
-    },
-    { label: 'Help', href: help.index().url, kind: 'route', current: false },
-] as const;
-
 export const HERO = {
     eyebrow: 'Track, Manage, and Monitor',
     /** Two lines in the design, broken after "Documents". */
@@ -60,6 +21,12 @@ export const HERO = {
     /** Two lines in the design, broken after "Document". */
     subLine1: 'Welcome to CICTO Document',
     subLine2: 'Tracking System',
+    /**
+     * The hero button's label. It read a bare "Login" until the client's
+     * 2026-08-25 comp spelled it out; the closing band keeps its own shorter
+     * "Login Now" (see GET_STARTED) rather than repeating this one.
+     */
+    action: 'Login to Your Account',
 } as const;
 
 export type FeatureIcon =
@@ -114,4 +81,17 @@ export const WHY = {
             body: 'View complete document history',
         },
     ] as readonly Feature[],
+} as const;
+
+/**
+ * The closing call to action, painted over the skyline band.
+ *
+ * The comp gives the button its own label -- "Login Now", not the hero's
+ * "Login" -- so it is transcribed rather than shared with HERO. Only the
+ * signed-out label lives here: the signed-in state reuses the hero's "Logout",
+ * which is built in pages/welcome.tsx for both slots at once.
+ */
+export const GET_STARTED = {
+    heading: 'Ready to Get Started?',
+    action: 'Login Now',
 } as const;

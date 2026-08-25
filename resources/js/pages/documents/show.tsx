@@ -139,7 +139,7 @@ export default function ShowDocument({
                 Back to Track Document
             </Link>
 
-            <div className="mt-4 flex flex-col gap-6">
+            <div className="mt-4 flex flex-col gap-4">
                 {/* §10 Status Tracking, in the client's "View Documents" shape. */}
                 <section className="rounded-xl bg-white p-6 shadow-xl sm:p-8">
                     {/*
@@ -189,26 +189,29 @@ export default function ShowDocument({
                             />
                         </div>
                     </div>
-                </section>
 
-                {/*
-                    §13 Audit trail, full width -- the client's View
-                    Documents design puts the stage timeline across the
-                    page. It is not decoration: ProgressTimeline lays the
-                    Processing Summary BESIDE the stages on a @2xl
-                    container, and in the old half-width column that query
-                    never fired, so the summary dropped underneath and the
-                    duration column had ~160px to work with.
-                */}
-                <section className="rounded-xl bg-white p-6 shadow-xl sm:mx-6 sm:p-8 lg:mx-16">
-                    <ProgressTimeline
-                        timeline={timeline}
-                        summary={processingSummary}
-                        upcoming={upcomingStages(
-                            document.status,
-                            document.tracking.is_open,
-                        )}
-                    />
+                    {/*
+                        §13 Audit trail. A bordered panel inside this sheet, not
+                        a card of its own: the design is ONE white container
+                        holding two outlined panels, so a second shadowed card
+                        here read as a separate document rather than the lower
+                        half of the same one.
+
+                        Full width of the panel, which is also what puts the
+                        Processing Summary beside the stages -- ProgressTimeline
+                        places it on a @2xl CONTAINER query, and a half-width
+                        column never fires it.
+                    */}
+                    <div className="mt-6 rounded-lg border border-[#E4EAF2] p-6 sm:mx-6 lg:mx-8">
+                        <ProgressTimeline
+                            timeline={timeline}
+                            summary={processingSummary}
+                            upcoming={upcomingStages(
+                                document.status,
+                                document.tracking.is_open,
+                            )}
+                        />
+                    </div>
                 </section>
 
                 {/*
@@ -219,7 +222,7 @@ export default function ShowDocument({
                     the QR label, routing, archiving, versions, signatures
                     and comments are all one click inside this.
                 */}
-                <details className="group sm:mx-6 lg:mx-16">
+                <details className="group">
                     <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-xl bg-white px-6 py-4 text-[15px] font-bold text-navy shadow-xl">
                         Actions, files, signatures and comments
                         <ChevronDown

@@ -164,6 +164,17 @@ export function StageStepper({ status }: { status: string }) {
                 const done = index < current;
                 const active = index === current;
 
+                /*
+                    The disc caps the connector arriving from the stage before
+                    it -- that is the whole reason it is a chevron. The first
+                    stage has no incoming line, so while IT is the banner the
+                    disc is a marker pointing at nothing, sitting outside the
+                    shape it belongs to. It comes back the moment the stage is
+                    done, because then it is a green tick reporting state
+                    rather than a joint.
+                */
+                const badge = !(index === 0 && active);
+
                 return (
                     <li key={stage.key} className="flex items-center">
                         {/*
@@ -189,38 +200,57 @@ export function StageStepper({ status }: { status: string }) {
                             unexplained block.
                         */}
                         <span className="flex items-center gap-2">
-                            <span
-                                aria-hidden="true"
-                                className={`flex size-6 items-center justify-center rounded-full text-white ${
-                                    done
-                                        ? 'bg-[#2FA36B]'
-                                        : active
-                                          ? 'bg-[#3B72C4]'
-                                          : 'bg-[#C9CFD9]'
-                                }`}
-                            >
-                                {done ? (
-                                    <Check className="size-4" strokeWidth={3} />
-                                ) : (
-                                    <ChevronRight
-                                        className="size-4"
-                                        strokeWidth={3}
-                                    />
-                                )}
-                            </span>
+                            {badge && (
+                                <span
+                                    aria-hidden="true"
+                                    className={`flex size-6 items-center justify-center rounded-full text-white ${
+                                        done
+                                            ? 'bg-[#2FA36B]'
+                                            : active
+                                              ? 'bg-[#3B72C4]'
+                                              : 'bg-[#C9CFD9]'
+                                    }`}
+                                >
+                                    {done ? (
+                                        <Check
+                                            className="size-4"
+                                            strokeWidth={3}
+                                        />
+                                    ) : (
+                                        <ChevronRight
+                                            className="size-4"
+                                            strokeWidth={3}
+                                        />
+                                    )}
+                                </span>
+                            )}
 
                             {active ? (
                                 // aria-current does for a screen reader what
                                 // the banner does for a sighted reader.
+                                /*
+                                    One clipped shape, not a rounded box with a
+                                    border-triangle stuck to its side. That
+                                    older pair could never meet cleanly: the
+                                    box's rounded right corners cut back from
+                                    the triangle's flat edge, leaving a notch
+                                    at the join, and the triangle overhung its
+                                    own parent so the banner needed `mr-4` to
+                                    stop it printing over the next stage.
+
+                                    A clip-path pentagon is one solid fill with
+                                    square corners and a point that lands on the
+                                    exact vertical centre, and it stays inside
+                                    its box, so the spacing to the connector is
+                                    the ordinary margin again. `pr-14` is the
+                                    text's clearance from where the taper
+                                    starts.
+                                */
                                 <span
                                     aria-current="step"
-                                    className="relative mr-4 flex h-10 items-center rounded-sm bg-[#3B72C4] pr-6 pl-5 text-[15px] font-bold text-white sm:mr-0"
+                                    className="flex h-10 items-center bg-[#3B72C4] pr-14 pl-8 text-[15px] font-bold text-white [clip-path:polygon(0_0,calc(100%_-_32px)_0,100%_50%,calc(100%_-_32px)_100%,0_100%)]"
                                 >
                                     {stage.label}
-                                    <span
-                                        aria-hidden="true"
-                                        className="absolute top-0 -right-4 h-0 w-0 border-y-[20px] border-l-[16px] border-y-transparent border-l-[#3B72C4]"
-                                    />
                                 </span>
                             ) : (
                                 <span
