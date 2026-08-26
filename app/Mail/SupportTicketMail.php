@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Address;
+use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -25,6 +26,14 @@ class SupportTicketMail extends Mailable
         public readonly User $reporter,
         public readonly string $ticketSubject,
         public readonly string $ticketBody,
+        /**
+         * Absolute path to the reporter's screenshot, if they attached one.
+         *
+         * A PATH rather than the UploadedFile: this Mailable is queueable in
+         * principle, and an UploadedFile does not survive serialisation --
+         * the temp file it points at is gone by the time a worker runs.
+         */
+        public readonly ?string $screenshotPath = null,
     ) {}
 
     public function envelope(): Envelope
@@ -54,5 +63,22 @@ class SupportTicketMail extends Mailable
                 'body' => $this->ticketBody,
             ],
         );
+    }
+
+    /**
+     * The reporter's screenshot, when there is one.
+     *
+     * @return list<Attachment>
+     */
+    public function attachments(): array
+    {
+        if ($this->screenshotPath === null) {
+            return [];
+        }
+
+        return [
+            Attachment::fromPath($this->screenshotPath)
+                ->as('screenshot.'.pathinfo($this->screenshotPath, PATHINFO_EXTENSION)),
+        ];
     }
 }

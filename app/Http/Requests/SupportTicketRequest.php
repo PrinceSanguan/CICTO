@@ -53,6 +53,19 @@ class SupportTicketRequest extends FormRequest
 
             'issue_type' => ['required', Rule::in(self::ISSUE_TYPES)],
             'body' => ['required', 'string', 'max:5000'],
+
+            /*
+             * The design's "Upload Screenshot (Optional)" dropzone. Optional
+             * in both senses: the field may be absent, and a ticket with no
+             * screenshot is complete.
+             *
+             * `image` rather than a mime list -- it rejects anything the image
+             * validator cannot parse, so a renamed executable does not reach
+             * the disk. 5MB is comfortably above a full-screen PNG and well
+             * under the default post_max_size, so the failure a reporter meets
+             * is this rule's message rather than a truncated request.
+             */
+            'screenshot' => ['nullable', 'image', 'max:5120'],
         ];
     }
 
@@ -78,6 +91,8 @@ class SupportTicketRequest extends FormRequest
     {
         return [
             'body.required' => 'Please describe the problem so somebody can act on it.',
+            'screenshot.image' => 'That file is not an image. Attach a screenshot, or describe what you saw in the message.',
+            'screenshot.max' => 'That screenshot is larger than 5MB. Crop it, or describe what you saw in the message.',
             'issue_type.required' => 'Please choose the kind of problem you are reporting.',
             'issue_type.in' => 'Please choose one of the listed issue types.',
         ];

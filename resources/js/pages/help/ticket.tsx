@@ -1,5 +1,6 @@
 import { Form, Head, Link, usePage } from '@inertiajs/react';
 import { AlertTriangle, Clock, FileText, UploadCloud } from 'lucide-react';
+import { useState } from 'react';
 import { HelpScene } from '@/components/help/help-scene';
 import InputError from '@/components/input-error';
 import help from '@/routes/help';
@@ -28,6 +29,10 @@ type Props = {
  */
 export default function SubmitTicket({ support, issueTypes }: Props) {
     const { auth } = usePage().props;
+
+    // Only the NAME, for the dropzone to echo back. The file itself stays in
+    // the input, where the form serialiser can reach it.
+    const [screenshot, setScreenshot] = useState<string | null>(null);
 
     return (
         <>
@@ -71,10 +76,20 @@ export default function SubmitTicket({ support, issueTypes }: Props) {
                     </div>
                 )}
 
+                {/*
+                    `encType` because the screenshot field makes this a
+                    multipart submission. Inertia's Form serialises the real DOM
+                    form, so the file rides along once the form is declared
+                    multipart -- without it the server sees every other field
+                    arrive correctly and the attachment silently vanishes, which
+                    is the exact failure the old honest copy warned about.
+                */}
                 <Form
                     {...help.ticket.store.form()}
+                    encType="multipart/form-data"
                     options={{ preserveScroll: true }}
                     resetOnSuccess={['body', 'tracking_number']}
+                    onSuccess={() => setScreenshot(null)}
                 >
                     {({ processing, errors }) => (
                         <div className="grid gap-6 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:items-start">
@@ -158,7 +173,10 @@ export default function SubmitTicket({ support, issueTypes }: Props) {
                                     the file a reporter attached is worse than
                                     one that says so.
                                 */}
-                                <div className="rounded-lg border-2 border-dashed border-[#BBD3F0] bg-[#F7FAFF] px-5 py-6 text-center">
+                                <label
+                                    htmlFor="screenshot"
+                                    className="block cursor-pointer rounded-lg border-2 border-dashed border-[#BBD3F0] bg-[#F7FAFF] px-5 py-6 text-center transition focus-within:border-[#3B72C4] focus-within:ring-2 focus-within:ring-brand hover:border-[#3B72C4] hover:bg-[#EEF4FD]"
+                                >
                                     <UploadCloud
                                         aria-hidden="true"
                                         className="mx-auto size-8 text-[#3B72C4]"
@@ -170,11 +188,52 @@ export default function SubmitTicket({ support, issueTypes }: Props) {
                                         </span>
                                     </p>
                                     <p className="mt-1 text-xs text-copy">
-                                        Screenshot uploads are not enabled on
-                                        this server yet. Describe what you saw
-                                        in the message instead.
+                                        {screenshot ??
+                                            'Click to upload or drag and drop'}
                                     </p>
-                                </div>
+
+                                    {/*
+                                        A real input, not a decorated div. The
+                                        zone said "uploads are not enabled on
+                                        this server" until 2026-08-26, when the
+                                        client asked for the comp's "Click to
+                                        upload or drag and drop" -- and that
+                                        copy is only honest if the file is
+                                        actually kept, so the field, its
+                                        validation, its storage and its mail
+                                        attachment all went in with it. A
+                                        dropzone that swallows a reporter's
+                                        screenshot is worse than one that
+                                        admits it cannot take one.
+
+                                        `sr-only` rather than `hidden`: a
+                                        hidden input is unreachable by keyboard
+                                        and invisible to a screen reader, so the
+                                        label above would announce a control
+                                        nobody could operate. This way the whole
+                                        zone is the click target AND the input
+                                        still takes focus, which is what
+                                        `focus-within` above draws.
+                                    */}
+                                    <input
+                                        id="screenshot"
+                                        name="screenshot"
+                                        type="file"
+                                        accept="image/*"
+                                        className="sr-only"
+                                        onChange={(event) =>
+                                            setScreenshot(
+                                                event.target.files?.[0]?.name ??
+                                                    null,
+                                            )
+                                        }
+                                    />
+                                </label>
+
+                                <InputError
+                                    className="mt-2"
+                                    message={errors.screenshot}
+                                />
 
                                 <button
                                     type="submit"

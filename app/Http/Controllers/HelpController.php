@@ -9,6 +9,7 @@ use App\Support\OutgoingMail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
@@ -90,6 +91,43 @@ class HelpController extends Controller
          * below still come from the session, so a reporter cannot file a ticket
          * as somebody else by typing their address into the form.
          */
+        /*
+         * Stored BEFORE anything else happens with the ticket, so the file
+         * survives even when the mail transport is missing or fails. The log
+         * line below records where it went; a screenshot that exists only
+         * inside a failed send is the same problem the log solves for the
+         * ticket text.
+         *
+         * `documents` disk under its own prefix rather than the default local
+         * one: it is the disk HostCheckCommand already validates and the one
+         * configured for cloud storage in production, so a support screenshot
+         * does not quietly become the single thing that only exists on one
+         * web node.
+         */
+        $screenshotPath = null;
+
+        if ($request->hasFile('screenshot')) {
+            $stored = $request->file('screenshot')
+                ->store('support-tickets/'.now()->format('Y-m'), 'documents');
+
+            /*
+             * `store()` answers false when the disk write fails -- a full
+             * volume, a bad S3 credential. The ticket still goes through: the
+             * reporter's description is the part somebody acts on, and losing
+             * their whole report because an attachment could not be saved
+             * would be the worse outcome. But it is logged as its own line,
+             * because "the screenshot they mention is missing" is exactly the
+             * question whoever reads the ticket will have.
+             */
+            if ($stored === false) {
+                Log::channel('stack')->error('Support ticket screenshot could not be stored', [
+                    'from' => $user->email,
+                ]);
+            } else {
+                $screenshotPath = $stored;
+            }
+        }
+
         $payload = [
             'from' => $user->email,
             'name' => $user->name,
@@ -100,6 +138,7 @@ class HelpController extends Controller
             'issue_type' => $request->string('issue_type')->value(),
             'subject' => $request->subject(),
             'body' => $request->string('body')->value(),
+            'screenshot' => $screenshotPath,
         ];
 
         $to = (string) config('cicto.support.email');
@@ -128,6 +167,9 @@ class HelpController extends Controller
                     $user,
                     $payload['subject'],
                     $payload['body'],
+                    $screenshotPath === null
+                        ? null
+                        : Storage::disk('documents')->path($screenshotPath),
                 ));
             } catch (TransportExceptionInterface $e) {
                 Log::channel('stack')->error('Support ticket email failed', [

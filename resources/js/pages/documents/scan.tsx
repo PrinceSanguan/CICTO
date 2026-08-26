@@ -82,8 +82,25 @@ export default function ScanConsole() {
         <>
             <Head title="Scan QR Code" />
 
-            <div className="flex flex-col items-center gap-10 lg:flex-row lg:items-start lg:justify-between lg:gap-16">
-                <div className="w-full max-w-md">
+            {/*
+                `max-w-5xl` on the row and `max-w-sm` on the column, measured
+                off the client's 2026-08-26 comp.
+
+                The row was the layout's full `max-w-7xl`, and `justify-between`
+                across 1216px shoved the viewfinder against the left edge and
+                the phone against the right, ~250px further apart than the comp
+                draws them. Narrowing the ROW is what closes that: the two stay
+                pinned to its edges, so the gap between them is whatever is left
+                over, and there is no gap value to keep in sync with the column
+                widths.
+
+                The column was `max-w-md` -- 448px, against the comp's ~364.
+                ScanFrame is `aspect-square w-full`, so those 64px came off the
+                height twice over: once from the frame and once from everything
+                the taller frame pushed down the page.
+            */}
+            <div className="mx-auto flex max-w-5xl flex-col items-center gap-10 lg:flex-row lg:items-start lg:justify-between lg:gap-16">
+                <div className="w-full max-w-sm">
                     {/*
                         White, like every other heading in this shell. It was
                         `text-navy` on `text-navy-soft/70` -- navy on the TOP of
