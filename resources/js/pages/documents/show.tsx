@@ -1,5 +1,5 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { ChevronDown, ChevronLeft, Download, QrCode } from 'lucide-react';
+import { ChevronDown, ChevronLeft, Download } from 'lucide-react';
 import { useState } from 'react';
 import DocumentCommentController from '@/actions/App/Http/Controllers/DocumentCommentController';
 import DocumentFileController from '@/actions/App/Http/Controllers/DocumentFileController';
@@ -57,7 +57,6 @@ export default function ShowDocument({
     comments,
     offices,
 }: Props) {
-    const [showQr, setShowQr] = useState(false);
     const [archiveReason, setArchiveReason] = useState('');
 
     const action = useForm<{
@@ -267,15 +266,16 @@ export default function ShowDocument({
                             <h3 className="mb-3 text-sm font-semibold">
                                 Label
                             </h3>
+                            {/*
+                                Print label only. The "Show QR" toggle that
+                                stood beside it -- and the panel it opened below
+                                -- moved to Track Documents on 2026-08-27, where
+                                every row now carries its own QR button next to
+                                View. The client asked for it there because the
+                                QR is what gets handed to a courier, and reaching
+                                it used to mean opening the document first.
+                            */}
                             <div className="flex flex-wrap gap-2">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setShowQr((value) => !value)}
-                                >
-                                    <QrCode className="size-4" />
-                                    {showQr ? 'Hide QR' : 'Show QR'}
-                                </Button>
                                 <Button variant="outline" size="sm" asChild>
                                     <a
                                         href={documents.labels.print.url({
@@ -288,20 +288,6 @@ export default function ShowDocument({
                                     </a>
                                 </Button>
                             </div>
-                            {showQr && (
-                                <div className="mt-6 flex w-fit flex-col items-center gap-2 rounded-xl border p-4">
-                                    <img
-                                        src={documents.qr.url({
-                                            document: document.id,
-                                        })}
-                                        alt={`QR code for ${document.control_number}`}
-                                        className="size-40"
-                                    />
-                                    <p className="font-mono text-xs">
-                                        {document.control_number}
-                                    </p>
-                                </div>
-                            )}
                         </section>
 
                         {/*

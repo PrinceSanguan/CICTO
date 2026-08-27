@@ -89,10 +89,12 @@ export default function AppTopLayout({
                     that the skyline (absolute to the bottom of the container
                     above) only drops by that much.
 
-                    It also finishes what `html { overflow-y: scroll }` in
-                    app.css started: that stopped the nav jumping between pages
-                    by reserving the gutter, and this puts a live bar in it
-                    instead of an empty track.
+                    This is now the ONLY thing keeping the nav from jumping
+                    between pages. app.css briefly forced the track on with
+                    `html { overflow-y: scroll }`, which reserved the gutter but
+                    broke Radix's scroll lock -- see the note there. Real
+                    overflow does the same job without lying to the modal about
+                    whether a scrollbar can be removed.
                 */}
                 <main
                     key={component}

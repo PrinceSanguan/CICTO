@@ -1,4 +1,5 @@
 import { Link } from '@inertiajs/react';
+import { DocumentQrButton } from '@/components/documents/document-qr-button';
 import { StatusPill } from '@/components/documents/status-pill';
 import documents from '@/routes/documents';
 import type { DocumentListItem } from '@/types';
@@ -66,12 +67,22 @@ export function DocumentCards({ items }: { items: DocumentListItem[] }) {
                         </div>
                     </dl>
 
-                    <Link
-                        href={documents.show(document.id)}
-                        className="mt-4 block rounded-md bg-[#3B72C4] py-2.5 text-center text-sm font-bold text-white transition hover:bg-[#31629F]"
-                    >
-                        View
-                    </Link>
+                    {/* The same pairing as the table's Action cell, stacked
+                        for the narrower measure: View takes the remaining
+                        width, the QR keeps its square. */}
+                    <div className="mt-4 flex items-center gap-2">
+                        <Link
+                            href={documents.show(document.id)}
+                            className="flex-1 rounded-md bg-[#3B72C4] py-2.5 text-center text-sm font-bold text-white transition duration-200 ease-out hover:bg-[#31629F] active:scale-[0.97]"
+                        >
+                            View
+                        </Link>
+
+                        <DocumentQrButton
+                            id={document.id}
+                            controlNumber={document.control_number}
+                        />
+                    </div>
                 </li>
             ))}
         </ul>

@@ -49,9 +49,14 @@ export default function HelpIndex({ support }: Props) {
                 concerns
             </p>
 
+            {/* Navy, like the other two primary actions that sit straight on
+                the hero gradient (documents/index.tsx, dashboard.tsx). A brand
+                blue here has almost no lightness between it and the ground, so
+                it reads as a shaded rectangle rather than a button. The card
+                buttons below keep #3B72C4 -- their ground is white. */}
             <Link
                 href={help.contact()}
-                className="mt-6 inline-flex items-center gap-3 rounded-lg bg-[#3B72C4] px-7 py-4 text-lg font-bold text-white shadow-lg transition hover:bg-[#31629F]"
+                className="mt-6 inline-flex items-center gap-3 rounded-lg bg-navy px-7 py-4 text-lg font-bold text-white shadow-lg transition duration-200 ease-out hover:bg-[#232c73] active:scale-[0.98]"
             >
                 Contact Support
                 <ChevronRight className="size-5" />

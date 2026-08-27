@@ -181,32 +181,49 @@
     body {
         @apply bg-background text-foreground;
     }
+
+    /* Tailwind v4's Preflight dropped the `cursor: pointer` v3 put on buttons,
+       so every <button> in the app fell back to the arrow -- a control that
+       does not announce itself as one. Anchors still get the hand from the UA;
+       these are the elements that stopped.
+
+       `:not(:disabled)` so a disabled control keeps the default arrow rather
+       than inviting a click it will ignore. <summary> and <select> are in for
+       the same reason as buttons: they are pressed, and neither gets the hand
+       on its own. */
+    button:not(:disabled),
+    [role='button']:not(:disabled),
+    select:not(:disabled),
+    summary {
+        cursor: pointer;
+    }
 }
 
 /* ==========================================================================
-   The scrollbar is always there, even on a page that fits.
+   Deliberately NO `html { overflow-y: scroll }`. Please do not add one back.
 
-   Every screen centres its content in `mx-auto max-w-7xl`, so the container's
-   left edge is `(viewport - 1280) / 2` -- it moves with the viewport width. A
-   classic scrollbar takes ~15px out of that viewport, so a page WITH one puts
-   the container 7px left of where a page WITHOUT one puts it, and the top nav
-   rides along. Track Documents and Reports are long enough to scroll; Help
-   fits the fold exactly and does not, so walking into Help jumped the nav
-   sideways. That is what the client reported on 2026-08-27.
+   The problem it solved was real: every screen centres its content in
+   `mx-auto max-w-7xl`, so the container's left edge is `(viewport - 1280) / 2`
+   and moves with the viewport width. A classic scrollbar takes ~15px out of
+   that viewport, so a page with one sits 7px left of a page without, and the
+   top nav rides along -- Track Documents and Reports scroll, Help fitted the
+   fold exactly and did not, and walking into Help jumped the nav sideways.
 
-   `overflow-y: scroll` reserves the track on every page instead, so the
-   viewport is one width throughout and the nav holds still. Chosen over
-   `scrollbar-gutter: stable`, which reserves the same space but draws nothing
-   in it: on Help that left a 15px strip of the html background beside the blue
-   gradient, which is a worse artefact than the jump it fixed.
+   Forcing the track on solved it and broke modals. Radix locks scrolling with
+   react-remove-scroll, which sets `overflow: hidden` on the body and adds
+   `margin-right: <scrollbar>px !important` to compensate for the bar it
+   expects to vanish. Pinned by `overflow-y: scroll`, ours never vanished: the
+   margin was surplus, so opening the QR dialog shoved the page left and opened
+   a strip of white beside the bar. Worse, an explicit overflow on the root
+   means the ROOT propagates to the viewport rather than the body, so
+   `body { overflow: hidden }` stopped locking the viewport at all.
 
-   Free where scrollbars are overlays (a macOS trackpad, iOS, Android): they
-   have no width, so there is nothing to reserve and nothing was jumping there
-   in the first place.
+   The guarantee moved instead to `min-h-[calc(100svh-3rem)]` on <main> in
+   app-top-layout.tsx: every page in that shell now clears the fold by 2rem, so
+   the scrollbar is genuinely always present and the nav has nothing to jump
+   between. Real overflow, not a reserved track -- which leaves the lock free
+   to remove the bar and compensate for it correctly.
    ========================================================================== */
-html {
-    overflow-y: scroll;
-}
 
 /* ==========================================================================
    CICTO landing page.

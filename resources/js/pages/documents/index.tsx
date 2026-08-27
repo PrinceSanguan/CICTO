@@ -2,6 +2,7 @@ import { Head, Link, router } from '@inertiajs/react';
 import { Plus, Search } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DocumentCards } from '@/components/documents/document-cards';
+import { DocumentQrButton } from '@/components/documents/document-qr-button';
 import { StatusPill } from '@/components/documents/status-pill';
 import documents from '@/routes/documents';
 import type { DocumentFilters, DocumentListItem, Paginated } from '@/types';
@@ -79,23 +80,30 @@ export default function DocumentsIndex({
                 </h1>
 
                 {/*
-                    #3B6FE0, not the #3B72C4 every other action on the app uses.
+                    Navy, not blue. This is the one primary action sitting
+                    directly on the hero gradient, and every blue tried here has
+                    blended into it.
 
-                    That colour is fine on a white card and invisible here: this
-                    is the ONE primary action that sits directly on the hero
-                    gradient, and #3B72C4 is rgb(59,114,196) against a gradient
-                    that starts at rgb(45,111,203). Same hue, near-identical
-                    value -- the button read as a faint rectangle rather than a
-                    control, which is what the client screenshotted.
+                    #3B72C4 -- the app's action colour everywhere else, where
+                    the ground is a white card -- is rgb(59,114,196) against a
+                    gradient starting at rgb(45,111,203): same hue, near
+                    identical value, so it read as a faint rectangle. #3B6FE0
+                    replaced it and pushed saturation ~15% on the theory that
+                    chroma would do the separating. The client screenshotted it
+                    again on 2026-08-27, so it did not.
 
-                    The fix is chroma, not darkness: same hue family, ~15% more
-                    saturation and slightly deeper, so it separates from the
-                    field behind it at every point of the gradient without
-                    turning into a second, competing brand colour.
+                    The thing two blues of one hue cannot differ in enough is
+                    LIGHTNESS, which is what the eye reads an edge from. --color-navy
+                    is L~16% against the gradient's L~45%, about 3.1:1 as a
+                    non-text boundary, where #3B6FE0 was under 1.2:1. It is
+                    already the palette's darkest brand colour, so this borrows
+                    a token rather than inventing a competing one -- and it
+                    cannot be confused with the white Search control below it
+                    the way a white button would have been.
                 */}
                 <Link
                     href={documents.create()}
-                    className="flex items-center gap-2 rounded-lg bg-[#3B6FE0] px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-[#2F5CC0]"
+                    className="flex items-center gap-2 rounded-lg bg-navy px-5 py-3 text-sm font-bold text-white shadow-lg transition duration-200 ease-out hover:bg-[#232c73] active:scale-[0.98]"
                 >
                     <Plus className="size-5" />
                     Submit Document
@@ -228,13 +236,34 @@ export default function DocumentsIndex({
                                             iso={document.created_at}
                                         />
                                     </td>
-                                    <td className="px-5 py-4 text-center">
-                                        <Link
-                                            href={documents.show(document.id)}
-                                            className="inline-block rounded-md bg-[#3B72C4] px-7 py-2.5 text-sm font-bold text-white transition hover:bg-[#31629F]"
-                                        >
-                                            View
-                                        </Link>
+                                    <td className="px-5 py-4">
+                                        {/*
+                                            The QR sits beside View rather than
+                                            in a column of its own: it acts on
+                                            the same row and the header already
+                                            calls this one "Action". A seventh
+                                            column would also push the table
+                                            past its min-w-[720px] and put the
+                                            whole thing back into horizontal
+                                            scroll at `md`.
+                                        */}
+                                        <div className="flex items-center justify-center gap-2">
+                                            <Link
+                                                href={documents.show(
+                                                    document.id,
+                                                )}
+                                                className="inline-block rounded-md bg-[#3B72C4] px-7 py-2.5 text-sm font-bold text-white transition duration-200 ease-out hover:bg-[#31629F] active:scale-[0.97]"
+                                            >
+                                                View
+                                            </Link>
+
+                                            <DocumentQrButton
+                                                id={document.id}
+                                                controlNumber={
+                                                    document.control_number
+                                                }
+                                            />
+                                        </div>
                                     </td>
                                 </tr>
                             ))}

@@ -200,7 +200,7 @@ export function AppTopNav() {
                             // py-1.5 + the 2px border, not py-2: that lands the
                             // outlined button on Logout's 36px so the pair sits
                             // on one baseline.
-                            className="group hidden items-center gap-2 rounded-md border-2 border-[#3B72C4] px-4 py-1.5 text-sm font-bold whitespace-nowrap text-[#3B72C4] transition duration-200 ease-out hover:bg-[#3B72C4] hover:text-white hover:shadow-md active:scale-[0.97] motion-safe:hover:-translate-y-0.5 lg:flex"
+                            className="group hidden items-center gap-2 rounded-md border-2 border-[#3B72C4] px-4 py-1.5 text-sm font-bold whitespace-nowrap text-[#3B72C4] transition duration-200 ease-out hover:bg-[#3B72C4] hover:text-white hover:shadow-md active:scale-[0.97] lg:flex"
                         >
                             {PanelIcon && (
                                 <PanelIcon
@@ -292,10 +292,10 @@ export function AppTopNav() {
                                             it, since underlining one row of a
                                             list reads as a divider.
                                         */
-                                        className={`block border-l-2 py-2.5 pl-3 text-[15px] font-bold transition duration-200 ease-out active:scale-[0.98] motion-safe:hover:translate-x-1 ${
+                                        className={`block rounded-r-md border-l-2 py-2.5 pr-3 pl-3 text-[15px] font-bold transition duration-200 ease-out active:scale-[0.98] ${
                                             current
                                                 ? 'border-link text-link'
-                                                : 'border-transparent text-navy hover:text-link'
+                                                : 'border-transparent text-navy hover:bg-[#EEF4FD] hover:text-link'
                                         }`}
                                     >
                                         {item.title}
@@ -309,7 +309,7 @@ export function AppTopNav() {
                                 <Link
                                     href={panel.href}
                                     onClick={() => setOpen(false)}
-                                    className="flex items-center gap-2 border-l-2 border-transparent py-2.5 pl-3 text-[15px] font-bold text-[#3B72C4] transition duration-200 ease-out active:scale-[0.98] motion-safe:hover:translate-x-1"
+                                    className="flex items-center gap-2 rounded-r-md border-l-2 border-transparent py-2.5 pr-3 pl-3 text-[15px] font-bold text-[#3B72C4] transition duration-200 ease-out hover:bg-[#EEF4FD] active:scale-[0.98]"
                                 >
                                     {PanelIcon && (
                                         <PanelIcon
@@ -332,6 +332,12 @@ export function AppTopNav() {
  * The red action in the top-right of the bar. Shared so the Logout and Login
  * states are the same control with a different word, exactly as the hero's
  * `heroActionClass` does for the landing page.
+ *
+ * The hover reads as a lift without being one: `shadow-md` only, no
+ * `-translate-y`. Moving a control under the pointer makes its own bottom edge
+ * unstable -- hover raises it, the pointer falls outside, it drops back -- and
+ * that oscillation is what the client caught on the nav links. `active:scale`
+ * stays: it fires with the button held, so there is no loop to enter.
  */
 const topActionClass =
-    'rounded-md bg-danger px-5 py-2 text-sm font-bold text-white transition duration-200 ease-out hover:brightness-95 hover:shadow-md active:scale-[0.97] motion-safe:hover:-translate-y-0.5';
+    'rounded-md bg-danger px-5 py-2 text-sm font-bold text-white transition duration-200 ease-out hover:brightness-95 hover:shadow-md active:scale-[0.97]';

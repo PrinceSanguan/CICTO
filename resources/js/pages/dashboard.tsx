@@ -48,9 +48,13 @@ export default function Dashboard({ summary, stats, recent, isAdmin }: Props) {
                     </p>
                 </div>
 
+                {/* Navy for the same reason Track Documents uses it: this
+                    button also sits straight on the hero gradient, where a
+                    brand blue has too little lightness between it and the
+                    ground to read as an edge. See documents/index.tsx. */}
                 <Link
                     href={documents.create()}
-                    className="flex items-center gap-2 rounded-lg bg-[#3B72C4] px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-[#31629F]"
+                    className="flex items-center gap-2 rounded-lg bg-navy px-5 py-3 text-sm font-bold text-white shadow-lg transition duration-200 ease-out hover:bg-[#232c73] active:scale-[0.98]"
                 >
                     <Plus className="size-5" />
                     Submit Document
