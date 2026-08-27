@@ -38,21 +38,21 @@ const ICONS: Record<string, typeof FileText> = {
 /**
  * §23 knowledge base index: search, category chips, article list.
  *
- * The vertical rhythm here is DELIBERATELY tighter than the Figma, and that is
- * the one place this page knowingly departs from it. The comp is drawn on a
- * ~1030px-tall frame; the app's nav is a fixed `h-20`, so on a 795px viewport
- * -- an ordinary laptop -- the page has 715px to work in and the comp's
- * spacing needs roughly 850. Reproducing it literally is what put a scrollbar
- * on a screen the client wants to fit whole.
+ * The vertical rhythm is the Figma's again. It was deliberately tighter for a
+ * while: the comp is drawn on a ~1030px-tall frame, the app's nav is a fixed
+ * `h-20`, so on a 795px viewport -- an ordinary laptop -- the page has 715px
+ * to work in and the comp's spacing needs roughly 850. Every gap was shaved a
+ * step to clear the fold with ~60px in hand, because the client wanted the
+ * screen whole.
  *
- * So the gaps are shaved evenly rather than in one place: no single space is
- * more than a step off the comp, and the page clears the fold with ~60px in
- * hand. The card padding is the exception that improves things -- `py-2.5`
- * puts the article cards at ~59px, which is nearer the comp's 58 than the
- * `py-3` they had.
+ * That requirement was dropped on 2026-08-27: the page may scroll. So the gaps
+ * are back on the comp -- and `app-top-layout.tsx` gave up the `lg:py-5`
+ * gutter clawback that existed for the same reason. Below `lg` nothing changes;
+ * phones were always scrolling.
  *
- * If the client ever wants the comp's exact spacing back, it costs a
- * scrollbar; there is no third option at this nav height.
+ * The article cards keep `py-2.5`. That one was never part of the squeeze --
+ * it puts them at ~59px against the comp's 58, nearer than the `py-3` they
+ * had -- so there is nothing to restore there.
  */
 export default function KnowledgeBaseIndex({ articles, categories }: Props) {
     const [query, setQuery] = useState('');
@@ -94,7 +94,7 @@ export default function KnowledgeBaseIndex({ articles, categories }: Props) {
             <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
                 Knowledge Base
             </h1>
-            <p className="mt-1 text-[15px] font-medium text-white/90">
+            <p className="mt-2 text-[15px] font-medium text-white/90">
                 Browse helpful articles and FAQs to guide you.
             </p>
 
@@ -111,7 +111,7 @@ export default function KnowledgeBaseIndex({ articles, categories }: Props) {
             <form
                 role="search"
                 onSubmit={(event) => event.preventDefault()}
-                className="mt-5 flex overflow-hidden rounded-lg shadow-lg"
+                className="mt-8 flex overflow-hidden rounded-lg shadow-lg"
             >
                 <div className="relative flex-1">
                     <Search
@@ -154,7 +154,7 @@ export default function KnowledgeBaseIndex({ articles, categories }: Props) {
                 wrap, and growing them per-line would make a line of two chips
                 twice the size of a line of four.
             */}
-            <div className="mt-3 flex flex-wrap gap-3">
+            <div className="mt-4 flex flex-wrap gap-3">
                 <Chip
                     active={category === null}
                     onClick={() => setCategory(null)}
@@ -172,7 +172,7 @@ export default function KnowledgeBaseIndex({ articles, categories }: Props) {
                 ))}
             </div>
 
-            <h2 className="mt-7 text-center text-2xl font-bold text-navy">
+            <h2 className="mt-10 text-center text-2xl font-bold text-navy">
                 {query || category ? 'Articles' : 'Featured Articles'}
             </h2>
 
@@ -188,7 +188,7 @@ export default function KnowledgeBaseIndex({ articles, categories }: Props) {
                     .
                 </p>
             ) : (
-                <ul className="mx-auto mt-5 grid max-w-4xl gap-3 md:grid-cols-2">
+                <ul className="mx-auto mt-6 grid max-w-4xl gap-3 md:grid-cols-2">
                     {visible.map((article) => {
                         const Icon = ICONS[article.icon] ?? FileText;
 
@@ -228,7 +228,7 @@ export default function KnowledgeBaseIndex({ articles, categories }: Props) {
                 Still well inside the container, so it cannot push the page
                 wider than the screen.
             */}
-            <aside className="mx-auto mt-6 flex max-w-2xl flex-col items-center gap-4 rounded-xl bg-white/85 p-4 text-center shadow-xl sm:flex-row sm:text-left">
+            <aside className="mx-auto mt-8 flex max-w-2xl flex-col items-center gap-4 rounded-xl bg-white/85 p-4 text-center shadow-xl sm:flex-row sm:text-left">
                 <div className="flex-1">
                     <p className="text-lg font-bold text-navy">
                         Still need help?

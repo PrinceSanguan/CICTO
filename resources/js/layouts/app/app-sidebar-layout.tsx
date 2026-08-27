@@ -18,7 +18,9 @@ export default function AppSidebarLayout({
     return (
         <AppShell variant="sidebar">
             <PanelSidebar />
-            <AppContent variant="sidebar" className="overflow-x-hidden">
+            {/* `clip`, not `hidden`: see app-top-layout for the second
+                scrollbar `hidden` produces on a flex item. */}
+            <AppContent variant="sidebar" className="overflow-x-clip">
                 <AppSidebarHeader breadcrumbs={breadcrumbs} />
 
                 {/*

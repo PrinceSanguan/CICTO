@@ -51,7 +51,12 @@ export default function AuthSimpleLayout({
         <div
             // overflow-x only: clipping the Y axis made the tallest form
             // (Register) unreachable below its own height.
-            className="cicto-auth relative flex min-h-svh flex-col overflow-x-hidden bg-linear-to-b/srgb from-brand to-brand-soft"
+            //
+            // `clip` rather than `hidden` for the same reason app-top-layout
+            // uses it -- `hidden` forces the Y axis to `auto` and quietly turns
+            // this into a scroll container, which is how a second scrollbar
+            // appears next to the document's. `clip` leaves Y `visible`.
+            className="cicto-auth relative flex min-h-svh flex-col overflow-x-clip bg-linear-to-b/srgb from-brand to-brand-soft"
         >
             {/*
                 The pale ground band the figure stands on. Sits behind

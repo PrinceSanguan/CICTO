@@ -6,7 +6,6 @@ import {
     FileSearch,
     Files,
     FolderOpen,
-    Home,
     LifeBuoy,
     ScanLine,
     Settings,
@@ -16,7 +15,6 @@ import {
     UserCog,
     Users,
 } from 'lucide-react';
-import { home } from '@/routes';
 import admin from '@/routes/admin';
 import archive from '@/routes/archive';
 import documents from '@/routes/documents';
@@ -41,26 +39,36 @@ import type { NavItem, RoleNav } from '@/types/navigation';
 /**
  * §4: "Main navigation: Home, Track Documents, Reports, Help."
  *
+ * Three items, not four. §4's `Home` is now carried by the LOCKUP rather than
+ * by a link in the row -- the client asked on 2026-08-27 for the home button
+ * to come out of the navbar and for the logo to be the way home. §4's
+ * destination is still there and still named: AppTopNav's lockup links `/`
+ * and labels itself "CICTO home", which is the masthead convention the panel
+ * sidebar already followed (see `panelHomeFor`). What went is the duplicate,
+ * not the destination.
+ *
+ * Dropping it also retires the special case AppTopNav used to carry: `Home`
+ * was hidden from the row while you were ON Home, so the bar silently changed
+ * width between pages. Three items on every screen is one behaviour instead of
+ * two.
+ *
  * NOTE for the client (see docs/implementation/client-questions.md): §4's main
  * navigation names no Submit Document and no Dashboard entry, yet both are
- * billable features (#1/#2 and #14). Reading those four as the shared top bar
- * and giving each role a sidebar for its own work is the interpretation that
- * makes the section coherent -- it needs written confirmation.
+ * billable features (#1/#2 and #14). Reading those as the shared top bar and
+ * giving each role a sidebar for its own work is the interpretation that makes
+ * the section coherent -- it needs written confirmation.
  */
 const mainNav: NavItem[] = [
     /*
-        Home is `/` for EVERYBODY, not the dashboard for a signed-in user. The
-        client asked on 2026-08-26 for the signed-in home page to be the
-        landing page with the app nav on it, which makes `/` the destination
-        the label already promised -- and removes the old split where the same
-        word meant two different screens depending on who was reading it.
+        No Home entry. It pointed at `/` for everybody -- the landing page,
+        which the client made the signed-in home on 2026-08-26 -- and the
+        lockup beside this row has always pointed at the same URL. The logo is
+        the one that stayed.
 
-        These four are the WHOLE of the signed-in menu now. §18's dashboard was
-        briefly given a button beside Logout so it stayed reachable; the client
-        struck it the same day, asking for these four and nothing else. Its
-        route still resolves for anyone who types it.
+        §18's dashboard is still absent too: it was briefly a button beside
+        Logout so it stayed reachable, and the client struck it on 2026-08-26.
+        Its route still resolves for anyone who types it.
     */
-    { title: 'Home', href: home(), icon: Home },
     { title: 'Track Documents', href: documents.index(), icon: FileSearch },
     { title: 'Reports', href: reports.index(), icon: BarChart3 },
     { title: 'Help', href: help.index(), icon: LifeBuoy },
@@ -219,14 +227,15 @@ export function panelNavFor(role: Role | null | undefined): NavItem[] {
  * The way BACK into a role's panel from the clerk shell.
  *
  * The panel sidebar's lockup links Home, so an admin can always leave the
- * panel -- but nothing led back. §4's main navigation is Home, Track Documents,
- * Reports and Help for everybody, so /admin/dashboard was reachable only by
- * signing in again or typing the URL. The client asked where it had gone.
+ * panel -- but nothing led back. §4's main navigation is Track Documents,
+ * Reports and Help for everybody (plus Home on the lockup), so /admin/dashboard
+ * was reachable only by signing in again or typing the URL. The client asked
+ * where it had gone.
  *
- * Kept OUT of `mainNav` deliberately. Those four labels are contract acceptance
- * criteria and a fifth entry would change the set §4 names; AppTopNav renders
+ * Kept OUT of `mainNav` deliberately. §4's labels are contract acceptance
+ * criteria and another entry would change the set it names; AppTopNav renders
  * this as its own button beside Logout instead, which is both truer to the
- * spec and harder to miss than one more link in a row of four.
+ * spec and harder to miss than one more link in the row.
  *
  * Null for a plain user, who has no panel. Hiding it is presentation only --
  * EnsureRole still answers 403 to anyone who types the URL.

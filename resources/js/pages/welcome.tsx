@@ -21,7 +21,7 @@ import { login } from '@/routes';
  * or "Login Now", the feature cards clickable, and the app's own top
  * navigation instead of the landing bar. That is what `signedIn` switches:
  *
- *   nav      SiteNav (logo only)        ->  AppTopNav (Home/Track/Reports/Help)
+ *   nav      SiteNav (logo only)        ->  AppTopNav (Track/Reports/Help)
  *   hero     "Login to Your Account"    ->  nothing under the sub-line
  *   cards    inert articles             ->  links to the screen each names
  *   closing  "Ready to Get Started?"    ->  the skyline alone
@@ -29,9 +29,10 @@ import { login } from '@/routes';
  * Everything else -- the gradient, the art, the panel, "Why Choose CICTO" --
  * is shared, which is the point: the two are the same page.
  *
- * Because this is now Home for a signed-in user too, `lib/nav.ts` points the
- * Home item at `/` for everybody rather than at the dashboard, and the user
- * menu carries "My Dashboard" so §18 stays reachable. See both files.
+ * Because this is now Home for a signed-in user too, `/` is where the LOCKUP
+ * in either bar points. The main nav's own "Home" item was retired on
+ * 2026-08-27 -- the client asked for the logo to be the only way home -- so
+ * both states reach this page the same way. See `lib/nav.ts`.
  *
  * The design carries a single action, in brand blue, so there is no Register
  * link and therefore no `register()` call anywhere on this page. That is also

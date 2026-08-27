@@ -84,8 +84,17 @@ createInertiaApp({
             </TooltipProvider>
         );
     },
+    /*
+        The loading bar across the top of the viewport -- the feedback between
+        pressing a nav item and the next screen arriving.
+
+        Brand blue, not the starter kit's #4B5563 slate. It is the only motion
+        a slow request produces, and a grey hairline on a white bar was easy to
+        miss entirely; #3B72C4 is the same blue the nav's hover rule and the
+        page's primary buttons use, so the bar reads as part of the press.
+    */
     progress: {
-        color: '#4B5563',
+        color: '#3B72C4',
     },
 });
 
