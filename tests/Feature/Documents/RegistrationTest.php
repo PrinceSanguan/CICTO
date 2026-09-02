@@ -50,6 +50,36 @@ class RegistrationTest extends TestCase
         $this->assertSame("MTO-{$year}-00001", $b->control_number);
     }
 
+    /**
+     * The shape the Submit Document form actually posts, at its most ordinary:
+     * one department. Every other registration test here uses the scalar
+     * `originating_office_id` alias, so without this the common path through
+     * the real form -- an `office_ids` list of one -- was untested.
+     */
+    public function test_submitting_one_department_registers_it_and_queues_nothing(): void
+    {
+        Storage::fake('documents');
+
+        $office = $this->office('MPDO');
+
+        $this->actingAs($this->staff($office))
+            ->post(route('documents.store'), [
+                'title' => 'Request for office supplies',
+                'document_type_id' => $this->documentType()->id,
+                'office_ids' => [$office->id],
+                'priority' => 'normal',
+                'file' => UploadedFile::fake()->create('request.pdf', 40, 'application/pdf'),
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        $document = Document::query()->firstOrFail();
+
+        $this->assertSame($office->id, $document->originating_office_id);
+        $this->assertStringStartsWith('MPDO-', $document->control_number);
+        $this->assertSame(0, $document->routeStops()->count(), 'One department is not a route.');
+    }
+
     public function test_registration_writes_a_genesis_movement(): void
     {
         $office = $this->office();

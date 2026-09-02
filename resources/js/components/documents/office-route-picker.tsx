@@ -141,11 +141,16 @@ export function OfficeRoutePicker({
                     className={selectClassName}
                 >
                     <option value="">
-                        {remaining.length === 0
-                            ? `Every ${noun} is already on the route`
-                            : value.length === 0
-                              ? `Select ${article(noun)} ${noun}…`
-                              : `Add another ${noun}…`}
+                        {offices.length === 0
+                            ? // Not "every one is already on the route": there
+                              // are none to add, which is a different problem
+                              // and the sentence has to say so.
+                              `No ${noun} is available`
+                            : remaining.length === 0
+                              ? `Every ${noun} is already on the route`
+                              : value.length === 0
+                                ? `Select ${article(noun)} ${noun}…`
+                                : `Add another ${noun}…`}
                     </option>
                     {remaining.map((office) => (
                         <option key={office.id} value={office.id}>
