@@ -13,7 +13,10 @@ import {
     TrackingMetrics,
     upcomingStages,
 } from '@/components/documents/document-tracking';
-import { OfficeRoutePicker } from '@/components/documents/office-route-picker';
+import {
+    OfficeRoutePicker,
+    routeError,
+} from '@/components/documents/office-route-picker';
 import { SignaturePad } from '@/components/documents/signature-pad';
 import { ToneBadge } from '@/components/documents/status-badge';
 import InputError from '@/components/input-error';
@@ -885,24 +888,6 @@ export default function ShowDocument({
                 </details>
             </div>
         </>
-    );
-}
-
-/**
- * Whatever the server said about the destinations, whichever key it used.
- *
- * Rules on `to_office_ids.*` -- an office deactivated between opening this page
- * and pressing Confirm, say -- are reported by Laravel under an indexed key
- * like `to_office_ids.0`. Reading only the bare key left those invisible, and
- * an invisible validation error is a button that silently does nothing, which
- * is exactly the failure the empty-array bug already cost us once.
- */
-function routeError(errors: Record<string, string>): string | undefined {
-    return (
-        errors.to_office_ids ??
-        Object.entries(errors).find(([key]) =>
-            key.startsWith('to_office_ids.'),
-        )?.[1]
     );
 }
 

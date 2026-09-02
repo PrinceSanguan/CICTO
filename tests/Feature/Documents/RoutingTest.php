@@ -11,6 +11,8 @@ use App\Models\DocumentRouteStop;
 use App\Models\Office;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Concerns\BuildsDocuments;
 use Tests\TestCase;
@@ -31,6 +33,67 @@ use Tests\TestCase;
 class RoutingTest extends TestCase
 {
     use BuildsDocuments, RefreshDatabase;
+
+    /**
+     * §5's Department field, when the submitter names more than one.
+     *
+     * The same request, one step earlier: pick every department at the counter
+     * instead of forwarding by hand at each hop. It resolves to the SAME
+     * routing list -- registered under the first department, travelling the
+     * rest in order -- so submitting to three departments is not a second way
+     * of moving a folder, and the ledger cannot tell the two apart.
+     */
+    public function test_submitting_to_several_departments_registers_under_the_first_and_queues_the_rest(): void
+    {
+        Storage::fake('documents');
+
+        [$mpdo, $mto, $hrmo] = $this->offices();
+        $clerk = $this->staff($mpdo);
+
+        $this->actingAs($clerk)
+            ->post(route('documents.store'), [
+                'title' => 'Request for office supplies',
+                'document_type_id' => $this->documentType()->id,
+                'office_ids' => [$mpdo->id, $mto->id, $hrmo->id],
+                'priority' => 'normal',
+                'file' => UploadedFile::fake()->create('request.pdf', 40, 'application/pdf'),
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        $document = Document::query()->firstOrFail();
+
+        // The FIRST department registers it: its prefix is burned into the
+        // control number, and it is where the folder physically starts.
+        $this->assertSame($mpdo->id, $document->originating_office_id);
+        $this->assertStringStartsWith('MPDO-', $document->control_number);
+        $this->assertSame($mpdo->id, $document->openMovement->to_office_id);
+
+        // The rest are a plan, in the order they were picked -- and no office
+        // but the originating one has custody of anything yet.
+        $this->assertSame(
+            [$mto->id, $hrmo->id],
+            $document->routeStops()->pluck('office_id')->all(),
+            'The queue must keep the order the submitter picked.',
+        );
+        $this->assertTrue($document->routeStops()->get()->every(
+            fn (DocumentRouteStop $stop) => $stop->status === RouteStopStatus::Pending,
+        ));
+        $this->assertSame(1, DocumentMovement::query()->where('document_id', $document->id)->count());
+
+        // And it walks the plan on approval, exactly as a route built after
+        // registration does.
+        $admin = $this->admin($mpdo);
+        $this->act($admin, $document, MovementAction::Received);
+        $this->act($admin, $document->refresh(), MovementAction::Approved);
+
+        $document->refresh();
+        $this->assertSame($mto->id, $document->openMovement->to_office_id);
+        $this->assertSame(
+            [RouteStopStatus::Visited, RouteStopStatus::Pending],
+            $document->routeStops()->get()->pluck('status')->all(),
+        );
+    }
 
     public function test_one_submit_sends_to_the_first_office_and_queues_the_rest(): void
     {

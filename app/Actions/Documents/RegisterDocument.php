@@ -5,9 +5,11 @@ namespace App\Actions\Documents;
 use App\Enums\DocumentPriority;
 use App\Enums\DocumentStatus;
 use App\Enums\MovementAction;
+use App\Enums\RouteStopStatus;
 use App\Events\DocumentTransitioned;
 use App\Models\Document;
 use App\Models\DocumentMovement;
+use App\Models\DocumentRouteStop;
 use App\Models\DocumentType;
 use App\Models\Office;
 use App\Models\User;
@@ -34,6 +36,9 @@ final class RegisterDocument
      * Explicit parameters rather than a loose array: every one of these is a
      * §5 form field, and a typed signature is what stops a validated payload
      * being reshaped somewhere between the request and the insert.
+     *
+     * @param  list<int>  $routeOfficeIds  the departments to visit AFTER the
+     *                                     originating one, in visiting order
      */
     public function handle(
         string $title,
@@ -44,11 +49,14 @@ final class RegisterDocument
         ?string $description = null,
         ?string $remarks = null,
         ?UploadedFile $upload = null,
+        array $routeOfficeIds = [],
         ?Request $request = null,
     ): Document {
+        $routeOfficeIds = array_values(array_unique(array_map('intval', $routeOfficeIds)));
+
         return DB::transaction(function () use (
             $title, $documentTypeId, $priority, $originatingOffice, $creator,
-            $description, $remarks, $upload, $request
+            $description, $remarks, $upload, $routeOfficeIds, $request
         ): Document {
             $type = DocumentType::query()->findOrFail($documentTypeId);
             $now = Deadlines::now();
@@ -92,6 +100,29 @@ final class RegisterDocument
                 'ip_address' => $request?->ip(),
                 'user_agent' => mb_substr((string) $request?->userAgent(), 0, 191) ?: null,
             ]);
+
+            /*
+             * §5's Department field, when the submitter picked more than one.
+             *
+             * The rest of the picks are a ROUTING PLAN, not extra custodies:
+             * position 1 is the first place the folder still has to go, and
+             * AdvanceRoute moves it there when the originating office approves.
+             * Written in the same transaction as the document, so a route can
+             * never survive a registration that rolled back -- and so a failed
+             * stop insert costs a control number rather than leaving a document
+             * queued for departments nobody chose.
+             */
+            $position = 1;
+
+            foreach ($routeOfficeIds as $officeId) {
+                DocumentRouteStop::create([
+                    'document_id' => $document->id,
+                    'position' => $position++,
+                    'office_id' => $officeId,
+                    'status' => RouteStopStatus::Pending,
+                    'created_by_id' => $creator->id,
+                ]);
+            }
 
             if ($upload instanceof UploadedFile) {
                 $this->storeDocumentFile->handle($document, $upload, $creator, $movement);

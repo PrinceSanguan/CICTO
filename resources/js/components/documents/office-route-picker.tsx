@@ -1,10 +1,20 @@
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import type { IdNameOption } from '@/types';
 
+const SELECT =
+    'h-9 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-60';
+
 /**
- * §9 "Send to Another Office", for one office or several in one submit.
+ * An ordered list of offices, built one pick at a time.
+ *
+ * Two callers, one meaning. §9 "Send to Another Office" uses it to forward to
+ * one office or several in one submit; §5's Submit Document form uses it for
+ * the Department field, where the FIRST entry is the originating office -- the
+ * one that stamps the control number and physically holds the folder -- and the
+ * rest are the same routing plan, queued at registration instead of after it.
  *
  * DELIBERATELY NOT `<select multiple>`. A native multi-select reports its
  * chosen options in DOCUMENT order, not click order, so a routing list built
@@ -20,12 +30,28 @@ export function OfficeRoutePicker({
     value,
     onChange,
     disabled = false,
+    id = 'to_office_ids',
+    label = 'Send to',
+    noun = 'office',
+    className = 'grid gap-3 sm:max-w-md',
+    selectClassName = SELECT,
+    hint = defaultHint,
 }: {
     offices: IdNameOption[];
     /** Office ids in visiting order. */
     value: number[];
     onChange: (next: number[]) => void;
     disabled?: boolean;
+    /** Id of the add-an-office dropdown, and what an outside label points at. */
+    id?: string;
+    /** Null when the caller renders its own label for `id`. */
+    label?: string | null;
+    /** What one entry is called, in this control's own copy. */
+    noun?: string;
+    className?: string;
+    selectClassName?: string;
+    /** The sentence under a route of more than one stop. */
+    hint?: (first: IdNameOption) => ReactNode;
 }) {
     const chosen = value
         .map((id) => offices.find((office) => office.id === id))
@@ -86,18 +112,20 @@ export function OfficeRoutePicker({
     };
 
     return (
-        <div className="grid gap-3 sm:max-w-md">
+        <div className={className}>
             <div className="grid gap-2">
-                <label htmlFor="to_office_ids" className="text-sm font-medium">
-                    Send to
-                </label>
+                {label !== null && (
+                    <label htmlFor={id} className="text-sm font-medium">
+                        {label}
+                    </label>
+                )}
 
                 <select
-                    id="to_office_ids"
-                    // Always reads "Add an office…": this control is an ADD
-                    // button with a list attached, not a field holding a value.
-                    // Leaving the last pick selected would suggest the choice
-                    // lives here rather than in the route below it.
+                    id={id}
+                    // Always reads "Add another…": this control is an ADD button
+                    // with a list attached, not a field holding a value. Leaving
+                    // the last pick selected would suggest the choice lives here
+                    // rather than in the route below it.
                     value=""
                     disabled={disabled || remaining.length === 0}
                     onChange={(event) => {
@@ -110,14 +138,14 @@ export function OfficeRoutePicker({
                             commit([...chosen, added]);
                         }
                     }}
-                    className="h-9 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-60"
+                    className={selectClassName}
                 >
                     <option value="">
                         {remaining.length === 0
-                            ? 'Every office is already on the route'
+                            ? `Every ${noun} is already on the route`
                             : value.length === 0
-                              ? 'Select an office…'
-                              : 'Add another office…'}
+                              ? `Select ${article(noun)} ${noun}…`
+                              : `Add another ${noun}…`}
                     </option>
                     {remaining.map((office) => (
                         <option key={office.id} value={office.id}>
@@ -201,10 +229,37 @@ export function OfficeRoutePicker({
                         className="mt-0.5 size-3.5 shrink-0"
                         aria-hidden="true"
                     />
-                    The document goes to {chosen[0].name} now, then moves to the
-                    next office automatically each time it is approved.
+                    {hint(chosen[0])}
                 </p>
             )}
         </div>
+    );
+}
+
+const defaultHint = (first: IdNameOption): ReactNode => (
+    <>
+        The document goes to {first.name} now, then moves to the next office
+        automatically each time it is approved.
+    </>
+);
+
+const article = (noun: string): string => (/^[aeiou]/i.test(noun) ? 'an' : 'a');
+
+/**
+ * Whatever the server said about the destinations, whichever key it used.
+ *
+ * Rules on `to_office_ids.*` -- an office deactivated between opening the page
+ * and pressing Confirm, say -- are reported by Laravel under an indexed key
+ * like `to_office_ids.0`. Reading only the bare key left those invisible, and
+ * an invisible validation error is a button that silently does nothing, which
+ * is exactly the failure the empty-array bug already cost us once.
+ */
+export function routeError(
+    errors: Record<string, string>,
+    field = 'to_office_ids',
+): string | undefined {
+    return (
+        errors[field] ??
+        Object.entries(errors).find(([key]) => key.startsWith(`${field}.`))?.[1]
     );
 }

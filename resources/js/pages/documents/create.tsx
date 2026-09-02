@@ -2,6 +2,10 @@ import { Form, Head, Link } from '@inertiajs/react';
 import { ChevronLeft, UploadCloud } from 'lucide-react';
 import { useRef, useState } from 'react';
 import DocumentController from '@/actions/App/Http/Controllers/DocumentController';
+import {
+    OfficeRoutePicker,
+    routeError,
+} from '@/components/documents/office-route-picker';
 import InputError from '@/components/input-error';
 import documents from '@/routes/documents';
 import type { IdNameOption, SelectOption } from '@/types';
@@ -31,6 +35,20 @@ export default function CreateDocument({
     priorities,
     defaultOfficeId,
 }: Props) {
+    /*
+     * Departments, in visiting order. The first is the ORIGINATING office --
+     * it stamps the control number prefix and is where the folder starts --
+     * and any after it are queued as the routing plan, so one submit can name
+     * every department the document has to pass through.
+     *
+     * Not `useState(defaultOfficeId ? ... )`: office id 0 is impossible, but a
+     * falsy check on an id is the kind of thing that quietly breaks the day the
+     * ids change shape. The prop is null or an id, so compare against null.
+     */
+    const [departmentIds, setDepartmentIds] = useState<number[]>(
+        defaultOfficeId === null ? [] : [defaultOfficeId],
+    );
+
     return (
         <>
             <Head title="Submit Document" />
@@ -108,29 +126,59 @@ export default function CreateDocument({
 
                             <Field
                                 label="Department"
-                                htmlFor="originating_office_id"
+                                htmlFor="office_ids"
                                 required
-                                error={errors.originating_office_id}
+                                error={
+                                    routeError(errors, 'office_ids') ??
+                                    errors.originating_office_id
+                                }
                             >
-                                <select
-                                    id="originating_office_id"
-                                    name="originating_office_id"
-                                    required
-                                    defaultValue={defaultOfficeId ?? ''}
-                                    className={FIELD}
-                                >
-                                    <option value="" disabled>
-                                        Select Department
-                                    </option>
-                                    {offices.map((office) => (
-                                        <option
-                                            key={office.id}
-                                            value={office.id}
-                                        >
-                                            {office.name}
-                                        </option>
-                                    ))}
-                                </select>
+                                <OfficeRoutePicker
+                                    offices={offices}
+                                    value={departmentIds}
+                                    onChange={setDepartmentIds}
+                                    disabled={processing}
+                                    id="office_ids"
+                                    // The Field above already labels this
+                                    // control, with the asterisk and the
+                                    // screen-reader "(required)" the rest of
+                                    // the form uses. A second label would name
+                                    // the same input twice.
+                                    label={null}
+                                    noun="department"
+                                    className="grid gap-3"
+                                    selectClassName={`${FIELD} disabled:opacity-60`}
+                                    hint={(first) => (
+                                        <>
+                                            The document is registered under{' '}
+                                            {first.name} and moves to the next
+                                            department each time it is approved.
+                                        </>
+                                    )}
+                                />
+
+                                {/*
+                                    What the form actually posts.
+
+                                    <Form> serialises the DOM, so the picker's
+                                    state has to exist as real inputs -- one per
+                                    department, in order, because that order is
+                                    the route. Nothing chosen means no inputs at
+                                    all, which is exactly the payload the
+                                    server's `required` rule is there to refuse;
+                                    a hidden input cannot carry the browser's
+                                    own `required` (an unfocusable invalid
+                                    control blocks the submit silently), so the
+                                    check that matters is the one on the server.
+                                */}
+                                {departmentIds.map((id) => (
+                                    <input
+                                        key={id}
+                                        type="hidden"
+                                        name="office_ids[]"
+                                        value={id}
+                                    />
+                                ))}
                             </Field>
 
                             <Field

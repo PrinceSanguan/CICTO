@@ -102,9 +102,9 @@ class DocumentController extends Controller
          * office list) that silently pre-fills SOMEBODY ELSE'S department, and
          * the form submits happily: a document filed under the wrong office,
          * with that office's prefix burned into a control number that is then
-         * printed on a label. Sending null instead leaves the disabled
-         * "Select Department" placeholder showing, so the field is visibly
-         * unanswered and the required attribute stops the submit.
+         * printed on a label. Sending null instead leaves the department list
+         * empty, so the field is visibly unanswered and StoreDocumentRequest's
+         * `required` refuses the submit.
          */
         $userOfficeId = request()->user()?->office_id;
 
@@ -119,7 +119,19 @@ class DocumentController extends Controller
 
     public function store(StoreDocumentRequest $request, RegisterDocument $register): RedirectResponse
     {
-        $office = Office::query()->findOrFail($request->integer('originating_office_id'));
+        /*
+         * Departments in the order the submitter picked them. The first one
+         * registers the document -- it owns the control number prefix and the
+         * genesis leg -- and the rest are queued as the route it travels from
+         * there. StoreDocumentRequest guarantees at least one; the `?? 0` is
+         * only what makes that guarantee legible to static analysis.
+         *
+         * @var list<int> $officeIds
+         */
+        $officeIds = array_values(array_map('intval', (array) $request->input('office_ids', [])));
+
+        $office = Office::query()->findOrFail($officeIds[0] ?? 0);
+        $queued = array_slice($officeIds, 1);
 
         $document = $register->handle(
             title: $request->string('title')->value(),
@@ -130,11 +142,49 @@ class DocumentController extends Controller
             description: $request->input('description'),
             remarks: $request->input('remarks'),
             upload: $request->file('file'),
+            routeOfficeIds: $queued,
             request: $request,
         );
 
         return to_route('documents.show', $document)
-            ->with('toast', ['type' => 'success', 'message' => "Document registered as {$document->control_number}."]);
+            ->with('toast', [
+                'type' => 'success',
+                'message' => $this->registrationConfirmation($document, $queued),
+            ]);
+    }
+
+    /**
+     * "Document registered as X." for one department, and for several the
+     * sentence that reads the route back -- the submitter's proof that the
+     * extra picks were kept and where the folder goes next.
+     *
+     * Names in the order they were picked, not in id or alphabetical order.
+     *
+     * @param  list<int>  $queued  the departments after the originating one
+     */
+    private function registrationConfirmation(Document $document, array $queued): string
+    {
+        $plain = "Document registered as {$document->control_number}.";
+
+        if ($queued === []) {
+            return $plain;
+        }
+
+        $names = Office::query()->whereKey($queued)->pluck('name', 'id');
+
+        $ordered = array_values(array_filter(array_map(
+            static fn (int $id) => $names[$id] ?? null,
+            $queued,
+        )));
+
+        if ($ordered === []) {
+            return $plain;
+        }
+
+        $last = array_pop($ordered);
+        $list = $ordered === [] ? $last : implode(', ', $ordered).' and '.$last;
+
+        return "Document registered as {$document->control_number}, then queued for {$list}.";
     }
 
     public function show(Document $document): Response
