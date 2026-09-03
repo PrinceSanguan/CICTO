@@ -13,6 +13,7 @@ type UserRow = {
     role: string;
     role_label: string;
     office: string | null;
+    office_name: string | null;
     is_active: boolean;
     last_login_at: string | null;
 };
@@ -134,7 +135,7 @@ export default function AdminUsers({ users, filters, roles }: Props) {
                         />
                     </div>
 
-                    {/* Phone: cards, because a five-column table on a 375px
+                    {/* Phone: cards, because a six-column table on a 375px
                         screen hides Status and Last Login entirely. */}
                     <ul className="mt-4 divide-y divide-[#EEF2F7] md:hidden">
                         {users.data.length === 0 && (
@@ -153,6 +154,9 @@ export default function AdminUsers({ users, filters, roles }: Props) {
                                 </p>
                                 <dl className="mt-2 space-y-1 text-sm">
                                     <Row label="Role">{user.role_label}</Row>
+                                    <Row label="Office">
+                                        {user.office_name ?? user.office ?? '—'}
+                                    </Row>
                                     <Row label="Last Login">
                                         <LastLogin iso={user.last_login_at} />
                                     </Row>
@@ -165,13 +169,14 @@ export default function AdminUsers({ users, filters, roles }: Props) {
                     </ul>
 
                     <div className="mt-4 hidden overflow-x-auto md:block">
-                        <table className="w-full min-w-[640px] text-left">
+                        <table className="w-full min-w-[760px] text-left">
                             <thead>
                                 <tr className="border-b border-[#EEF2F7]">
                                     {[
                                         'Name',
                                         'Email',
                                         'Role',
+                                        'Office',
                                         'Status',
                                         'Last Login',
                                     ].map((heading) => (
@@ -190,7 +195,7 @@ export default function AdminUsers({ users, filters, roles }: Props) {
                                 {users.data.length === 0 && (
                                     <tr>
                                         <td
-                                            colSpan={5}
+                                            colSpan={6}
                                             className="px-3 py-10 text-center text-sm text-copy"
                                         >
                                             No users match these filters.
@@ -211,6 +216,9 @@ export default function AdminUsers({ users, filters, roles }: Props) {
                                         </td>
                                         <td className="px-3 py-4 text-sm text-copy">
                                             {user.role_label}
+                                        </td>
+                                        <td className="px-3 py-4 text-sm">
+                                            <OfficeCell user={user} />
                                         </td>
                                         <td className="px-3 py-4">
                                             <StatusPill
@@ -289,6 +297,37 @@ export default function AdminUsers({ users, filters, roles }: Props) {
                     deactivate an account.
                 </p>
             </section>
+        </>
+    );
+}
+
+/**
+ * Which office an account belongs to -- the client's ask of 2026-09-03.
+ *
+ * Code on top, full name under it: the code is the identifier that appears in
+ * control numbers and on printed labels, the name is what makes it readable.
+ *
+ * On this screen an office admin only ever sees their own office, so the column
+ * repeats one value down the page. That repetition is the point -- it is the
+ * answer to "am I looking at my department or at everybody".
+ */
+function OfficeCell({
+    user,
+}: {
+    user: Pick<UserRow, 'office' | 'office_name'>;
+}) {
+    if (!user.office && !user.office_name) {
+        return <span className="text-copy">—</span>;
+    }
+
+    return (
+        <>
+            <span className="font-medium text-navy">{user.office ?? '—'}</span>
+            {user.office_name && (
+                <span className="block text-xs text-copy">
+                    {user.office_name}
+                </span>
+            )}
         </>
     );
 }

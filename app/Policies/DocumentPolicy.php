@@ -5,7 +5,9 @@ namespace App\Policies;
 use App\Enums\DocumentStatus;
 use App\Enums\MovementAction;
 use App\Enums\Role;
+use App\Enums\RouteStopStatus;
 use App\Models\Document;
+use App\Models\DocumentRouteStop;
 use App\Models\DocumentSignature;
 use App\Models\User;
 use App\Support\DocumentWorkflow;
@@ -131,6 +133,23 @@ class DocumentPolicy
             return false;
         }
 
+        /*
+         * A document still travelling a route is not finished, whoever is
+         * holding it.
+         *
+         * The workflow map has to allow `completed` from under_review -- with
+         * approval gone that is the only stage it could hang off, and a
+         * document that can never complete can never be archived. But offering
+         * the button at every stop would put "Completed" beside "Received" for
+         * the whole trip, and the client asked for those offices to see
+         * "received lang, wala nang iba". AdvanceRoute closes the document by
+         * itself when the LAST office receives it, so nobody has to reach for
+         * this on a routed document at all.
+         */
+        if ($action === MovementAction::Completed && $this->hasPendingStops($document)) {
+            return false;
+        }
+
         if ($action->isDecision() || $action === MovementAction::Completed) {
             if (! $user->atLeast(Role::Admin)) {
                 return false;
@@ -240,6 +259,19 @@ class DocumentPolicy
     public function delete(User $user, Document $document): bool
     {
         return $user->is_active && $user->isSuperAdmin();
+    }
+
+    /** Is there still an office queued after this one? */
+    private function hasPendingStops(Document $document): bool
+    {
+        if ($document->relationLoaded('routeStops')) {
+            return $document->routeStops
+                ->contains(fn (DocumentRouteStop $stop) => $stop->status === RouteStopStatus::Pending);
+        }
+
+        return $document->routeStops()
+            ->where('status', RouteStopStatus::Pending)
+            ->exists();
     }
 
     /**

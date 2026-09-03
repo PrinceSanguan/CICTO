@@ -17,6 +17,29 @@ type Props = {
     defaultOfficeId: number | null;
 };
 
+/**
+ * §5's two ways of serving more than one department.
+ *
+ * `in_order` is the routing list: ONE document, visiting each department in
+ * turn as the one before it approves. `all_at_once` is flat -- one document per
+ * department, every one of them holding it from the same second, nobody waiting
+ * on anybody. Mirrors StoreDocumentRequest::DISTRIBUTIONS.
+ */
+const DELIVERY = [
+    {
+        value: 'in_order',
+        label: 'One after another',
+        detail: 'In the order listed above.',
+    },
+    {
+        value: 'all_at_once',
+        label: 'All at the same time',
+        detail: 'No order, and nobody waits.',
+    },
+] as const;
+
+type Delivery = (typeof DELIVERY)[number]['value'];
+
 const FIELD =
     'h-12 w-full rounded-md border border-[#DCE4EE] bg-white px-4 text-[15px] text-navy ' +
     'placeholder:text-[#9AA5B4] focus-visible:border-brand focus-visible:ring-2 ' +
@@ -48,6 +71,17 @@ export default function CreateDocument({
     const [departmentIds, setDepartmentIds] = useState<number[]>(
         defaultOfficeId === null ? [] : [defaultOfficeId],
     );
+
+    /*
+     * Defaults to the route, and that is deliberate: it is what one department
+     * has always meant and what every submit did before this existed, so the
+     * flat shape is something you ask for rather than something you get by
+     * forgetting to look. The control only appears once there is more than one
+     * department, because until then the two are the same submit.
+     */
+    const [delivery, setDelivery] = useState<Delivery>('in_order');
+
+    const simultaneous = delivery === 'all_at_once';
 
     return (
         <>
@@ -148,14 +182,73 @@ export default function CreateDocument({
                                     noun="department"
                                     className="grid gap-3"
                                     selectClassName={`${FIELD} disabled:opacity-60`}
-                                    hint={(first) => (
-                                        <>
-                                            The document is registered under{' '}
-                                            {first.name} and moves to the next
-                                            department each time it is approved.
-                                        </>
-                                    )}
+                                    ordered={!simultaneous}
+                                    hint={(first) =>
+                                        simultaneous ? (
+                                            <>
+                                                Each department gets its own
+                                                copy, with its own control
+                                                number and deadline. None of
+                                                them waits for another.
+                                            </>
+                                        ) : (
+                                            <>
+                                                The document is registered under{' '}
+                                                {first.name} and moves to the
+                                                next department each time it is
+                                                approved.
+                                            </>
+                                        )
+                                    }
                                 />
+
+                                {/*
+                                    Only from two departments up: with one, both
+                                    answers produce the same single document,
+                                    and asking the question would imply
+                                    otherwise. Real radios, so the choice posts
+                                    itself -- and so nothing posts it when the
+                                    question was never asked.
+                                */}
+                                {departmentIds.length > 1 && (
+                                    <fieldset className="grid gap-2 rounded-md border border-[#DCE4EE] px-3 pt-2 pb-3">
+                                        <legend className="px-1 text-xs font-bold text-navy">
+                                            How should they get it?
+                                        </legend>
+
+                                        {DELIVERY.map((option) => (
+                                            <label
+                                                key={option.value}
+                                                className="flex items-start gap-2"
+                                            >
+                                                <input
+                                                    type="radio"
+                                                    name="distribution"
+                                                    value={option.value}
+                                                    checked={
+                                                        delivery ===
+                                                        option.value
+                                                    }
+                                                    disabled={processing}
+                                                    onChange={() =>
+                                                        setDelivery(
+                                                            option.value,
+                                                        )
+                                                    }
+                                                    className="mt-0.5 size-4 shrink-0 accent-[#3B72C4]"
+                                                />
+                                                <span className="min-w-0">
+                                                    <span className="block text-sm font-bold text-navy">
+                                                        {option.label}
+                                                    </span>
+                                                    <span className="block text-xs text-copy">
+                                                        {option.detail}
+                                                    </span>
+                                                </span>
+                                            </label>
+                                        ))}
+                                    </fieldset>
+                                )}
 
                                 {/*
                                     What the form actually posts.

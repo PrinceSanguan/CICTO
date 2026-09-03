@@ -90,10 +90,17 @@ class SelfApprovalSettingTest extends TestCase
         $this->assertNull(AppSetting::get(SystemSettings::ALLOW_SELF_APPROVAL));
     }
 
-    public function test_the_stored_choice_actually_decides_an_approval(): void
+    /**
+     * The point of the toggle: not that a row exists, but that the folder
+     * moves. config stays on the blocking default throughout.
+     *
+     * Driven through `completed` rather than `approved`. Approving was removed
+     * from the workflow on 2026-09-03 at the client's request; completing is
+     * the terminal, Admin-only action that inherited the separation-of-duties
+     * rule this setting switches.
+     */
+    public function test_the_stored_choice_actually_decides_a_closure(): void
     {
-        // The point of the toggle: not that a row exists, but that the folder
-        // moves. config stays on the blocking default throughout.
         config(['cicto.workflow.allow_self_approval' => false]);
 
         $office = $this->office();
@@ -109,8 +116,8 @@ class SelfApprovalSettingTest extends TestCase
 
         $this->actingAs($admin)
             ->post(route('documents.transitions.store', $document), [
-                'action' => 'approved',
-                'remarks' => 'Approving my own request',
+                'action' => 'completed',
+                'remarks' => 'Closing my own request',
                 'expected_movement_id' => $document->openMovement->id,
             ])
             ->assertForbidden();
@@ -123,13 +130,13 @@ class SelfApprovalSettingTest extends TestCase
 
         $this->actingAs($admin)
             ->post(route('documents.transitions.store', $document), [
-                'action' => 'approved',
-                'remarks' => 'Approving my own request',
+                'action' => 'completed',
+                'remarks' => 'Closing my own request',
                 'expected_movement_id' => $document->openMovement->id,
             ])
             ->assertRedirect();
 
-        $this->assertSame(DocumentStatus::Approved, $document->fresh()->status);
+        $this->assertSame(DocumentStatus::Completed, $document->fresh()->status);
     }
 
     /**

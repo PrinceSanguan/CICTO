@@ -70,7 +70,7 @@ class VersionRetentionTest extends TestCase
             );
         }
 
-        foreach ([MovementAction::Received, MovementAction::Approved, MovementAction::Completed] as $action) {
+        foreach ([MovementAction::Received, MovementAction::Completed] as $action) {
             $document->refresh();
             app(TransitionDocument::class)->handle(
                 document: $document,
@@ -153,7 +153,7 @@ class VersionRetentionTest extends TestCase
         app(StoreDocumentFile::class)->handle($document, UploadedFile::fake()->createWithContent('v3.pdf', 'three'), $admin);
 
         $document->refresh();
-        foreach ([MovementAction::Approved, MovementAction::Completed] as $action) {
+        foreach ([MovementAction::Received, MovementAction::Completed] as $action) {
             $document->refresh();
             app(TransitionDocument::class)->handle(
                 document: $document,
@@ -209,7 +209,7 @@ class VersionRetentionTest extends TestCase
         app(StoreDocumentFile::class)->handle($document, UploadedFile::fake()->createWithContent('v2.pdf', 'two'), $admin);
         app(StoreDocumentFile::class)->handle($document, UploadedFile::fake()->createWithContent('v3.pdf', 'three'), $admin);
 
-        foreach ([MovementAction::Approved, MovementAction::Completed] as $action) {
+        foreach ([MovementAction::Received, MovementAction::Completed] as $action) {
             $document->refresh();
             app(TransitionDocument::class)->handle(
                 document: $document,

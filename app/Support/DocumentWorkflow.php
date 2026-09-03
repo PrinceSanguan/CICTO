@@ -19,10 +19,39 @@ final class DocumentWorkflow
     /**
      * [current status][action] => resulting status
      *
-     * `forwarded` from under_review resolves back to under_review on purpose:
-     * routing a folder between offices is not a stage change. The
-     * approved -> forwarded -> under_review path is the multi-signatory chain,
-     * e.g. the Mayor's office signing after a department head.
+     * `forwarded` and `received` from under_review resolve back to under_review
+     * on purpose: moving a folder between offices, and acknowledging that it
+     * arrived, are not stage changes.
+     *
+     * NO APPROVAL STEP, and that is the client's decision of 2026-09-03: "dapat
+     * yung mga offices wala ng approval, only received na lang, para tuloy-tuloy
+     * yung naka-pila na mag-rereceive ng document". A route was stalling at the
+     * third office every time, because the only action that advanced it was
+     * `approved` -- which DocumentPolicy restricts to Admins and, by default,
+     * refuses to the document's own author. An office with no admin, or an
+     * office whose admin filed the document, could not release the folder at
+     * all, and the remaining stops sat on "Waiting" forever.
+     *
+     * `received` is now what advances the route (see AdvanceRoute), and it is
+     * ungated on purpose: acknowledging a folder that is physically on your desk
+     * is a receipt, not a judgement, so MovementAction::isDecision() leaves it
+     * out and the Admin-only and self-approval rules in DocumentPolicy::act()
+     * never apply to it.
+     *
+     * WHAT THIS REMOVED. `approved`, `rejected` and `returned` are gone from
+     * under_review, which is the only status a travelling document is ever in,
+     * so none of the three can be performed any more -- the client asked for
+     * "received lang, wala nang iba". The enum cases stay: document_movements
+     * rows written before today still carry them, §13's timeline still has to
+     * render them, and §19's reports still count them.
+     *
+     * The 'approved' and 'returned' rows below are kept for the same reason --
+     * a document that was already sitting in one of those stages when this
+     * shipped still has to have a way out. Nothing can enter them any more.
+     *
+     * `completed` moved onto under_review because it used to hang off
+     * `approved`: with approval gone it would have become unreachable, and a
+     * document that can never complete can never be archived either (§16).
      *
      * @var array<string, array<string, string>>
      */
@@ -33,10 +62,11 @@ final class DocumentWorkflow
         ],
         'under_review' => [
             'forwarded' => 'under_review',
-            'approved' => 'approved',
-            'rejected' => 'rejected',
-            'returned' => 'returned',
+            'received' => 'under_review',
+            'completed' => 'completed',
         ],
+        // Legacy stages. Unreachable from today; kept so documents already in
+        // them at deploy time are not stranded.
         'approved' => [
             'forwarded' => 'under_review',
             'completed' => 'completed',

@@ -27,7 +27,7 @@ class ReportTest extends TestCase
     /** Walk a document all the way to Completed. */
     private function complete(Document $document, User $admin): void
     {
-        foreach ([MovementAction::Received, MovementAction::Approved, MovementAction::Completed] as $action) {
+        foreach ([MovementAction::Received, MovementAction::Completed] as $action) {
             $document->refresh();
             app(TransitionDocument::class)->handle(
                 document: $document,
@@ -119,10 +119,19 @@ class ReportTest extends TestCase
 
         $rows = collect(app(DocumentStats::class)->userActivity($admin))->keyBy('user');
 
-        // The clerk registered it; the admin drove three transitions.
+        // The clerk registered it; the admin drove two transitions -- received
+        // and completed, which is the whole chain now that approval is gone.
         $this->assertSame(1, $rows[$clerk->name]['actions']);
-        $this->assertSame(3, $rows[$admin->name]['actions']);
-        $this->assertSame(1, $rows[$admin->name]['approvals']);
+        $this->assertSame(2, $rows[$admin->name]['actions']);
+
+        /*
+         * Nobody approves anything any more (the client's 2026-09-03 flow), so
+         * the approvals column reads zero on every new document. The column
+         * stays: document_movements written before the change still carry
+         * `approved`, and this figure is how a report over that period keeps
+         * telling the truth about them.
+         */
+        $this->assertSame(0, $rows[$admin->name]['approvals']);
     }
 
     public function test_the_reports_page_renders_with_all_four_artifacts(): void

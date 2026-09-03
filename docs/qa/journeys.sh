@@ -152,8 +152,11 @@ LEG=$(props admin "/documents/$DOCID" | python3 -c "import sys,json; print(json.
 expect "received"                     302 "$(post admin "/documents/$DOCID/transitions" --data-urlencode "action=received" --data-urlencode "expected_movement_id=$LEG")"
 
 LEG=$(props admin "/documents/$DOCID" | python3 -c "import sys,json; print(json.load(sys.stdin)['document']['expected_movement_id'])")
-expect "stale leg id is refused"      409 "$(post admin "/documents/$DOCID/transitions" --data-urlencode "action=approved" --data-urlencode "expected_movement_id=999999")"
-expect "approved"                     302 "$(post admin "/documents/$DOCID/transitions" --data-urlencode "action=approved" --data-urlencode "expected_movement_id=$LEG")"
+expect "stale leg id is refused"      409 "$(post admin "/documents/$DOCID/transitions" --data-urlencode "action=received" --data-urlencode "expected_movement_id=999999")"
+
+# Approval was removed on 2026-09-03 -- offices press Received and the folder
+# moves on by itself. A hand-rolled 'approved' must now bounce, not succeed.
+expect "approving is refused"         403 "$(post admin "/documents/$DOCID/transitions" --data-urlencode "action=approved" --data-urlencode "remarks=nope" --data-urlencode "expected_movement_id=$LEG")"
 
 LEG=$(props admin "/documents/$DOCID" | python3 -c "import sys,json; print(json.load(sys.stdin)['document']['expected_movement_id'])")
 expect "completed"                    302 "$(post admin "/documents/$DOCID/transitions" --data-urlencode "action=completed" --data-urlencode "expected_movement_id=$LEG")"

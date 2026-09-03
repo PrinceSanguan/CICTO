@@ -17,20 +17,34 @@ import type { DocumentDetail, TimelineEntry } from '@/types';
  * sends. Nothing is stored, so none of it can disagree with the audit trail.
  */
 
-/** The four stages the design names, in order. */
+/**
+ * The stages the rail names, in order.
+ *
+ * THREE, not the design's four. "Approved" was the third box until the client
+ * removed the approval step on 2026-09-03: an office now presses Received and
+ * the document travels straight on. Nothing can enter that stage any more, so
+ * leaving the box on the rail would draw every document skipping a step it was
+ * never going to take, and `upcomingStages` would promise an approval that is
+ * never coming.
+ */
 const STAGES = [
     { key: 'initiated', label: 'Initiated' },
     { key: 'under_review', label: 'Under Review' },
-    { key: 'approved', label: 'Approved' },
     { key: 'completed', label: 'Completed' },
 ] as const;
 
 /**
- * Where the document sits on that four-stage rail.
+ * Where the document sits on that rail.
  *
- * The workflow has six states; `returned` and `rejected` are not stages on a
- * happy path, so they are reported against the furthest point actually
- * reached rather than being invented as a fifth box.
+ * The status vocabulary is still six words wide, and three of them are not
+ * stages on a happy path -- so `returned` and `rejected` are reported against
+ * the furthest point actually reached rather than invented as extra boxes, and
+ * `approved` folds into Under Review.
+ *
+ * Folding `approved` rather than dropping it matters for the client's older
+ * documents, which are stored in that status and still get opened. It is the
+ * same collapse DocumentStatus::publicLabel() already makes -- both Under
+ * Review and Approved read "In Process" -- so the rail and the pill agree.
  */
 function stageIndex(status: string): number {
     switch (status) {
@@ -38,11 +52,10 @@ function stageIndex(status: string): number {
             return 0;
         case 'under_review':
         case 'returned':
-            return 1;
         case 'approved':
-            return 2;
+            return 1;
         case 'completed':
-            return 3;
+            return 2;
         case 'rejected':
             // Stopped where it was decided, and the status pill says so.
             return 1;
@@ -54,7 +67,7 @@ function stageIndex(status: string): number {
 /**
  * The stages this document has NOT reached yet.
  *
- * The client's design draws the four-stage rail vertically as well as across
+ * The client's design draws the stage rail vertically as well as across
  * the top: under the stages that happened, the ones still to come appear as
  * empty grey rows with a blank duration. `isOpen` is what keeps that honest --
  * a rejected or completed document has nothing still coming, and listing
@@ -179,8 +192,8 @@ export function StageStepper({ status }: { status: string }) {
                     <li key={stage.key} className="flex items-center">
                         {/*
                             One navy rail, not a blue-ahead/grey-behind pair.
-                            The design runs the same dark line between all four
-                            stages: progress is carried by the badges and the
+                            The design runs the same dark line between every
+                            stage: progress is carried by the badges and the
                             active banner, so colouring the track as well said
                             the same thing twice and left the tail looking
                             disabled rather than simply not yet reached.

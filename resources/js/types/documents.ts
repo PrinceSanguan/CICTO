@@ -52,6 +52,15 @@ export type RouteStop = {
     status_tone: Tone;
 };
 
+/** One of the other documents produced by a single simultaneous submit. */
+export type SubmissionSibling = {
+    id: number;
+    control_number: string;
+    office: string | null;
+    status_label: string;
+    status_tone: Tone;
+};
+
 export type DocumentDetail = DocumentListItem & {
     description: string | null;
     remarks: string | null;
@@ -67,6 +76,14 @@ export type DocumentDetail = DocumentListItem & {
      * IS, which is always one office, and this says where it is GOING.
      */
     route: RouteStop[];
+    /**
+     * The other documents the same submit produced, when it was sent to several
+     * departments at the same time. Empty for every other document.
+     *
+     * Separate documents, not stops: a flat submit has no route, and a routed
+     * document has no siblings.
+     */
+    submitted_with: SubmissionSibling[];
     available_actions: DocumentAction[];
     /** The open leg the page was rendered from -- posted back to defeat double-submits. */
     expected_movement_id: number | null;

@@ -36,6 +36,7 @@ export function OfficeRoutePicker({
     className = 'grid gap-3 sm:max-w-md',
     selectClassName = SELECT,
     hint = defaultHint,
+    ordered = true,
 }: {
     offices: IdNameOption[];
     /** Office ids in visiting order. */
@@ -52,6 +53,12 @@ export function OfficeRoutePicker({
     selectClassName?: string;
     /** The sentence under a route of more than one stop. */
     hint?: (first: IdNameOption) => ReactNode;
+    /**
+     * False when the picks are a SET, not a sequence -- every office served at
+     * once, none before another. Numbering them 1, 2, 3 and offering arrows to
+     * reorder them would be a lie about what the list does.
+     */
+    ordered?: boolean;
 }) {
     const chosen = value
         .map((id) => offices.find((office) => office.id === id))
@@ -98,6 +105,8 @@ export function OfficeRoutePicker({
             onChange(chosenIds === '' ? [] : chosenIds.split(',').map(Number));
         }
     }, [chosenIds, valueIds, onChange]);
+
+    const ListTag = ordered ? 'ol' : 'ul';
 
     const move = (from: number, to: number) => {
         if (to < 0 || to >= chosen.length) {
@@ -161,45 +170,57 @@ export function OfficeRoutePicker({
             </div>
 
             {chosen.length > 0 && (
-                <ol className="grid gap-2">
+                <ListTag className="grid gap-2">
                     {chosen.map((office, index) => (
                         <li
                             key={office.id}
                             className="flex items-center gap-2 rounded-md border border-[#E4EAF2] bg-[#F7FAFF] px-3 py-2"
                         >
-                            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#3B72C4] text-xs font-bold text-white tabular-nums">
-                                {index + 1}
+                            <span
+                                aria-hidden={ordered ? undefined : true}
+                                className={`flex shrink-0 items-center justify-center rounded-full bg-[#3B72C4] font-bold text-white ${
+                                    ordered
+                                        ? 'size-6 text-xs tabular-nums'
+                                        : 'size-2'
+                                }`}
+                            >
+                                {ordered ? index + 1 : ''}
                             </span>
 
                             <span className="min-w-0 flex-1 truncate text-sm font-medium text-navy">
                                 {office.name}
                             </span>
 
-                            <Button
-                                type="button"
-                                size="icon"
-                                variant="ghost"
-                                className="size-7"
-                                disabled={disabled || index === 0}
-                                aria-label={`Move ${office.name} earlier`}
-                                onClick={() => move(index, index - 1)}
-                            >
-                                <ArrowUp className="size-4" />
-                            </Button>
+                            {ordered && (
+                                <>
+                                    <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="ghost"
+                                        className="size-7"
+                                        disabled={disabled || index === 0}
+                                        aria-label={`Move ${office.name} earlier`}
+                                        onClick={() => move(index, index - 1)}
+                                    >
+                                        <ArrowUp className="size-4" />
+                                    </Button>
 
-                            <Button
-                                type="button"
-                                size="icon"
-                                variant="ghost"
-                                className="size-7"
-                                disabled={
-                                    disabled || index === chosen.length - 1
-                                }
-                                aria-label={`Move ${office.name} later`}
-                                onClick={() => move(index, index + 1)}
-                            >
-                                <ArrowDown className="size-4" />
-                            </Button>
+                                    <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="ghost"
+                                        className="size-7"
+                                        disabled={
+                                            disabled ||
+                                            index === chosen.length - 1
+                                        }
+                                        aria-label={`Move ${office.name} later`}
+                                        onClick={() => move(index, index + 1)}
+                                    >
+                                        <ArrowDown className="size-4" />
+                                    </Button>
+                                </>
+                            )}
 
                             <Button
                                 type="button"
@@ -207,7 +228,7 @@ export function OfficeRoutePicker({
                                 variant="ghost"
                                 className="size-7"
                                 disabled={disabled}
-                                aria-label={`Remove ${office.name} from the route`}
+                                aria-label={`Remove ${office.name}`}
                                 onClick={() =>
                                     commit(
                                         chosen.filter(
@@ -220,7 +241,7 @@ export function OfficeRoutePicker({
                             </Button>
                         </li>
                     ))}
-                </ol>
+                </ListTag>
             )}
 
             {/*

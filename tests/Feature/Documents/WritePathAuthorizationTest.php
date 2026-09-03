@@ -143,7 +143,7 @@ class WritePathAuthorizationTest extends TestCase
 
         // The fix must not lock out the people who are supposed to act.
         $this->assertTrue($mtoAdmin->can('view', $document));
-        $this->assertTrue($mtoAdmin->can('act', [$document, MovementAction::Approved]));
+        $this->assertTrue($mtoAdmin->can('act', [$document, MovementAction::Received]));
         $this->assertTrue($mtoAdmin->can('uploadVersion', $document));
 
         $this->actingAs($mtoAdmin)

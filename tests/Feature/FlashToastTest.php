@@ -67,7 +67,6 @@ class FlashToastTest extends TestCase
             ->assertSessionHas('toast.type', 'success');
 
         foreach ([
-            MovementAction::Approved,
             MovementAction::Completed,
         ] as $action) {
             $document->refresh();

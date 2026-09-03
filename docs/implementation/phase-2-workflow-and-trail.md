@@ -99,6 +99,36 @@ safely inside the limit — and its unique index is what makes the sweep idempot
 
 ## 2. Approval Management (#7, PHP 700)
 
+> **SUPERSEDED 2026-09-03 — there is no approval step any more.** The client
+> watched a document stall at the third department in a seven-office route and
+> asked for it to be removed: *"dapat yung mga offices wala ng approval, only
+> received na lang, para tuloy-tuloy yung naka-pila na mag-rereceive ng
+> document"*, and again, *"once mag-received na, walang approved, proceed na sa
+> next office"*.
+>
+> **What replaced it.** An office presses **Received** and the folder moves
+> straight on to the next office on the list. Approve, reject and return are
+> gone from `DocumentWorkflow::TRANSITIONS`, so no reachable stage offers them
+> and the buttons no longer render. `AdvanceRoute` advances on `received`, and
+> completes the document when the last office on the route receives it.
+>
+> **Why it was breaking.** Approving is Admin-only and, with self-approval off,
+> forbidden to the document's own author (question A6 below). Any queued office
+> without a qualifying approver held the folder for good, and every stop behind
+> it read "Waiting" forever. Receiving is neither gated — acknowledging a folder
+> on your desk is a receipt, not a judgement.
+>
+> **What survives.** The `MovementAction` cases and the `DocumentStatus` values:
+> legs and documents written before this date still carry them, §13's timeline
+> renders them and §19's reports count them. `TRANSITIONS` keeps rows for
+> `approved` and `returned` so a document left in either stage at deploy time
+> still has a way out. Question A6's setting survives too — it now gates
+> **Complete**, the terminal Admin-only action that inherited the
+> separation-of-duties rule.
+>
+> The rest of this section describes the workflow as it shipped in Phase 2 and
+> is kept as the record of what was built.
+
 Approve, reject and return are the same `TransitionDocument` call from Phase 1 with
 a different `MovementAction`. No new engine.
 

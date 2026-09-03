@@ -35,7 +35,7 @@ Read this table before writing any controller.
 | Event | What is written |
 | --- | --- |
 | Registration (§5) | INSERT `sequence=1`, `from_office_id=null`, `to_office_id=originating`, `action='registered'`, `to_status='initiated'`, `arrived_at=now()`, `departed_at=null` |
-| Approve / reject / return | Close the open leg, then INSERT a new leg with `from_office_id = to_office_id` (same office), `action='approved'`, `arrived_at=now()`. Same-office decisions are still legs — that is how "it sat in HRMO for six days waiting for a signature" becomes visible. |
+| Receive (§9) | Close the open leg, then INSERT a new leg with `from_office_id = to_office_id` (same office), `action='received'`, `arrived_at=now()`. Same-office legs still count — that is how "it sat in HRMO for six days" becomes visible. On a routed document `AdvanceRoute` then forwards it to the next stop, or completes it if that was the last one. (Approve / reject / return wrote the same shape until 2026-09-03; see phase-2-workflow-and-trail.md §2.) |
 | Forward A→B (§9) | One transaction: UPDATE open row `SET departed_at = now()`; INSERT `sequence = prev+1`, `from_office_id=A`, `to_office_id=B`, `action='forwarded'`, `arrived_at=now()`, `departed_at=null` |
 | Complete | Close the open leg; INSERT terminal leg `action='completed'` with both timestamps set; set `documents.completed_at` |
 | Archive (§20) | INSERT `action='archived'`, both timestamps set; set `documents.archived_at` |
@@ -146,10 +146,10 @@ mapping just has to exist, in one place, in the label layer.
 | Rejected | `rejected` |
 | Completed | `completed` |
 
-`approved` maps to *In Process*, not *Completed*, because §9 says the "Send to
-Another Office" button appears **after** approval — an approved document is still
-moving. Confirm this mapping with the client at the Phase 1 demo; it is a literal
-§8 acceptance criterion and it is the kind of thing that gets filed as a bug.
+`approved` — a stage nothing has entered since 2026-09-03, but one the client's
+older documents are stored in — maps to *In Process*, not *Completed*: an approved
+document was still moving. This mapping is a literal §8 acceptance criterion and
+it is the kind of thing that gets filed as a bug, so it is pinned by a test.
 
 ### Packages
 

@@ -111,20 +111,17 @@ class WorkflowTest extends TestCase
         );
     }
 
-    public function test_approving_makes_send_to_another_office_available(): void
+    /**
+     * The client's flow of 2026-09-03: an office acknowledges the folder and
+     * that is the whole of its involvement. No approval step exists to wait on.
+     */
+    public function test_receiving_is_the_only_step_and_it_keeps_the_folder_movable(): void
     {
         $office = $this->office();
         $admin = $this->admin($office);
         $document = $this->registerDocument($office, $this->staff($office));
 
-        $transition = app(TransitionDocument::class);
-
-        // §9: the button appears only after approval.
-        $this->assertFalse(
-            DocumentWorkflow::allows(DocumentStatus::Initiated, MovementAction::Approved),
-        );
-
-        $transition->handle(
+        app(TransitionDocument::class)->handle(
             document: $document,
             action: MovementAction::Received,
             actor: $admin,
@@ -132,19 +129,92 @@ class WorkflowTest extends TestCase
         );
 
         $document->refresh();
-        $this->assertSame(DocumentStatus::UnderReview, $document->status);
 
-        $transition->handle(
+        // Receiving is not a stage change -- the folder is acknowledged, not
+        // advanced -- so it stays under review and stays sendable.
+        $this->assertSame(DocumentStatus::UnderReview, $document->status);
+        $this->assertTrue(DocumentWorkflow::canForward($document->status));
+
+        // And it can be received again by the next office it reaches.
+        $this->assertTrue(
+            DocumentWorkflow::allows(DocumentStatus::UnderReview, MovementAction::Received),
+        );
+    }
+
+    /**
+     * The client asked for "received lang, wala nang iba". These three are what
+     * that removed, and this is the test that keeps them removed.
+     *
+     * Approving in particular is why the client's documents kept dying at the
+     * third department: it was the only action that advanced a route, and
+     * DocumentPolicy makes it Admin-only and forbids it to the document's own
+     * author, so any queued office without a qualifying approver held the
+     * folder forever.
+     */
+    public function test_no_reachable_stage_offers_approve_reject_or_return(): void
+    {
+        $removed = [
+            MovementAction::Approved,
+            MovementAction::Rejected,
+            MovementAction::Returned,
+        ];
+
+        foreach ([DocumentStatus::Initiated, DocumentStatus::UnderReview] as $status) {
+            foreach ($removed as $action) {
+                $this->assertFalse(
+                    DocumentWorkflow::allows($status, $action),
+                    "{$status->value} must not offer {$action->value} any more.",
+                );
+            }
+        }
+
+        // What under_review DOES offer, in full. Asserted as a whole set rather
+        // than one membership at a time, so putting an action back is a
+        // deliberate edit to this list and not an accident.
+        $this->assertEqualsCanonicalizing(
+            [MovementAction::Forwarded, MovementAction::Received, MovementAction::Completed],
+            DocumentWorkflow::allowed(DocumentStatus::UnderReview),
+        );
+    }
+
+    /**
+     * The stages nothing can enter any more still have a way out.
+     *
+     * A document that was sitting in `approved` or `returned` when the receipt
+     * flow shipped is a real row in the client's database, and stranding it
+     * would mean a folder that exists on somebody's desk and can never be
+     * moved, completed or archived again.
+     */
+    public function test_a_document_left_in_a_retired_stage_can_still_be_moved(): void
+    {
+        foreach ([DocumentStatus::Approved, DocumentStatus::Returned] as $status) {
+            $this->assertNotSame(
+                [],
+                DocumentWorkflow::allowed($status),
+                "A document stuck in {$status->value} must still have a way out.",
+            );
+            $this->assertTrue(DocumentWorkflow::canForward($status));
+        }
+
+        $office = $this->office('MPDO');
+        $mto = $this->office('MTO', 'Treasury');
+        $admin = $this->admin($office);
+        $document = $this->registerDocument($office, $this->staff($office));
+
+        // Put it where the old workflow could have left it.
+        $document->forceFill(['status' => DocumentStatus::Approved->value])->save();
+
+        app(TransitionDocument::class)->handle(
             document: $document,
-            action: MovementAction::Approved,
+            action: MovementAction::Forwarded,
             actor: $admin,
-            remarks: 'Approved',
-            expectedMovementId: $document->fresh()->openMovement->id,
+            toOfficeId: $mto->id,
+            expectedMovementId: $document->openMovement->id,
         );
 
         $document->refresh();
-        $this->assertSame(DocumentStatus::Approved, $document->status);
-        $this->assertTrue(DocumentWorkflow::canForward($document->status));
+        $this->assertSame(DocumentStatus::UnderReview, $document->status);
+        $this->assertSame($mto->id, $document->openMovement->to_office_id);
     }
 
     public function test_illegal_transitions_throw_and_write_nothing(): void
@@ -200,19 +270,25 @@ class WorkflowTest extends TestCase
 
         $document->refresh();
 
+        /*
+         * A forward, because that is what carries a remark now: the three
+         * decision actions were removed on 2026-09-03 and the mirror is not
+         * about them -- it is about any remark that becomes a ledger entry.
+         */
         $transition->handle(
             document: $document,
-            action: MovementAction::Rejected,
+            action: MovementAction::Forwarded,
             actor: $admin,
             remarks: 'Missing supporting documents.',
+            toOfficeId: $this->office('MTO', 'Treasury')->id,
             expectedMovementId: $document->openMovement->id,
         );
 
-        // The remark lives on the leg the decision CREATED, alongside the
+        // The remark lives on the leg the action CREATED, alongside the
         // matching immutable copy in movements.remarks.
         $movement = DocumentMovement::query()
             ->where('document_id', $document->id)
-            ->where('action', MovementAction::Rejected)
+            ->where('action', MovementAction::Forwarded)
             ->firstOrFail();
 
         $comment = DocumentComment::query()
@@ -221,9 +297,11 @@ class WorkflowTest extends TestCase
 
         $this->assertNotNull($comment);
         $this->assertSame($movement->remarks, $comment->body);
-        $this->assertSame(DocumentComment::CONTEXT_REJECTION, $comment->context);
+        $this->assertSame(DocumentComment::CONTEXT_MOVEMENT, $comment->context);
 
-        // The ledger copy is immutable, so the two can never diverge.
+        // The ledger copy is immutable, so the two can never diverge. Every
+        // context except CONTEXT_COMMENT is locked, which is the rule that
+        // keeps the panel and the trail from disagreeing.
         $this->assertFalse($comment->isEditable());
     }
 
@@ -235,7 +313,7 @@ class WorkflowTest extends TestCase
 
         $transition = app(TransitionDocument::class);
 
-        foreach ([MovementAction::Received, MovementAction::Approved, MovementAction::Completed] as $action) {
+        foreach ([MovementAction::Received, MovementAction::Completed] as $action) {
             $document->refresh();
             $transition->handle(
                 document: $document,
@@ -256,73 +334,18 @@ class WorkflowTest extends TestCase
         );
     }
 
-    public function test_returning_a_document_sends_it_back_to_the_office_it_came_from(): void
-    {
-        $mpdo = $this->office('MPDO');
-        $mto = $this->office('MTO', 'Treasury');
-
-        $document = $this->registerDocument($mpdo, $this->staff($mpdo));
-
-        // MPDO forwards to MTO.
-        app(TransitionDocument::class)->handle(
-            document: $document,
-            action: MovementAction::Forwarded,
-            actor: $this->admin($mpdo),
-            toOfficeId: $mto->id,
-            expectedMovementId: $document->openMovement->id,
-        );
-
-        $document->refresh();
-        $this->assertSame($mto->id, $document->openMovement->to_office_id);
-
-        // MTO returns it for correction. §9 means send it BACK -- leaving it on
-        // the reviewer's own desk would make Return indistinguishable from
-        // Reject, and only MPDO can make the fix.
-        app(TransitionDocument::class)->handle(
-            document: $document,
-            action: MovementAction::Returned,
-            actor: $this->admin($mto),
-            remarks: 'Attach the quotation.',
-            expectedMovementId: $document->openMovement->id,
-        );
-
-        $document->refresh();
-
-        $this->assertSame(DocumentStatus::Returned, $document->status);
-        $this->assertSame(
-            $mpdo->id,
-            $document->openMovement->to_office_id,
-            'A returned document must go back to the office that sent it.',
-        );
-        $this->assertSame($mto->id, $document->openMovement->from_office_id);
-    }
-
-    public function test_returning_on_the_genesis_leg_falls_back_to_the_originating_office(): void
-    {
-        $office = $this->office('MPDO');
-        $admin = $this->admin($office);
-        $document = $this->registerDocument($office, $this->staff($office));
-
-        app(TransitionDocument::class)->handle(
-            document: $document,
-            action: MovementAction::Received,
-            actor: $admin,
-            expectedMovementId: $document->openMovement->id,
-        );
-
-        $document->refresh();
-
-        app(TransitionDocument::class)->handle(
-            document: $document,
-            action: MovementAction::Returned,
-            actor: $admin,
-            remarks: 'Incomplete.',
-            expectedMovementId: $document->openMovement->id,
-        );
-
-        $document->refresh();
-
-        // Nowhere else to send it -- there is no previous office.
-        $this->assertSame($office->id, $document->openMovement->to_office_id);
-    }
+    /**
+     * WHAT USED TO BE HERE. Two tests pinned Return's destination -- back to
+     * the office that sent it, falling back to the originating office on the
+     * genesis leg. Returning was removed from the workflow on 2026-09-03 at the
+     * client's request, so there is no longer a stage it can be performed from
+     * and the tests had nothing left to drive.
+     *
+     * TransitionDocument still carries the `Returned` arm that works out that
+     * destination, and MovementAction still has the case. Both are kept
+     * deliberately: legs written before the change still say "returned" and
+     * §13's timeline has to render them, and if the client asks for the button
+     * back the subtle half of the feature is still there. Put a test back
+     * beside it if they do.
+     */
 }

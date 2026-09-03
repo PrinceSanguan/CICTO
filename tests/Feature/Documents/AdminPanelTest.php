@@ -3,6 +3,7 @@
 namespace Tests\Feature\Documents;
 
 use App\Actions\Documents\TransitionDocument;
+use App\Enums\DocumentStatus;
 use App\Enums\MovementAction;
 use App\Models\Document;
 use App\Models\User;
@@ -24,6 +25,23 @@ class AdminPanelTest extends TestCase
 {
     use BuildsDocuments, RefreshDatabase;
 
+    /**
+     * Park a document in a stage the workflow can no longer reach.
+     *
+     * `approved` and `rejected` were removed as ACTIONS on 2026-09-03, but they
+     * are still STATUSES: every document the client processed before that date
+     * is stored in one of them, and the four dashboard tiles exist to bucket
+     * exactly those six stored values. Writing the column directly is the only
+     * way left to build that fixture, and it is honest -- the tiles read
+     * documents.status and have never cared how a row got there.
+     */
+    private function park(Document $document, DocumentStatus $status): Document
+    {
+        $document->forceFill(['status' => $status->value])->save();
+
+        return $document;
+    }
+
     /** Walk a document to a terminal state. */
     private function advance(Document $document, User $admin, MovementAction ...$actions): void
     {
@@ -44,30 +62,22 @@ class AdminPanelTest extends TestCase
         $admin = $this->admin($office);
         $clerk = $this->staff($office);
 
-        // One left pending, one approved, one completed, one rejected.
+        // One left pending, one approved, one completed, one rejected. Two of
+        // those four stages are unreachable now, so they are written directly
+        // -- see park(): the tiles bucket stored statuses, and the client's
+        // database is full of rows in both.
         $this->registerDocument($office, $clerk);
 
-        $this->advance(
-            $this->registerDocument($office, $clerk),
-            $admin,
-            MovementAction::Received,
-            MovementAction::Approved,
-        );
+        $this->park($this->registerDocument($office, $clerk), DocumentStatus::Approved);
 
         $this->advance(
             $this->registerDocument($office, $clerk),
             $admin,
             MovementAction::Received,
-            MovementAction::Approved,
             MovementAction::Completed,
         );
 
-        $this->advance(
-            $this->registerDocument($office, $clerk),
-            $admin,
-            MovementAction::Received,
-            MovementAction::Rejected,
-        );
+        $this->park($this->registerDocument($office, $clerk), DocumentStatus::Rejected);
 
         $stats = $this->actingAs($admin)
             ->get(route('admin.dashboard'))
@@ -97,8 +107,7 @@ class AdminPanelTest extends TestCase
 
         $this->registerDocument($office, $clerk);
 
-        $rejected = $this->registerDocument($office, $clerk);
-        $this->advance($rejected, $admin, MovementAction::Received, MovementAction::Rejected);
+        $rejected = $this->park($this->registerDocument($office, $clerk), DocumentStatus::Rejected);
 
         $props = $this->actingAs($admin)
             ->get(route('admin.dashboard', ['status' => 'rejected']))

@@ -18,7 +18,7 @@ class EndToEndTest extends TestCase
 {
     use BuildsDocuments, RefreshDatabase;
 
-    public function test_a_clerk_submits_an_admin_routes_it_and_the_next_office_approves_it(): void
+    public function test_a_clerk_submits_an_admin_routes_it_and_the_next_office_receives_it(): void
     {
         Storage::fake('documents');
 
@@ -62,18 +62,25 @@ class EndToEndTest extends TestCase
         $this->assertSame(DocumentStatus::UnderReview, $document->status);
         $this->assertSame($mto->id, $document->openMovement->to_office_id);
 
-        // 3. The next office approves (§9), which unlocks Send to Another Office.
+        // 3. The next office acknowledges it. That is the whole of what an
+        //    office does now -- no approval to wait on, and Send to Another
+        //    Office stays available either way.
         $this->actingAs($mtoAdmin)
             ->post(route('documents.transitions.store', $document), [
-                'action' => 'approved',
+                'action' => 'received',
                 'remarks' => 'Funds available',
                 'expected_movement_id' => $document->openMovement->id,
             ])
             ->assertRedirect();
 
         $document->refresh();
-        $this->assertSame(DocumentStatus::Approved, $document->status);
+        $this->assertSame(DocumentStatus::UnderReview, $document->status);
         $this->assertSame('In Process', $document->status->publicLabel());
+        $this->assertSame(
+            $mto->id,
+            $document->openMovement->to_office_id,
+            'Nothing was queued behind MTO, so the folder stays with them.',
+        );
 
         // 4. The trail shows all three hops.
         $this->actingAs($mtoAdmin)
@@ -88,7 +95,14 @@ class EndToEndTest extends TestCase
             );
     }
 
-    public function test_rejecting_without_remarks_is_refused(): void
+    /**
+     * The three removed actions are refused over HTTP, not merely hidden.
+     *
+     * The buttons are gone from the page because DocumentPresenter builds them
+     * from the same map that guards the server -- but a hand-rolled POST, or a
+     * tab left open across the deploy, still has to bounce.
+     */
+    public function test_the_removed_decision_actions_are_refused_over_http(): void
     {
         $office = $this->office();
         $admin = $this->admin($office);
@@ -99,17 +113,23 @@ class EndToEndTest extends TestCase
             'expected_movement_id' => $document->openMovement->id,
         ]);
 
-        $document->refresh();
+        foreach (['approved', 'rejected', 'returned'] as $action) {
+            $document->refresh();
 
-        // §9: "approve, reject, or return a document with remarks".
-        $this->actingAs($admin)
-            ->post(route('documents.transitions.store', $document), [
-                'action' => 'rejected',
-                'expected_movement_id' => $document->openMovement->id,
-            ])
-            ->assertSessionHasErrors('remarks');
+            $this->actingAs($admin)
+                ->post(route('documents.transitions.store', $document), [
+                    'action' => $action,
+                    'remarks' => 'Trying it anyway.',
+                    'expected_movement_id' => $document->openMovement->id,
+                ])
+                ->assertForbidden();
 
-        $this->assertSame(DocumentStatus::UnderReview, $document->fresh()->status);
+            $this->assertSame(
+                DocumentStatus::UnderReview,
+                $document->fresh()->status,
+                "A refused '{$action}' must leave the document exactly where it was.",
+            );
+        }
     }
 
     public function test_forwarding_to_the_office_that_already_holds_it_is_refused(): void
@@ -127,7 +147,17 @@ class EndToEndTest extends TestCase
             ->assertSessionHasErrors('to_office_id');
     }
 
-    public function test_an_admin_cannot_approve_their_own_submission_by_default(): void
+    /**
+     * Separation of duties, on the one action it still applies to.
+     *
+     * Approving was the action this rule was written for, and it is gone.
+     * Completing a document is what inherited it: it is terminal, it is
+     * Admin-only, and signing off on your own paperwork is exactly what
+     * client question A6 asked to be able to prevent.
+     *
+     * Receiving is deliberately NOT covered -- see the test below.
+     */
+    public function test_an_admin_cannot_close_their_own_submission_by_default(): void
     {
         config(['cicto.workflow.allow_self_approval' => false]);
 
@@ -146,11 +176,38 @@ class EndToEndTest extends TestCase
 
         $this->actingAs($admin)
             ->post(route('documents.transitions.store', $document), [
-                'action' => 'approved',
-                'remarks' => 'Approving my own request',
+                'action' => 'completed',
+                'remarks' => 'Closing my own request',
                 'expected_movement_id' => $document->openMovement->id,
             ])
             ->assertForbidden();
+    }
+
+    /**
+     * Receiving your own document is always allowed, switch or no switch.
+     *
+     * This is the client's bug, stated as a rule. Acknowledging that a folder
+     * reached your desk is a receipt, not a judgement on its contents -- there
+     * is no duty to separate. When the route waited on approval instead, an
+     * office whose own admin had filed the document could not release it, and
+     * every stop behind it sat on "Waiting" for good.
+     */
+    public function test_receiving_your_own_document_is_never_blocked(): void
+    {
+        config(['cicto.workflow.allow_self_approval' => false]);
+
+        $office = $this->office();
+        $admin = $this->admin($office);
+        $document = $this->registerDocument($office, $admin);
+
+        $this->actingAs($admin)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'received',
+                'expected_movement_id' => $document->openMovement->id,
+            ])
+            ->assertRedirect();
+
+        $this->assertSame(DocumentStatus::UnderReview, $document->fresh()->status);
     }
 
     public function test_self_approval_can_be_switched_on_for_a_small_office(): void
@@ -172,13 +229,13 @@ class EndToEndTest extends TestCase
 
         $this->actingAs($admin)
             ->post(route('documents.transitions.store', $document), [
-                'action' => 'approved',
-                'remarks' => 'Approved',
+                'action' => 'completed',
+                'remarks' => 'Closed',
                 'expected_movement_id' => $document->openMovement->id,
             ])
             ->assertRedirect();
 
-        $this->assertSame(DocumentStatus::Approved, $document->fresh()->status);
+        $this->assertSame(DocumentStatus::Completed, $document->fresh()->status);
     }
 
     public function test_search_is_case_insensitive_on_the_control_number(): void
@@ -228,18 +285,22 @@ class EndToEndTest extends TestCase
         $this->assertSame('Edited', $comment->fresh()->body);
         $this->assertNotNull($comment->fresh()->edited_at);
 
-        // Now a decision remark, which is a ledger entry.
+        // Now a remark attached to a ledger leg. A forward, because the three
+        // decision actions were removed on 2026-09-03 -- what is being pinned
+        // here is that a remark written into the trail cannot be edited
+        // afterwards, whichever action carried it.
         $this->actingAs($admin)->post(route('documents.transitions.store', $document), [
             'action' => 'received',
             'expected_movement_id' => $document->fresh()->openMovement->id,
         ]);
         $this->actingAs($admin)->post(route('documents.transitions.store', $document), [
-            'action' => 'returned',
+            'action' => 'forwarded',
+            'to_office_id' => $this->office('MTO', 'Treasury')->id,
             'remarks' => 'Please attach the quotation.',
             'expected_movement_id' => $document->fresh()->openMovement->id,
         ]);
 
-        $remark = DocumentComment::query()->where('context', DocumentComment::CONTEXT_RETURN)->firstOrFail();
+        $remark = DocumentComment::query()->where('context', DocumentComment::CONTEXT_MOVEMENT)->firstOrFail();
 
         $this->actingAs($admin)
             ->patch(route('documents.comments.update', [$document, $remark]), ['body' => 'Rewritten history'])

@@ -2,9 +2,7 @@
 
 namespace Tests\Feature\Documents;
 
-use App\Actions\Documents\TransitionDocument;
 use App\Enums\DocumentStatus;
-use App\Enums\MovementAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\BuildsDocuments;
 use Tests\TestCase;
@@ -63,17 +61,16 @@ class StatusPresentationTest extends TestCase
         // initiated -> "Pending"
         $initiated = $this->registerDocument($office, $clerk);
 
-        // returned -> also "Pending", via a different workflow state
+        /*
+         * returned -> also "Pending", via a different workflow state.
+         *
+         * Written straight to the column because returning was removed as an
+         * ACTION on 2026-09-03. It is still a stored STATUS -- documents the
+         * client returned before that date sit in it, and a courier scanning
+         * one of those labels is exactly the reader this pairing protects.
+         */
         $returned = $this->registerDocument($office, $clerk);
-        foreach ([MovementAction::Received, MovementAction::Returned] as $action) {
-            $returned->refresh();
-            app(TransitionDocument::class)->handle(
-                document: $returned,
-                action: $action,
-                actor: $admin,
-                expectedMovementId: $returned->openMovement?->id,
-            );
-        }
+        $returned->forceFill(['status' => DocumentStatus::Returned->value])->save();
 
         $this->assertSame('returned', $returned->fresh()->status->value);
 

@@ -35,6 +35,110 @@ class RoutingTest extends TestCase
     use BuildsDocuments, RefreshDatabase;
 
     /**
+     * §5's OTHER shape: several departments, no hierarchy.
+     *
+     * The flat counterpart to the routing list. Nothing is queued behind
+     * anything, so this cannot be one document -- the ledger allows one open
+     * leg and `documents.status` is one column. It is one document per
+     * department instead, each an ordinary registration, linked only so the
+     * page can name the batch.
+     */
+    public function test_submitting_to_several_departments_at_once_gives_each_its_own_document(): void
+    {
+        Storage::fake('documents');
+
+        [$mpdo, $mto, $hrmo] = $this->offices();
+        $clerk = $this->staff($mpdo);
+
+        $this->actingAs($clerk)
+            ->post(route('documents.store'), [
+                'title' => 'Memorandum for all departments',
+                'document_type_id' => $this->documentType()->id,
+                'office_ids' => [$mpdo->id, $mto->id, $hrmo->id],
+                'distribution' => 'all_at_once',
+                'priority' => 'normal',
+                'file' => UploadedFile::fake()->create('memo.pdf', 40, 'application/pdf'),
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        $documents = Document::query()->orderBy('id')->get();
+
+        $this->assertCount(3, $documents, 'One department, one document.');
+
+        // Each is registered under its OWN department: its own prefix, its own
+        // sequence, its own genesis leg. None of them is anybody's second stop.
+        $this->assertSame(
+            [$mpdo->id, $mto->id, $hrmo->id],
+            $documents->pluck('originating_office_id')->all(),
+        );
+
+        foreach ($documents as $document) {
+            $this->assertSame(
+                $document->originating_office_id,
+                $document->openMovement->to_office_id,
+                'Every copy starts at its own department, immediately.',
+            );
+            $this->assertSame(0, $document->routeStops()->count(), 'Nothing is queued in a flat submit.');
+            $this->assertNotNull($document->currentFile()->first(), 'Every department gets the attachment.');
+        }
+
+        // Three control numbers, three prefixes, no sharing.
+        $this->assertCount(3, $documents->pluck('control_number')->unique());
+        $this->assertStringStartsWith('MPDO-', $documents[0]->control_number);
+        $this->assertStringStartsWith('MTO-', $documents[1]->control_number);
+        $this->assertStringStartsWith('HRMO-', $documents[2]->control_number);
+
+        // One submit, so they are linked -- and linked to nothing else.
+        $group = $documents[0]->submission_group_id;
+        $this->assertNotNull($group);
+        $this->assertSame([$group, $group, $group], $documents->pluck('submission_group_id')->all());
+    }
+
+    /**
+     * The flat submit's whole point: no department can hold up another. One
+     * finishing with its copy leaves the other two exactly where they were.
+     *
+     * Used to be asserted through a rejection. Rejecting was removed from the
+     * workflow on 2026-09-03, so the isolation is shown with the strongest
+     * thing a department can still do to its own copy -- close it outright.
+     */
+    public function test_one_department_finishing_does_not_touch_the_others(): void
+    {
+        Storage::fake('documents');
+
+        [$mpdo, $mto, $hrmo] = $this->offices();
+
+        $this->actingAs($this->staff($mpdo))
+            ->post(route('documents.store'), [
+                'title' => 'Memorandum for all departments',
+                'document_type_id' => $this->documentType()->id,
+                'office_ids' => [$mpdo->id, $mto->id, $hrmo->id],
+                'distribution' => 'all_at_once',
+                'priority' => 'normal',
+                'file' => UploadedFile::fake()->create('memo.pdf', 40, 'application/pdf'),
+            ])->assertSessionHasNoErrors();
+
+        $mine = Document::query()->where('originating_office_id', $mto->id)->firstOrFail();
+        $admin = $this->admin($mto);
+
+        $this->act($admin, $mine, MovementAction::Received);
+        $this->act($admin, $mine->refresh(), MovementAction::Completed, 'Handled.');
+
+        $this->assertSame(DocumentStatus::Completed, $mine->refresh()->status);
+
+        foreach ([$mpdo, $hrmo] as $untouched) {
+            $other = Document::query()->where('originating_office_id', $untouched->id)->firstOrFail();
+
+            $this->assertSame(
+                DocumentStatus::Initiated,
+                $other->status,
+                'One department finishing must not reach into another.',
+            );
+        }
+    }
+
+    /**
      * §5's Department field, when the submitter names more than one.
      *
      * The same request, one step earlier: pick every department at the counter
@@ -81,11 +185,9 @@ class RoutingTest extends TestCase
         ));
         $this->assertSame(1, DocumentMovement::query()->where('document_id', $document->id)->count());
 
-        // And it walks the plan on approval, exactly as a route built after
-        // registration does.
-        $admin = $this->admin($mpdo);
-        $this->act($admin, $document, MovementAction::Received);
-        $this->act($admin, $document->refresh(), MovementAction::Approved);
+        // And it walks the plan on RECEIPT, exactly as a route built after
+        // registration does. One acknowledgement, no approval.
+        $this->act($this->admin($mpdo), $document, MovementAction::Received);
 
         $document->refresh();
         $this->assertSame($mto->id, $document->openMovement->to_office_id);
@@ -124,25 +226,132 @@ class RoutingTest extends TestCase
         $this->assertOneOpenLeg($document);
     }
 
-    public function test_approving_moves_the_document_to_the_next_office_by_itself(): void
+    /**
+     * The client's bug, in one test: the folder must not stop at a queued
+     * office waiting for an approval that office may not be able to give.
+     */
+    public function test_receiving_moves_the_document_to_the_next_office_by_itself(): void
     {
         [$mpdo, $mto, $hrmo] = $this->offices();
         $document = $this->registerDocument($mpdo, $this->staff($mpdo));
 
         $this->send($this->admin($mpdo), $document, [$mto, $hrmo]);
 
-        // The receiving office approves. That, and nothing else, releases it.
-        $this->act($this->admin($mto), $document, MovementAction::Approved);
+        // The receiving office acknowledges it. That, and nothing else,
+        // releases it.
+        $this->act($this->admin($mto), $document, MovementAction::Received);
 
         $document->refresh();
 
         $this->assertSame(
             $hrmo->id,
             $document->openMovement->to_office_id,
-            'Approving at stop 1 must send the folder on to stop 2.',
+            'Receiving at stop 1 must send the folder on to stop 2.',
         );
         $this->assertSame(RouteStopStatus::Visited, $document->routeStops()->first()->status);
         $this->assertOneOpenLeg($document);
+    }
+
+    /**
+     * The Actions panel a queued office actually sees.
+     *
+     * The client asked for "received lang, wala nang iba" while a document is
+     * travelling. This is that button set, asserted through the same
+     * `available_actions` payload the page renders from -- so it fails if a
+     * decision action creeps back into the workflow map, and it fails if
+     * Completed starts being offered halfway down a route.
+     */
+    public function test_a_queued_office_is_offered_only_received_and_send_to_another_office(): void
+    {
+        [$mpdo, $mto, $hrmo] = $this->offices();
+        $document = $this->registerDocument($mpdo, $this->staff($mpdo));
+
+        $this->send($this->admin($mpdo), $document, [$mto, $hrmo]);
+
+        $actions = $this->actingAs($this->admin($mto))
+            ->get(route('documents.show', $document))
+            ->assertOk()
+            ->viewData('page')['props']['document']['available_actions'];
+
+        $this->assertEqualsCanonicalizing(
+            ['forwarded', 'received'],
+            array_column($actions, 'value'),
+            'A stop with an office still queued behind it gets a receipt and nothing else.',
+        );
+
+        // Neither of them nags for a reason. Remarks were mandatory on reject
+        // and return; acknowledging a folder is not a decision to justify.
+        $this->assertSame(
+            [false, false],
+            array_column($actions, 'requires_remarks'),
+        );
+
+        // At the LAST stop the queue is empty, so closing the document by hand
+        // becomes available beside the receipt that would close it anyway.
+        $this->act($this->admin($mto), $document, MovementAction::Received);
+
+        $actions = $this->actingAs($this->admin($hrmo))
+            ->get(route('documents.show', $document->refresh()))
+            ->assertOk()
+            ->viewData('page')['props']['document']['available_actions'];
+
+        $this->assertEqualsCanonicalizing(
+            ['forwarded', 'received', 'completed'],
+            array_column($actions, 'value'),
+        );
+    }
+
+    /**
+     * The end of the line closes itself.
+     *
+     * The client asked for the document to be complete once the last office on
+     * the list has received it, rather than sitting open waiting for somebody
+     * to notice there is nowhere left to send it.
+     */
+    public function test_the_last_office_receiving_completes_the_document(): void
+    {
+        [$mpdo, $mto, $hrmo] = $this->offices();
+        $document = $this->registerDocument($mpdo, $this->staff($mpdo));
+
+        $this->send($this->admin($mpdo), $document, [$mto, $hrmo]);
+
+        // MTO is stop 1: still somewhere to go, so it travels on.
+        $this->act($this->admin($mto), $document, MovementAction::Received);
+        $this->assertSame(DocumentStatus::UnderReview, $document->refresh()->status);
+
+        // HRMO is the last stop. Nothing left to forward to.
+        $this->act($this->admin($hrmo), $document->refresh(), MovementAction::Received);
+
+        $document->refresh();
+
+        $this->assertSame(DocumentStatus::Completed, $document->status);
+        $this->assertNotNull($document->completed_at);
+        $this->assertNull($document->openMovement, 'A completed document is held by nobody.');
+        $this->assertSame(
+            0,
+            $document->routeStops()->where('status', RouteStopStatus::Pending)->count(),
+        );
+    }
+
+    /**
+     * A document nobody routed is NOT completed by acknowledging it.
+     *
+     * The auto-close above keys off the route running out. A document with no
+     * route never had one, so its own originating office pressing Received
+     * would otherwise close it before any work had been done.
+     */
+    public function test_receiving_an_unrouted_document_leaves_it_open(): void
+    {
+        $office = $this->office('MPDO');
+        $document = $this->registerDocument($office, $this->staff($office));
+
+        $this->act($this->admin($office), $document, MovementAction::Received);
+
+        $document->refresh();
+
+        $this->assertSame(DocumentStatus::UnderReview, $document->status);
+        $this->assertNotNull($document->openMovement, 'It is still on somebody\'s desk.');
+        $this->assertSame($office->id, $document->openMovement->to_office_id);
     }
 
     public function test_a_routed_document_leaves_the_same_trail_as_forwarding_by_hand(): void
@@ -153,11 +362,11 @@ class RoutingTest extends TestCase
 
         // One submit naming both offices...
         $this->send($this->admin($mpdo), $routed, [$mto, $hrmo]);
-        $this->act($this->admin($mto), $routed, MovementAction::Approved);
+        $this->act($this->admin($mto), $routed, MovementAction::Received);
 
         // ...against the same journey typed out one office at a time.
         $this->send($this->admin($mpdo), $byHand, [$mto]);
-        $this->act($this->admin($mto), $byHand, MovementAction::Approved);
+        $this->act($this->admin($mto), $byHand, MovementAction::Received);
         $this->send($this->admin($mto), $byHand, [$hrmo]);
 
         $shape = fn (Document $document) => DocumentMovement::query()
@@ -180,25 +389,35 @@ class RoutingTest extends TestCase
         );
     }
 
-    public function test_rejecting_cancels_the_rest_of_the_route(): void
+    /**
+     * Sending the folder somewhere off the plan tears the plan down.
+     *
+     * This used to be asserted through a rejection, which is no longer an
+     * action anybody can perform. A hand-picked destination is the case that
+     * remains and it is the more important one: a queue that survived the
+     * override would send the folder somewhere nobody asked for two hops later.
+     */
+    public function test_sending_the_folder_off_the_plan_cancels_the_rest_of_the_route(): void
     {
-        [$mpdo, $mto, $hrmo] = $this->offices();
+        [$mpdo, $mto, $hrmo, $mayor] = $this->offices();
         $document = $this->registerDocument($mpdo, $this->staff($mpdo));
 
         $this->send($this->admin($mpdo), $document, [$mto, $hrmo]);
-        $this->act($this->admin($mto), $document, MovementAction::Rejected, 'Wrong form attached.');
+
+        // MTO holds it, and sends it to the Mayor instead of letting the plan
+        // carry it to HRMO.
+        $this->send($this->admin($mto), $document->refresh(), [$mayor]);
 
         $document->refresh();
 
-        $this->assertSame(DocumentStatus::Rejected, $document->status);
-        $this->assertSame(
-            RouteStopStatus::Cancelled,
-            $document->routeStops()->first()->status,
-            'A rejected document must not still be listed as travelling.',
-        );
+        $this->assertSame($mayor->id, $document->openMovement->to_office_id);
         $this->assertSame(
             0,
-            $document->routeStops()->where('status', RouteStopStatus::Pending)->count(),
+            $document->routeStops()
+                ->where('status', RouteStopStatus::Pending)
+                ->where('office_id', $hrmo->id)
+                ->count(),
+            'The overridden tail must not still be listed as travelling.',
         );
     }
 
@@ -209,10 +428,10 @@ class RoutingTest extends TestCase
 
         $this->send($this->admin($mpdo), $document, [$mto, $hrmo]);
 
-        // Approving at MTO auto-advances to HRMO; HRMO completes it there.
-        $this->act($this->admin($mto), $document, MovementAction::Approved);
-        $this->act($this->admin($hrmo), $document, MovementAction::Approved);
-        $this->act($this->admin($hrmo), $document, MovementAction::Completed);
+        // Receiving at MTO auto-advances to HRMO, and receiving at HRMO --
+        // the last stop -- closes the document where it stands.
+        $this->act($this->admin($mto), $document, MovementAction::Received);
+        $this->act($this->admin($hrmo), $document->refresh(), MovementAction::Received);
 
         $document->refresh();
 
@@ -238,7 +457,7 @@ class RoutingTest extends TestCase
             ->assertForbidden();
 
         // Once it arrives, they can.
-        $this->act($this->admin($mto), $document, MovementAction::Approved);
+        $this->act($this->admin($mto), $document, MovementAction::Received);
 
         $this->actingAs($this->admin($hrmo))
             ->get(route('documents.show', $document))
@@ -377,14 +596,14 @@ class RoutingTest extends TestCase
         $this->assertOneOpenLeg($document->refresh());
 
         foreach ($destinations->take(4) as $office) {
-            $this->act($this->admin($office), $document->refresh(), MovementAction::Approved);
+            $this->act($this->admin($office), $document->refresh(), MovementAction::Received);
             $this->assertOneOpenLeg($document->refresh());
         }
 
         $this->assertSame(
             $destinations->last()->id,
             $document->refresh()->openMovement->to_office_id,
-            'Four approvals should walk the folder to the fifth office.',
+            'Four receipts should walk the folder to the fifth office.',
         );
     }
 

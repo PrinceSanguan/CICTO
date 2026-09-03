@@ -336,6 +336,56 @@ export default function ShowDocument({
                             </section>
                         )}
 
+                        {/*
+                    The other copies one simultaneous submit produced.
+                    Deliberately NOT the Route panel above: a route is one
+                    document moving between offices, this is several documents
+                    that never move together and never wait for each other. Two
+                    different shapes deserve two different panels, or the flat
+                    submit reads as a route whose stops are all stuck at once.
+                */}
+                        {document.submitted_with.length > 0 && (
+                            <section className="rounded-xl bg-white p-6 shadow-xl">
+                                <h3 className="mb-1 text-sm font-semibold">
+                                    Submitted at the same time
+                                </h3>
+                                <p className="mb-3 text-xs text-copy">
+                                    One submit,{' '}
+                                    {document.submitted_with.length + 1}{' '}
+                                    departments. Each has its own control number
+                                    and deadline, and none waits for another.
+                                </p>
+
+                                <ul className="grid gap-2">
+                                    {document.submitted_with.map((sibling) => (
+                                        <li
+                                            key={sibling.id}
+                                            className="flex items-center gap-3 rounded-md border border-[#E4EAF2] px-3 py-2"
+                                        >
+                                            <div className="min-w-0 flex-1">
+                                                <Link
+                                                    href={documents.show(
+                                                        sibling.id,
+                                                    )}
+                                                    className="block truncate text-sm font-medium text-link hover:underline"
+                                                >
+                                                    {sibling.control_number}
+                                                </Link>
+                                                <span className="block truncate text-xs text-copy">
+                                                    {sibling.office ?? '—'}
+                                                </span>
+                                            </div>
+                                            <ToneBadge
+                                                tone={sibling.status_tone}
+                                            >
+                                                {sibling.status_label}
+                                            </ToneBadge>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </section>
+                        )}
+
                         {/* §9 Approval and routing */}
                         {/*
                     §16. Archiving is not a workflow action -- it applies once a

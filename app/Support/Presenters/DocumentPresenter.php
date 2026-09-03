@@ -48,6 +48,39 @@ class DocumentPresenter
     }
 
     /**
+     * The other documents one simultaneous submit produced.
+     *
+     * Never used to authorise anything: a viewer who cannot see a sibling still
+     * cannot open it -- DocumentPolicy decides that when they click. This only
+     * says the batch existed, which the person who submitted it already knows.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function submittedWith(Document $document): array
+    {
+        if ($document->submission_group_id === null) {
+            return [];
+        }
+
+        // array_values for the same reason route() does it: a keyed collection
+        // is not a list, and the payload is a JSON array.
+        return array_values(Document::query()
+            ->where('submission_group_id', $document->submission_group_id)
+            ->whereKeyNot($document->id)
+            ->with('originatingOffice:id,name')
+            ->orderBy('id')
+            ->get(['id', 'control_number', 'originating_office_id', 'status'])
+            ->map(fn (Document $sibling): array => [
+                'id' => $sibling->id,
+                'control_number' => $sibling->control_number,
+                'office' => $sibling->originatingOffice->name,
+                'status_label' => $sibling->status->publicLabel(),
+                'status_tone' => $sibling->status->tone(),
+            ])
+            ->all());
+    }
+
+    /**
      * Where the document is, or -- once it is finished -- where it finished.
      *
      * The open leg answers this while the document is moving. After the last
@@ -159,6 +192,17 @@ class DocumentPresenter
              * Nothing already reading `tracking` changes shape.
              */
             'route' => $this->route($document),
+
+            /*
+             * The rest of the same submit, when it went to several departments
+             * at the same time.
+             *
+             * These are SEPARATE documents, each with its own control number,
+             * deadline and trail -- that is what "no hierarchy" costs and what
+             * it buys. All this does is name them, so a submitter who pressed
+             * Submit once is not left wondering where the other copies went.
+             */
+            'submitted_with' => $this->submittedWith($document),
 
             'expected_movement_id' => $leg?->id,
             'can' => [

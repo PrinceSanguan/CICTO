@@ -8,6 +8,7 @@ use App\Actions\Documents\TransitionDocument;
 use App\Enums\MovementAction;
 use App\Http\Requests\Documents\TransitionDocumentRequest;
 use App\Models\Document;
+use App\Models\DocumentMovement;
 use App\Models\Office;
 use Illuminate\Http\RedirectResponse;
 
@@ -63,9 +64,9 @@ class DocumentWorkflowController extends Controller
         );
 
         /*
-         * The plan moves only after the ledger did. An approval that fails
-         * leaves the queue exactly where it was, and a document with no route
-         * is a no-op here -- so this is safe to call unconditionally.
+         * The plan moves only after the ledger did. A receipt that fails leaves
+         * the queue exactly where it was, and a document with no route is a
+         * no-op here -- so this is safe to call unconditionally.
          */
         $moved = $advance->handle($document, $action, $request->user(), $request);
 
@@ -73,7 +74,7 @@ class DocumentWorkflowController extends Controller
             'type' => 'success',
             'message' => $moved === null
                 ? $this->confirmation($action, $document)
-                : $this->advanceConfirmation($document, $moved->to_office_id),
+                : $this->advanceConfirmation($document, $moved),
         ]);
     }
 
@@ -96,11 +97,23 @@ class DocumentWorkflowController extends Controller
             .$this->list($names).'.';
     }
 
-    private function advanceConfirmation(Document $document, ?int $officeId): string
+    /**
+     * What the receipt did, in the sentence the person who pressed it needs.
+     *
+     * Two outcomes, and they read differently on purpose: a receipt in the
+     * middle of a route releases the folder onward, and a receipt at the last
+     * office on the route closes the document. Reporting the second as "sent
+     * on to ..." would name an office the folder never went to.
+     */
+    private function advanceConfirmation(Document $document, DocumentMovement $moved): string
     {
-        $name = $this->officeNames(array_filter([$officeId]))[0] ?? 'the next office';
+        if ($moved->action === MovementAction::Completed) {
+            return "{$document->control_number} received. That was the last office on the route, so it is now complete.";
+        }
 
-        return "{$document->control_number} approved and sent on to {$name}.";
+        $name = $this->officeNames(array_filter([$moved->to_office_id]))[0] ?? 'the next office';
+
+        return "{$document->control_number} received and sent on to {$name}.";
     }
 
     /**
@@ -135,6 +148,9 @@ class DocumentWorkflowController extends Controller
     private function confirmation(MovementAction $action, Document $document): string
     {
         return match ($action) {
+            // No next office on the list, so the folder stays put. Says so,
+            // rather than leaving a receipt that looks like it did nothing.
+            MovementAction::Received => "{$document->control_number} received. It stays with your office until you send it on.",
             MovementAction::Approved => "{$document->control_number} approved. You can now send it to another office.",
             MovementAction::Rejected => "{$document->control_number} rejected.",
             MovementAction::Returned => "{$document->control_number} returned for correction.",

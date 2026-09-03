@@ -76,19 +76,31 @@ final class KnowledgeBase
                 'sections' => [
                     [
                         'title' => 'Pending',
-                        'body' => 'Your document has been submitted but is still waiting to be processed. A document returned to an office for correction also shows as Pending.',
+                        'body' => 'Your document has been submitted but no office has picked it up yet.',
                     ],
                     [
                         'title' => 'In Process',
-                        'body' => 'An office has received the document and is checking or verifying it. On the document page itself this stage is named **Under Review**, and then **Approved** once it has passed verification and is on its way to completion.',
+                        'body' => 'An office has received the document and is working on it. On the document page itself this stage is named **Under Review**. If the document was submitted to several offices, each one presses **Received** when it arrives and the document moves straight on to the next office on the list -- there is no approval step to wait for.',
                     ],
+                    /*
+                     * Approved and Rejected are still listed, and deliberately.
+                     *
+                     * Neither is reachable any more -- the client removed the
+                     * approval step on 2026-09-03 -- but both are still STORED
+                     * statuses on every document processed before that date, and
+                     * the status filter still offers Rejected as one of §8's four
+                     * client-facing names. Somebody looking at an older document
+                     * and reaching for this article has to find the word they are
+                     * looking at, so both entries say what they mean AND that
+                     * nothing new arrives in them.
+                     */
                     [
                         'title' => 'Approved',
-                        'body' => 'The document has passed verification. It stays In Process in the list until the work is finished.',
+                        'body' => 'An older status. Documents processed before the approval step was removed may still show it; it means an office had signed off on the document. Nothing new is marked Approved -- offices now press **Received** instead.',
                     ],
                     [
                         'title' => 'Rejected',
-                        'body' => 'The document did not meet the required criteria. You may need to resubmit. The reason is recorded in the document history.',
+                        'body' => 'An older status. It means the document did not meet the required criteria, and the reason is recorded in the document history. Nothing new is marked Rejected.',
                     ],
                     [
                         // The design's fifth status is "Released". No screen in

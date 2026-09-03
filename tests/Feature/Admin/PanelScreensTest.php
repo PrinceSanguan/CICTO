@@ -19,6 +19,29 @@ class PanelScreensTest extends TestCase
 {
     use BuildsDocuments, RefreshDatabase;
 
+    /**
+     * The Office column, on the Admin panel's copy of the register.
+     *
+     * Same client ask of 2026-09-03 as the Super Admin screen. It repeats one
+     * value down the page here, because an office admin only ever sees their
+     * own department -- which is itself the answer to "whose list is this".
+     */
+    public function test_the_user_list_names_each_accounts_office(): void
+    {
+        $office = $this->office('PDC', 'City Planning and Development');
+        $clerk = $this->staff($office);
+
+        $rows = collect(
+            $this->actingAs($this->admin($office))
+                ->get(route('admin.users.index'))
+                ->assertOk()
+                ->viewData('page')['props']['users']['data'],
+        )->keyBy('id');
+
+        $this->assertSame('PDC', $rows[$clerk->id]['office']);
+        $this->assertSame('City Planning and Development', $rows[$clerk->id]['office_name']);
+    }
+
     public function test_an_office_admin_sees_only_their_own_offices_staff(): void
     {
         $mine = $this->office('MO', "Mayor's Office");

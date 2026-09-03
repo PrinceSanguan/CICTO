@@ -114,6 +114,37 @@ class ManageUsersTest extends TestCase
         $this->assertDatabaseMissing('users', ['email' => 'escalation@baliwag.gov.ph']);
     }
 
+    /**
+     * The register says which office each account belongs to.
+     *
+     * The client asked for this on 2026-09-03 looking at the Manage Users
+     * screen: "dapat meron dito column kung anong office yung mga users".
+     * Both halves ship -- the code, which is what appears in control numbers
+     * and on printed labels, and the full name, because "PDC" does not answer
+     * the question for somebody who came here to look it up.
+     */
+    public function test_the_register_names_each_accounts_office(): void
+    {
+        $office = $this->office('PDC', 'City Planning and Development');
+        $clerk = $this->staff($office);
+        $superAdmin = $this->superAdmin();
+
+        $rows = collect(
+            $this->actingAs($superAdmin)
+                ->get(route('super-admin.users.index'))
+                ->assertOk()
+                ->viewData('page')['props']['users']['data'],
+        )->keyBy('id');
+
+        $this->assertSame('PDC', $rows[$clerk->id]['office']);
+        $this->assertSame('City Planning and Development', $rows[$clerk->id]['office_name']);
+
+        // A Super Admin genuinely belongs to no office, so the column has
+        // nothing to print rather than missing data.
+        $this->assertNull($rows[$superAdmin->id]['office']);
+        $this->assertNull($rows[$superAdmin->id]['office_name']);
+    }
+
     public function test_a_non_super_admin_role_must_be_given_an_office(): void
     {
         $this->actingAs($this->superAdmin())

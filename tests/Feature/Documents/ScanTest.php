@@ -72,11 +72,6 @@ class ScanTest extends TestCase
         );
         app(TransitionDocument::class)->handle(
             document: $document,
-            action: MovementAction::Approved,
-            actor: $this->admin($office),
-        );
-        app(TransitionDocument::class)->handle(
-            document: $document,
             action: MovementAction::Completed,
             actor: $this->admin($office),
         );

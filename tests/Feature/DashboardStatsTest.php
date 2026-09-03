@@ -31,7 +31,6 @@ class DashboardStatsTest extends TestCase
 
         foreach ([
             MovementAction::Received,
-            MovementAction::Approved,
             MovementAction::Completed,
         ] as $action) {
             $document->refresh();

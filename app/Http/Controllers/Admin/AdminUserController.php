@@ -97,6 +97,12 @@ class AdminUserController extends Controller
                         'role' => $user->role->value,
                         'role_label' => $user->role->label(),
                         'office' => $user->office?->code,
+                        // Same Office column as the Super Admin register (the
+                        // client's ask of 2026-09-03). An office admin only
+                        // ever sees their own office here, so every row repeats
+                        // one value -- which is itself the answer to "am I
+                        // looking at my department or everybody's".
+                        'office_name' => $user->office?->name,
                         'is_active' => $user->is_active,
                         'last_login_at' => $user->last_login_at?->toIso8601String(),
                     ])

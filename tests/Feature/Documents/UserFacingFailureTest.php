@@ -222,7 +222,7 @@ class UserFacingFailureTest extends TestCase
         $admin = $this->admin($office);
         $document = $this->registerDocument($office, $this->staff($office));
 
-        foreach (['received', 'approved', 'completed'] as $action) {
+        foreach (['received', 'completed'] as $action) {
             $this->actingAs($admin)
                 ->post(route('documents.transitions.store', $document), [
                     'action' => $action,

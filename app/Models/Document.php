@@ -35,6 +35,7 @@ use Illuminate\Support\Carbon;
  * @property int $document_type_id
  * @property int $originating_office_id
  * @property int $created_by_id
+ * @property string|null $submission_group_id
  * @property DocumentStatus $status
  * @property DocumentPriority $priority
  * @property Carbon|null $due_at

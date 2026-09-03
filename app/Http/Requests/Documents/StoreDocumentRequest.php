@@ -15,6 +15,9 @@ use Illuminate\Validation\Validator;
  */
 class StoreDocumentRequest extends FormRequest
 {
+    /** @var list<string> */
+    public const DISTRIBUTIONS = ['in_order', 'all_at_once'];
+
     /**
      * Whether this submission arrived as the old single `originating_office_id`.
      * Errors are mirrored back onto that key when it did, so a caller only ever
@@ -98,6 +101,21 @@ class StoreDocumentRequest extends FormRequest
                 Rule::exists('offices', 'id')->where('is_active', true),
             ],
 
+            /*
+             * How the departments above are served, when there is more than
+             * one of them.
+             *
+             * `in_order` is the routing list: one document, visiting each
+             * department in turn as the one before it approves. `all_at_once`
+             * is flat -- one document per department, every one of them holding
+             * it from the same second, none waiting for another.
+             *
+             * Nullable, and absence means `in_order`: that is what a single
+             * department has always meant, and what every client that predates
+             * this field is asking for.
+             */
+            'distribution' => ['nullable', Rule::in(self::DISTRIBUTIONS)],
+
             'priority' => ['required', Rule::enum(DocumentPriority::class)],
 
             // Both types() and extensions(). mimes:/types() validates only the
@@ -143,6 +161,7 @@ class StoreDocumentRequest extends FormRequest
             'originating_office_id' => 'department',
             'office_ids' => 'department',
             'office_ids.*' => 'department',
+            'distribution' => 'delivery',
         ];
     }
 
@@ -154,6 +173,20 @@ class StoreDocumentRequest extends FormRequest
      * department client -- an old tab, an existing test -- still gets its error
      * back under the name it posted, instead of one it cannot display.
      */
+    /**
+     * Whether the submitter asked for every department to hold the document at
+     * once, rather than one after another.
+     *
+     * One department is one document either way, so the flag only means
+     * anything from two up -- and answering that here keeps the controller from
+     * deciding it a second time.
+     */
+    public function wantsSimultaneousDelivery(): bool
+    {
+        return $this->input('distribution') === 'all_at_once'
+            && count((array) $this->input('office_ids', [])) > 1;
+    }
+
     public function withValidator(Validator $validator): void
     {
         if (! $this->usedScalarAlias) {

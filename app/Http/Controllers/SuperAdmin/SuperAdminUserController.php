@@ -93,6 +93,13 @@ class SuperAdminUserController extends Controller
                         'role' => $user->role->value,
                         'role_label' => $user->role->label(),
                         'office' => $user->office?->code,
+                        // The client asked on 2026-09-03 for the register to
+                        // say which office each account belongs to. The code
+                        // alone was already on the wire and is what the column
+                        // leads with; the full name rides along because "PDC"
+                        // means nothing to somebody who does not already know
+                        // the answer they came here to look up.
+                        'office_name' => $user->office?->name,
                         'is_active' => $user->is_active,
                         'last_login_at' => $user->last_login_at?->toIso8601String(),
                         'has_two_factor' => $user->two_factor_confirmed_at !== null,

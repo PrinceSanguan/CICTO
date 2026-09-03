@@ -14,6 +14,7 @@ type UserRow = {
     role: string;
     role_label: string;
     office: string | null;
+    office_name: string | null;
     is_active: boolean;
     last_login_at: string | null;
     /** Whether a password reset alone would still leave them locked out. */
@@ -170,7 +171,7 @@ export default function ManageUsers({
                     />
                 )}
 
-                {/* Phone: cards, because a five-column table at 375px hides
+                {/* Phone: cards, because a seven-column table at 375px hides
                     Status and Last Login entirely. */}
                 <ul className="mt-6 divide-y divide-[#EEF2F7] md:hidden">
                     {users.data.length === 0 && (
@@ -190,6 +191,7 @@ export default function ManageUsers({
                             <p className="mt-1 text-sm text-copy">
                                 {user.role_label}
                                 {user.office && ` · ${user.office}`}
+                                {user.office_name && ` (${user.office_name})`}
                             </p>
                             <div className="mt-2 flex items-center gap-3">
                                 <StatusPill active={user.is_active} />
@@ -210,13 +212,14 @@ export default function ManageUsers({
                 </ul>
 
                 <div className="mt-6 hidden overflow-x-auto md:block">
-                    <table className="w-full min-w-[680px] text-left">
+                    <table className="w-full min-w-[820px] text-left">
                         <thead>
                             <tr>
                                 {[
                                     'Name',
                                     'Email',
                                     'Role',
+                                    'Office',
                                     'Status',
                                     'Last Login',
                                     'Password',
@@ -236,7 +239,7 @@ export default function ManageUsers({
                             {users.data.length === 0 && (
                                 <tr>
                                     <td
-                                        colSpan={6}
+                                        colSpan={7}
                                         className="px-3 py-10 text-center text-sm text-copy"
                                     >
                                         No accounts match that search.
@@ -254,6 +257,9 @@ export default function ManageUsers({
                                     </td>
                                     <td className="px-3 py-4 text-sm text-copy">
                                         {user.role_label}
+                                    </td>
+                                    <td className="px-3 py-4 text-sm">
+                                        <OfficeCell user={user} />
                                     </td>
                                     <td className="px-3 py-4">
                                         <StatusPill active={user.is_active} />
@@ -746,6 +752,38 @@ function Field({
             />
             <InputError message={error} />
         </div>
+    );
+}
+
+/**
+ * Which office an account belongs to -- the client's ask of 2026-09-03.
+ *
+ * Code on top, full name under it. The code is what appears in control numbers
+ * and on printed labels, so it is the identifier somebody is matching against;
+ * the name is what makes it readable to anyone who has not memorised thirty
+ * abbreviations.
+ *
+ * A Super Admin genuinely has no office, so the em dash is the truth rather
+ * than missing data.
+ */
+function OfficeCell({
+    user,
+}: {
+    user: Pick<UserRow, 'office' | 'office_name'>;
+}) {
+    if (!user.office && !user.office_name) {
+        return <span className="text-copy">—</span>;
+    }
+
+    return (
+        <>
+            <span className="font-medium text-navy">{user.office ?? '—'}</span>
+            {user.office_name && (
+                <span className="block text-xs text-copy">
+                    {user.office_name}
+                </span>
+            )}
+        </>
     );
 }
 
