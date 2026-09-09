@@ -46,6 +46,13 @@ use RuntimeException;
  * derived from the office CODE, so the second run finds every account it made
  * on the first and leaves the passwords alone. That is what makes it the right
  * tool when the client adds an office six months from now.
+ *
+ * EVERY ACCOUNT IT CREATES SHARES ONE PASSWORD, and config/cicto.php states
+ * plainly what that costs: one string opens 52 office Admins, and the movement
+ * ledger stops being able to answer *who* even though it still records *which
+ * account*. It is a rollout convenience with an exit -- replace each shared
+ * account with a named one via `cicto:user` as the office supplies a real
+ * address -- and run() says so on the console every time it creates any.
  */
 class OfficeAccountSeeder extends Seeder
 {
@@ -68,21 +75,6 @@ class OfficeAccountSeeder extends Seeder
         'clerk' => ['role' => Role::User, 'title' => 'Clerk', 'position' => 'Administrative Aide'],
     ];
 
-    private const PASSWORD_LENGTH = 14;
-
-    /**
-     * Letters and digits only, minus every ambiguous glyph: no I or l, no O or
-     * o, no 0 or 1.
-     *
-     * These passwords are printed and handed across a counter to people who
-     * will type them by hand on a phone, so a character that reads two ways
-     * costs a support call. No symbols for the same reason. 56^14 is ~10^24,
-     * which is far past anything the login throttle would ever let through, and
-     * it satisfies the Password::min(12)->letters()->numbers() rule the rest of
-     * the system validates against.
-     */
-    private const PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
-
     public function run(): void
     {
         $this->refuseAStaleOfficeList();
@@ -95,6 +87,7 @@ class OfficeAccountSeeder extends Seeder
             return;
         }
 
+        $password = $this->sharedPassword();
         $planned = $this->plan($offices);
 
         $existing = User::query()
@@ -116,7 +109,7 @@ class OfficeAccountSeeder extends Seeder
          * transaction means the operator's fix is always the same one: run it
          * again.
          */
-        $created = DB::transaction(fn (): array => $this->create($missing));
+        $created = DB::transaction(fn (): array => $this->create($missing, $password));
 
         /*
          * §21 audit lines are written AFTER the commit, not inside it. On
@@ -139,7 +132,7 @@ class OfficeAccountSeeder extends Seeder
             );
         }
 
-        $this->report($created, count($planned) - count($created), $offices->count());
+        $this->report($created, count($planned) - count($created), $offices->count(), $password);
     }
 
     /**
@@ -190,7 +183,7 @@ class OfficeAccountSeeder extends Seeder
      */
     private function plan(Collection $offices): array
     {
-        $domain = trim((string) config('cicto.office_accounts.domain'), " \t\n\r\0\x0B@");
+        $domain = $this->domain();
         $rows = [];
 
         foreach ($offices as $office) {
@@ -236,13 +229,11 @@ class OfficeAccountSeeder extends Seeder
      * @param  list<array{code: string, office: string, office_id: int, email: string, name: string, role: Role, position: string}>  $missing
      * @return list<array{code: string, office: string, office_id: int, email: string, name: string, role: Role, position: string, password: string}>
      */
-    private function create(array $missing): array
+    private function create(array $missing, string $password): array
     {
         $created = [];
 
         foreach ($missing as $row) {
-            $password = $this->password();
-
             $user = new User;
 
             /*
@@ -275,33 +266,55 @@ class OfficeAccountSeeder extends Seeder
     }
 
     /**
-     * Rejection sampling rather than a shuffle.
-     *
-     * Every character comes from random_int, and the loop simply discards the
-     * ~12% of draws that happen to contain no digit (or, vanishingly, no
-     * letter). Assembling a guaranteed mix and then shuffling would be one line
-     * shorter and would order it with mt_rand, which is not what you want
-     * deciding the layout of a password.
+     * The mail domain the addresses are built on, with a leading `@` and any
+     * stray whitespace trimmed off -- an operator setting
+     * CICTO_OFFICE_ACCOUNT_DOMAIN="@baliwag.gov.ph" is copying the shape of an
+     * address, not making a mistake worth failing a rollout over.
      */
-    private function password(): string
+    private function domain(): string
     {
-        $max = strlen(self::PASSWORD_ALPHABET) - 1;
+        return trim((string) config('cicto.office_accounts.domain'), " \t\n\r\0\x0B@");
+    }
 
-        do {
-            $password = '';
+    /**
+     * The one password every account created by this seeder shares.
+     *
+     * Read once per run rather than per account, so a config change cannot land
+     * mid-loop and split a rollout across two secrets -- which would be
+     * invisible until half the offices reported that their slip did not work.
+     *
+     * See config/cicto.php for what sharing it costs and how to retire it. The
+     * empty check is here because a blank CICTO_OFFICE_ACCOUNT_PASSWORD -- an
+     * env line with nothing after the `=` -- would otherwise hash the empty
+     * string into 104 accounts that anybody could open by pressing Enter.
+     */
+    private function sharedPassword(): string
+    {
+        $password = (string) config('cicto.office_accounts.password');
 
-            for ($i = 0; $i < self::PASSWORD_LENGTH; $i++) {
-                $password .= self::PASSWORD_ALPHABET[random_int(0, $max)];
-            }
-        } while (preg_match('/[A-Za-z]/', $password) !== 1 || preg_match('/\d/', $password) !== 1);
+        if (trim($password) === '') {
+            throw new RuntimeException(
+                'Nothing was created. CICTO_OFFICE_ACCOUNT_PASSWORD is empty, and an account '
+                .'with a blank password is one anybody can open.',
+            );
+        }
 
         return $password;
     }
 
     /**
+     * Four lines and a warning, not a 104-line dump.
+     *
+     * The dump was worth its noise while every account carried a password that
+     * existed nowhere else -- lose the scrollback and the only copy was gone.
+     * A shared password is recoverable from config at any time, so printing all
+     * of it now buys nothing and puts the whole rollout's credentials on a
+     * screen somebody has to remember to clear. The sheet on disk carries the
+     * office-by-office breakdown for whoever distributes it.
+     *
      * @param  list<array{code: string, office: string, office_id: int, email: string, name: string, role: Role, position: string, password: string}>  $created
      */
-    private function report(array $created, int $kept, int $offices): void
+    private function report(array $created, int $kept, int $offices, string $password): void
     {
         $orphaned = $this->activeOfficesWithNoAdmin();
 
@@ -319,8 +332,29 @@ class OfficeAccountSeeder extends Seeder
                 $offices,
                 $kept,
             ));
-            $this->command->line('  Credential sheet: '.$path);
-            $this->printCredentials($created);
+            $this->command->line(sprintf(
+                '  Addresses are {office code}.admin@%s and {office code}.clerk@%s, lower-cased.',
+                $this->domain(),
+                $this->domain(),
+            ));
+            $this->command->line('  Every one of them signs in with the password: '.$password);
+            $this->command->line('  Distribution sheet: '.$path);
+
+            /*
+             * Said at the point the risk is created rather than left to the
+             * runbook, because this is the moment somebody is standing at a
+             * console deciding whether the rollout is finished.
+             */
+            $this->command->warn(sprintf(
+                '  ONE PASSWORD NOW OPENS %d ACCOUNTS, %d of them office Admins who can read, '
+                .'forward, approve and reject their office\'s documents. Until it is retired, '
+                .'the movement log records which ACCOUNT acted and cannot tell you which PERSON. '
+                .'Replace each shared account with a named one as the office supplies a real '
+                .'address: `php artisan cicto:user <email> --name="Their Name" --role=admin --office=<CODE>`, '
+                .'then `--deactivate` the shared account.',
+                count($created),
+                $offices,
+            ));
         }
 
         if ($orphaned !== []) {
@@ -370,31 +404,6 @@ class OfficeAccountSeeder extends Seeder
         Storage::disk('local')->put($path, $this->csv($created));
 
         return 'storage/app/private/'.$path;
-    }
-
-    /**
-     * Printed as well as written, because the platform this runs on decides
-     * whether the file survives the command that made it. Laravel Cloud's
-     * filesystem is ephemeral and its console has no download, so on that host
-     * the copy on screen is the only copy there is.
-     *
-     * @param  list<array{code: string, office: string, office_id: int, email: string, name: string, role: Role, position: string, password: string}>  $created
-     */
-    private function printCredentials(array $created): void
-    {
-        $output = $this->command->getOutput();
-
-        $output->writeln('');
-        $output->writeln('  ----- copy everything between these lines into a spreadsheet -----');
-        $output->writeln($this->csv($created));
-        $output->writeln('  ----- end -----');
-        $output->writeln('');
-
-        $this->command->warn(
-            '  Hand each office its two lines privately and ask them to change the password under '
-            .'Settings > Security on first sign-in. Then clear this output from your terminal or '
-            .'hosting panel history -- every password in this deployment is on the screen above.'
-        );
     }
 
     /**

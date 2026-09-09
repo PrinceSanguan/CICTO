@@ -537,29 +537,55 @@ php artisan db:seed --class=OfficeSeeder --force
 php artisan db:seed --class="Database\Seeders\OfficeAccountSeeder" --force
 ```
 
-It prints the credentials once and writes the same rows to
-`storage/app/private/office-accounts-<timestamp>.csv`. **Copy them out of the
-terminal before you close it** — on Laravel Cloud the filesystem is ephemeral and
-the console has no download, so the copy on screen is the only copy there is.
-Then clear the scrollback and the hosting panel's command history.
+**All 104 accounts share one password**, `password`, so there is no slip to lose
+and no per-office secret to mistype on rollout day. Override it before seeding a
+real installation:
 
-Four things to know before running it:
+```dotenv
+CICTO_OFFICE_ACCOUNT_PASSWORD="a shared secret that is not the word password"
+```
+
+The seeder writes an office-by-office distribution sheet to
+`storage/app/private/office-accounts-<timestamp>.csv` (code, office, role, name,
+address, password) for whoever hands the accounts out. On Laravel Cloud that file
+does not survive the next deploy — download or copy it if you want to keep it,
+though nothing in it is unrecoverable, since the addresses follow the office
+codes and the password is in your environment.
+
+> **This is the one thing on this page that must not stay true.** One password
+> opens 52 office **Admin** accounts, each of which can read, forward, approve
+> and reject that office's documents. The movement ledger keeps working — every
+> leg still names the account that made it — but it stops answering *who*,
+> because the whole office shares the login. It is a rollout convenience, not a
+> configuration, and §21's audit trail is only worth what this is worth.
+
+Five things to know before running it:
 
 - **Re-running is safe.** The addresses come from the office code, so a second
   run finds everything the first made and creates only what is missing — which
   is what you want the day the client adds an office. It never rewrites an
-  existing password, so it cannot lock out an office that has already been
-  handed its slip.
+  existing password, so changing `CICTO_OFFICE_ACCOUNT_PASSWORD` later affects
+  only accounts created after the change, and cannot lock out an office that is
+  already working.
+- **Retire the shared accounts as real people arrive.** That is the fix for the
+  warning above, and it is per-office rather than all-or-nothing:
+
+  ```bash
+  php artisan cicto:user maria@baliwag.gov.ph --name="Maria Santos" --role=admin --office=OCM
+  php artisan cicto:user ocm.admin@baliwag.gov.ph --deactivate
+  ```
+
+  Movements already recorded stay attributed to `OCM Admin`. That is accurate
+  history, not a defect — deactivating never rewrites the ledger.
 - **These are login identifiers, not mailboxes.** There is no `ocm.clerk@` inbox
   on the city mail server, so deadline notices and password-reset links sent to
   them go nowhere. They are created already verified for exactly that reason —
   `verified` gates every protected route, and no verification mail could ever
-  arrive. Use `cicto:user <email> --reset-password` to rescue one.
-- **They are shared accounts, so treat them as temporary.** As each office names
-  a real person, create that person against their real address and
-  `--deactivate` the shared one. Movements stay attributed to whoever was signed
-  in, so the ledger will read `OCM Admin` for anything done before the handover;
-  that is accurate, not a defect.
+  arrive. Use `cicto:user <email> --reset-password` to rotate one by hand.
+- **`password` is below the app's own password policy.** Nothing checks strength
+  at login, so the accounts work; but the moment somebody changes theirs under
+  Settings › Security they must meet `min:12` with letters and numbers. Expect
+  the question.
 - **It writes an audit line per account.** 104 `user.created` rows land in the
   §21 security log with `system` as the actor. That is a one-time flood of the
   Security Log screen and it is deliberate — 104 accounts appearing with no

@@ -11,6 +11,7 @@ use Database\Seeders\DocumentTypeSeeder;
 use Database\Seeders\OfficeAccountSeeder;
 use Database\Seeders\OfficeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 use RuntimeException;
@@ -220,6 +221,50 @@ class OfficeAccountSeederTest extends TestCase
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('MPDO');
+
+        try {
+            $this->seed(OfficeAccountSeeder::class);
+        } finally {
+            $this->assertSame(0, User::query()->count());
+        }
+    }
+
+    public function test_every_account_shares_the_one_configured_password(): void
+    {
+        $this->seed(OfficeAccountSeeder::class);
+
+        $shared = (string) config('cicto.office_accounts.password');
+
+        // Asserted account by account rather than on a sample: a rollout where
+        // 103 slips work and one does not is indistinguishable, from the
+        // counter, from a broken account.
+        foreach (User::query()->get() as $account) {
+            $this->assertTrue(
+                Hash::check($shared, $account->password),
+                "{$account->email} does not open with the shared password.",
+            );
+        }
+    }
+
+    public function test_a_configured_password_replaces_the_default(): void
+    {
+        config()->set('cicto.office_accounts.password', 'Rollout-2026-Baliwag');
+
+        $this->seed(OfficeAccountSeeder::class);
+
+        $admin = $this->seeded('ocm.admin');
+
+        $this->assertTrue(Hash::check('Rollout-2026-Baliwag', $admin->password));
+        $this->assertFalse(Hash::check('password', $admin->password));
+    }
+
+    public function test_it_refuses_a_blank_password(): void
+    {
+        // An env line with nothing after the `=` would otherwise hash the empty
+        // string into every account on the deployment.
+        config()->set('cicto.office_accounts.password', '   ');
+
+        $this->expectException(RuntimeException::class);
 
         try {
             $this->seed(OfficeAccountSeeder::class);

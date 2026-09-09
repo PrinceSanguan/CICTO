@@ -341,6 +341,38 @@ return [
     */
     'office_accounts' => [
         'domain' => env('CICTO_OFFICE_ACCOUNT_DOMAIN', 'baliwag.gov.ph'),
+
+        /*
+         * ONE PASSWORD, SHARED BY ALL 104 ACCOUNTS. Say plainly what that
+         * means: anybody who can reach the login page can sign in as any
+         * office Admin, and an office Admin can read, forward, approve and
+         * reject that office's documents. The register's audit trail stays
+         * intact -- every movement still names the account that made it -- but
+         * it stops being evidence of WHO, because everybody shares the login.
+         *
+         * It ships this way on purpose. Handing 52 offices a distinct
+         * 14-character string on rollout day means 52 chances to mistype one
+         * and no way to tell a wrong password from a broken account, and the
+         * likeliest end of that story is the passwords being written on a
+         * shared sheet anyway. One password everybody already knows is the
+         * honest version of the same risk, and it is the one that can be
+         * retired per-office without a support call.
+         *
+         * SO RETIRE IT. Two ways, and they compose:
+         *
+         *   - Set CICTO_OFFICE_ACCOUNT_PASSWORD before seeding a real
+         *     installation, so the shared secret is at least not the word
+         *     "password".
+         *   - As each office names a real person, create that person with
+         *     `cicto:user` against their own address and deactivate the shared
+         *     account. `cicto:user <email> --reset-password` rotates one
+         *     without touching the other 103.
+         *
+         * The seeder never re-writes a password it did not just create, so
+         * changing this value later affects only accounts made after the
+         * change.
+         */
+        'password' => env('CICTO_OFFICE_ACCOUNT_PASSWORD', 'password'),
     ],
 
 ];
