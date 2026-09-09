@@ -61,9 +61,15 @@ class OfficeSeeder extends Seeder
      * HRMO is absent on purpose -- it is a real office and appears in the list
      * below, so it is updated in place and keeps its id.
      *
+     * Public because OfficeAccountSeeder refuses to run while any of these are
+     * still active: an installation showing them has not been re-seeded onto
+     * the client's real list yet, and minting two accounts per office there
+     * would fill a live register with staff belonging to offices that are about
+     * to be retired. One shared list, so the two seeders cannot disagree.
+     *
      * @var list<string>
      */
-    private const RETIRED_PLACEHOLDER_CODES = [
+    public const RETIRED_PLACEHOLDER_CODES = [
         'MO', 'SB', 'MTO', 'MACC', 'MBO', 'MPDO', 'MEO', 'MASSO', 'MCR', 'MITO',
     ];
 

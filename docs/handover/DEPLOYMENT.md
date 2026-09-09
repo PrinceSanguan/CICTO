@@ -515,6 +515,61 @@ php artisan cicto:user someone@baliwag.gov.ph --deactivate        # close, never
 
 Run it with no options to see an account's current role, office and state.
 
+#### Staffing every office at once
+
+`cicto:user` is one person at a time, which is right for a named clerk and wrong
+for a rollout: the Submit form offers **every active office** in its department
+list, but only an **Admin** whose `office_id` matches can open what arrives
+there. An office with no Admin is a destination a document can reach and nobody
+can read — it sits as the open leg, counts as overdue on every report, and only
+its submitter and a Super Admin can see it. Nothing in the UI says so.
+
+`OfficeAccountSeeder` closes that gap in one pass. It gives each of the 52 active
+offices two accounts — one **Admin** (`{code}.admin@baliwag.gov.ph`, receives and
+decides) and one **User** (`{code}.clerk@baliwag.gov.ph`, files and tracks) — so
+104 in all.
+
+```bash
+# The office list must be the client's real one FIRST. The seeder refuses to
+# run while any retired placeholder code is still active, and names the ones
+# it found.
+php artisan db:seed --class=OfficeSeeder --force
+php artisan db:seed --class="Database\Seeders\OfficeAccountSeeder" --force
+```
+
+It prints the credentials once and writes the same rows to
+`storage/app/private/office-accounts-<timestamp>.csv`. **Copy them out of the
+terminal before you close it** — on Laravel Cloud the filesystem is ephemeral and
+the console has no download, so the copy on screen is the only copy there is.
+Then clear the scrollback and the hosting panel's command history.
+
+Four things to know before running it:
+
+- **Re-running is safe.** The addresses come from the office code, so a second
+  run finds everything the first made and creates only what is missing — which
+  is what you want the day the client adds an office. It never rewrites an
+  existing password, so it cannot lock out an office that has already been
+  handed its slip.
+- **These are login identifiers, not mailboxes.** There is no `ocm.clerk@` inbox
+  on the city mail server, so deadline notices and password-reset links sent to
+  them go nowhere. They are created already verified for exactly that reason —
+  `verified` gates every protected route, and no verification mail could ever
+  arrive. Use `cicto:user <email> --reset-password` to rescue one.
+- **They are shared accounts, so treat them as temporary.** As each office names
+  a real person, create that person against their real address and
+  `--deactivate` the shared one. Movements stay attributed to whoever was signed
+  in, so the ledger will read `OCM Admin` for anything done before the handover;
+  that is accurate, not a defect.
+- **It writes an audit line per account.** 104 `user.created` rows land in the
+  §21 security log with `system` as the actor. That is a one-time flood of the
+  Security Log screen and it is deliberate — 104 accounts appearing with no
+  record would be the worse outcome.
+
+After it runs it re-checks its own work and warns about any active office still
+without an active Admin. That list should be empty; if it is not, the address it
+wanted was already taken by somebody else's account, and the fix is
+`php artisan cicto:user <email> --role=admin --office=<CODE>`.
+
 #### When somebody forgets their password
 
 Client question **B3**, answered 2026-08-20, meant there was no reset link at

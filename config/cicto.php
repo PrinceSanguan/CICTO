@@ -311,4 +311,36 @@ return [
         'response_window' => env('CICTO_SUPPORT_RESPONSE_WINDOW', '24-48 hours'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Per-office accounts
+    |--------------------------------------------------------------------------
+    |
+    | Database\Seeders\OfficeAccountSeeder mints one Admin and one User for
+    | every ACTIVE office, because §5's "send to" dropdown offers every active
+    | office whether or not anybody works there -- and a document forwarded to
+    | an office with no Admin is a document nobody can open. DocumentPolicy
+    | grants office-scoped read and workflow rights to Role::Admin only, so the
+    | Admin of the pair is the one who receives; the User is the one who files.
+    |
+    | Addresses are {code}.admin@{domain} and {code}.clerk@{domain}, lower-cased
+    | -- ocm.admin@baliwag.gov.ph, gso-ms.clerk@baliwag.gov.ph. Derived from the
+    | office CODE rather than a counter so re-running the seeder lands on the
+    | same address and creates nothing twice.
+    |
+    | THESE ARE LOGIN IDENTIFIERS FIRST AND MAILBOXES SECOND. The city mail
+    | server has no ocm.clerk@ box, so anything the app sends one of them -- a
+    | deadline notice, a password reset -- goes nowhere. That is survivable for
+    | a rollout set whose passwords are handed over on paper, and it is why
+    | `cicto:user` exists: as each office names a real person, create them
+    | against their real address and deactivate the shared account.
+    |
+    | Override the domain rather than editing the seeder, so a pilot or a
+    | training instance can mint accounts under a domain that is not the city's.
+    |
+    */
+    'office_accounts' => [
+        'domain' => env('CICTO_OFFICE_ACCOUNT_DOMAIN', 'baliwag.gov.ph'),
+    ],
+
 ];
