@@ -53,6 +53,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->scopeBindings()
         ->name('documents.files.download');
 
+    // Reading a version on screen rather than taking a copy away. Same
+    // scopeBindings() requirement and the same reason -- and see the controller
+    // for why serving an upload INLINE needs more than the download path does.
+    Route::get('documents/{document}/files/{file}/preview', [DocumentFileController::class, 'preview'])
+        ->scopeBindings()
+        ->name('documents.files.preview');
+
     // §15 digital signatures.
     //
     // password.confirm is the cheapest thing that makes "the method identified

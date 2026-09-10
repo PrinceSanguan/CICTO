@@ -86,6 +86,52 @@ class DocumentFile extends Model
         return $this->hasMany(DocumentSignature::class, 'document_file_id');
     }
 
+    /**
+     * The ONLY types this application will serve inline, and the exact
+     * Content-Type it will serve each one as.
+     *
+     * This is a security boundary, not a convenience list. Uploads are served
+     * from the application's own origin, so anything the browser renders inline
+     * there runs as the app: an HTML or SVG payload could read the session
+     * cookie and act as whoever opened it. That is why every attachment has
+     * always been forced to download, and why previewing has to be a CLOSED
+     * allowlist rather than "inline unless it looks dangerous".
+     *
+     * Three types, all inert renderers. Deliberately NARROWER than
+     * cicto.uploads.mimes, which also accepts Word and Excel -- no browser
+     * renders those anyway, so nothing is lost by refusing them here.
+     *
+     * The VALUE is what gets sent, never the stored mime_type string. The
+     * stored one is sniffed from the bytes at upload time and is trustworthy
+     * enough to route on, but it is still a database column, and a column is
+     * the kind of thing that gets edited.
+     *
+     * @var array<string, string>
+     */
+    public const PREVIEWABLE = [
+        'application/pdf' => 'application/pdf',
+        'image/png' => 'image/png',
+        'image/jpeg' => 'image/jpeg',
+    ];
+
+    /**
+     * Can this version be shown in the browser rather than downloaded?
+     *
+     * Says nothing about whether the bytes still exist -- same rule as
+     * DocumentFilePolicy::download. A purged version is GONE, not FORBIDDEN,
+     * and the controller answers 410 for it.
+     */
+    public function isPreviewable(): bool
+    {
+        return array_key_exists((string) $this->mime_type, self::PREVIEWABLE);
+    }
+
+    /** The Content-Type to serve inline, or null if this type is not on the list. */
+    public function previewContentType(): ?string
+    {
+        return self::PREVIEWABLE[(string) $this->mime_type] ?? null;
+    }
+
     public function isPurged(): bool
     {
         return $this->purged_at !== null;

@@ -372,6 +372,13 @@ class DocumentPresenter
                 'uploaded_at' => $file->created_at?->toIso8601String(),
                 'replace_reason' => $file->replace_reason,
                 'is_purged' => $file->isPurged(),
+
+                // Whether the browser will render this one. Word and Excel
+                // uploads are accepted but have no viewer, so the page offers
+                // them a download and says why rather than opening a blank
+                // frame. The allowlist itself lives on the model, so the button
+                // and the endpoint cannot disagree about what is previewable.
+                'is_previewable' => $file->isPreviewable(),
             ];
         }
 

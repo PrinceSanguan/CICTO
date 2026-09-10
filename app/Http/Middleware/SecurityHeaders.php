@@ -61,7 +61,24 @@ class SecurityHeaders
                 ? 'Content-Security-Policy'
                 : 'Content-Security-Policy-Report-Only';
 
-            $response->headers->set($header, $this->policy($nonce));
+            /*
+             * A response that set its own policy keeps it.
+             *
+             * headers->set() REPLACES, and this middleware runs after the
+             * controller -- so without this guard the app-wide policy silently
+             * overwrote the deny-all one that DocumentFileController::preview
+             * puts on inline attachments. That policy is load-bearing: it is
+             * the difference between an uploaded file rendering with nothing
+             * available to it and rendering under a policy that allows 'self'
+             * scripts. It only broke in production, which is the one place
+             * nobody would have seen it.
+             *
+             * The app policy is the DEFAULT for pages that do not care, not an
+             * override for the few that do.
+             */
+            if (! $response->headers->has('Content-Security-Policy')) {
+                $response->headers->set($header, $this->policy($nonce));
+            }
         }
 
         return $response;

@@ -141,6 +141,8 @@ export type DocumentFileItem = {
     uploaded_at: string | null;
     replace_reason: string | null;
     is_purged: boolean;
+    /** Whether the browser can render this one. See DocumentFile::PREVIEWABLE. */
+    is_previewable: boolean;
 };
 
 export type DocumentCommentItem = {

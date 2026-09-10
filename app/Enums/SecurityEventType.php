@@ -42,6 +42,15 @@ enum SecurityEventType: string
     /** Reads must never touch document_movements -- they belong here. */
     case FileDownloaded = 'file.downloaded';
 
+    /*
+     * Distinct from FileDownloaded, for the same reason PasswordResetByAdmin is
+     * distinct from PasswordReset: the two are different acts and the log has to
+     * say which one happened. Someone who opened a document on screen did not
+     * take a copy away, and an investigation into a leak cares about the
+     * difference.
+     */
+    case FilePreviewed = 'file.previewed';
+
     case DocumentSigned = 'signature.created';
     case SignatureTampered = 'signature.tampered';
 
@@ -66,6 +75,7 @@ enum SecurityEventType: string
             self::UserReactivated => 'Account reactivated',
             self::SettingChanged => 'Setting changed',
             self::FileDownloaded => 'File downloaded',
+            self::FilePreviewed => 'File previewed',
             self::DocumentSigned => 'Document signed',
             self::SignatureTampered => 'Signature mismatch detected',
             self::BackupCompleted => 'Backup completed',

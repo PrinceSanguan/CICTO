@@ -1,5 +1,5 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { ChevronDown, ChevronLeft, Download } from 'lucide-react';
+import { ChevronDown, ChevronLeft, Download, Eye } from 'lucide-react';
 import { useState } from 'react';
 import DocumentCommentController from '@/actions/App/Http/Controllers/DocumentCommentController';
 import DocumentFileController from '@/actions/App/Http/Controllers/DocumentFileController';
@@ -13,6 +13,7 @@ import {
     TrackingMetrics,
     upcomingStages,
 } from '@/components/documents/document-tracking';
+import { FilePreviewDialog } from '@/components/documents/file-preview-dialog';
 import {
     OfficeRoutePicker,
     routeError,
@@ -61,6 +62,23 @@ export default function ShowDocument({
     offices,
 }: Props) {
     const [archiveReason, setArchiveReason] = useState('');
+
+    /*
+     * Which version is open in the viewer, if any.
+     *
+     * Held by id rather than by object so it survives a partial reload -- the
+     * file rows are re-serialised on every workflow action, and a held object
+     * would be a stale copy of one.
+     *
+     * Opened on demand, never on page render: a preview is an audited read
+     * (SecurityEventType::FilePreviewed), and streaming every attachment into a
+     * hidden frame on every page view would bury the log it is written to.
+     */
+    const [previewFileId, setPreviewFileId] = useState<number | null>(null);
+    const previewFile = files.find((file) => file.id === previewFileId) ?? null;
+
+    /** The version a signature made right now would bind to. files arrive newest-first. */
+    const currentFile = files[0] ?? null;
 
     const action = useForm<{
         action: string;
@@ -164,6 +182,16 @@ export default function ShowDocument({
     return (
         <>
             <Head title={document.control_number} />
+
+            <FilePreviewDialog
+                documentId={document.id}
+                file={previewFile}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setPreviewFileId(null);
+                    }
+                }}
+            />
 
             <Link
                 href={documents.index()}
@@ -634,6 +662,36 @@ export default function ShowDocument({
 
                                                             {signOnSend && (
                                                                 <>
+                                                                    {/*
+                                                                        A signature binds to
+                                                                        one exact version, so
+                                                                        the thing being signed
+                                                                        should be readable
+                                                                        without leaving the
+                                                                        page.
+                                                                    */}
+                                                                    {currentFile?.is_previewable && (
+                                                                        <Button
+                                                                            type="button"
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            className="w-fit"
+                                                                            onClick={() =>
+                                                                                setPreviewFileId(
+                                                                                    currentFile.id,
+                                                                                )
+                                                                            }
+                                                                        >
+                                                                            <Eye className="size-4" />
+                                                                            Read
+                                                                            v
+                                                                            {
+                                                                                currentFile.version
+                                                                            }{' '}
+                                                                            before
+                                                                            signing
+                                                                        </Button>
+                                                                    )}
                                                                     <SignaturePad
                                                                         disabled={
                                                                             action.processing
@@ -815,23 +873,57 @@ export default function ShowDocument({
                                                     purged
                                                 </span>
                                             ) : (
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    asChild
-                                                >
-                                                    <a
-                                                        href={documents.files.download.url(
-                                                            {
-                                                                document:
-                                                                    document.id,
-                                                                file: file.id,
-                                                            },
-                                                        )}
+                                                <span className="flex shrink-0 items-center">
+                                                    {/*
+                                                        Offered only for what the
+                                                        browser can actually render.
+                                                        Word and Excel uploads are
+                                                        accepted by the system but
+                                                        have no viewer, and a button
+                                                        that opens an empty frame is
+                                                        worse than no button.
+                                                    */}
+                                                    {file.is_previewable && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            title={`Preview version ${file.version}`}
+                                                            onClick={() =>
+                                                                setPreviewFileId(
+                                                                    file.id,
+                                                                )
+                                                            }
+                                                        >
+                                                            <Eye className="size-4" />
+                                                            <span className="sr-only">
+                                                                Preview version{' '}
+                                                                {file.version}
+                                                            </span>
+                                                        </Button>
+                                                    )}
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        asChild
                                                     >
-                                                        <Download className="size-4" />
-                                                    </a>
-                                                </Button>
+                                                        <a
+                                                            href={documents.files.download.url(
+                                                                {
+                                                                    document:
+                                                                        document.id,
+                                                                    file: file.id,
+                                                                },
+                                                            )}
+                                                            title={`Download version ${file.version}`}
+                                                        >
+                                                            <Download className="size-4" />
+                                                            <span className="sr-only">
+                                                                Download version{' '}
+                                                                {file.version}
+                                                            </span>
+                                                        </a>
+                                                    </Button>
+                                                </span>
                                             )}
                                         </li>
                                     ))}
@@ -1004,6 +1096,25 @@ export default function ShowDocument({
                                             }}
                                             className="mt-4 space-y-3 border-t pt-4"
                                         >
+                                            {currentFile?.is_previewable && (
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="w-fit"
+                                                    onClick={() =>
+                                                        setPreviewFileId(
+                                                            currentFile.id,
+                                                        )
+                                                    }
+                                                >
+                                                    <Eye className="size-4" />
+                                                    Read v{
+                                                        currentFile.version
+                                                    }{' '}
+                                                    before signing
+                                                </Button>
+                                            )}
                                             <SignaturePad
                                                 onChange={(dataUrl) =>
                                                     signature.setData(

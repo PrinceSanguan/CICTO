@@ -34,4 +34,21 @@ class DocumentFilePolicy
     {
         return $this->documents->view($user, $file->document);
     }
+
+    /**
+     * Reading a version on screen instead of taking a copy away.
+     *
+     * The same people, by design: anyone who may download a version may look at
+     * it, and refusing the weaker act while allowing the stronger one would be
+     * theatre. It is a separate method anyway, because "who may see this file
+     * inline" is the question a reviewer will come back to when the inline
+     * serving rules change -- and it should have an answer that greps.
+     *
+     * What may be served inline is a different question again, and not a
+     * permission one: see DocumentFile::PREVIEWABLE.
+     */
+    public function preview(User $user, DocumentFile $file): bool
+    {
+        return $this->documents->view($user, $file->document);
+    }
 }
