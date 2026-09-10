@@ -4,13 +4,17 @@ namespace App\Http\Controllers;
 
 use App\Actions\Documents\AdvanceRoute;
 use App\Actions\Documents\RouteDocument;
+use App\Actions\Documents\SignDocument;
 use App\Actions\Documents\TransitionDocument;
 use App\Enums\MovementAction;
+use App\Enums\SignatureMethod;
 use App\Http\Requests\Documents\TransitionDocumentRequest;
 use App\Models\Document;
 use App\Models\DocumentMovement;
+use App\Models\DocumentSignature;
 use App\Models\Office;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 
 /**
  * §9 workflow and approval.
@@ -22,6 +26,11 @@ use Illuminate\Http\RedirectResponse;
  * The one branch it does carry is forwarding: a forward may name SEVERAL
  * offices, and a routing list is a different action from a single hop even
  * though it produces the same first leg. Everything else goes straight through.
+ *
+ * §15 rides along on that same branch. An office may sign the version it is
+ * releasing at the moment it releases it -- one submit, one transaction, both
+ * or neither. It is offered, never required: a forward with no signature block
+ * behaves exactly as it did before the feature existed.
  */
 class DocumentWorkflowController extends Controller
 {
@@ -31,6 +40,7 @@ class DocumentWorkflowController extends Controller
         TransitionDocument $transition,
         RouteDocument $route,
         AdvanceRoute $advance,
+        SignDocument $sign,
     ): RedirectResponse {
         $action = $request->enum('action', MovementAction::class);
 
@@ -38,18 +48,44 @@ class DocumentWorkflowController extends Controller
         $destinations = array_map('intval', (array) $request->input('to_office_ids', []));
 
         if ($action === MovementAction::Forwarded && $destinations !== []) {
-            $route->handle(
-                document: $document,
-                actor: $request->user(),
-                officeIds: $destinations,
-                remarks: $request->input('remarks'),
-                expectedMovementId: $request->integer('expected_movement_id') ?: null,
-                request: $request,
-            );
+            $signature = DB::transaction(function () use ($request, $document, $route, $sign, $destinations): ?DocumentSignature {
+                /*
+                 * Signed BEFORE the forward, and that order is the whole point.
+                 *
+                 * SignDocument binds the row to the document's open leg, so
+                 * signing first attaches it to the leg that is still parked at
+                 * the releasing office -- which is what makes "did the office
+                 * holding this sign it?" answerable later by joining on the
+                 * movement instead of matching an office name. Sign afterwards
+                 * and the row would name the office the folder had already
+                 * moved to.
+                 */
+                $signature = $request->carriesSignature()
+                    ? $sign->handle(
+                        document: $document,
+                        signer: $request->user(),
+                        method: $request->enum('signature_method', SignatureMethod::class),
+                        drawnPng: $request->input('signature_image'),
+                        purpose: DocumentSignature::PURPOSE_RELEASE,
+                        request: $request,
+                    )
+                    : null;
+
+                $route->handle(
+                    document: $document,
+                    actor: $request->user(),
+                    officeIds: $destinations,
+                    remarks: $request->input('remarks'),
+                    expectedMovementId: $request->integer('expected_movement_id') ?: null,
+                    request: $request,
+                );
+
+                return $signature;
+            }, 3);
 
             return back()->with('toast', [
                 'type' => 'success',
-                'message' => $this->routeConfirmation($document, $destinations),
+                'message' => $this->routeConfirmation($document, $destinations, $signature),
             ]);
         }
 
@@ -82,19 +118,29 @@ class DocumentWorkflowController extends Controller
      * "Sent to X." for one office, "Sent to X, then queued for Y and Z." for a
      * route. The plural sentence is the client's proof the multi-select worked.
      *
+     * A signature adds its serial rather than a bare "and signed": the serial
+     * is what the certificate and the QR verification page are looked up by, so
+     * it is the one part of the receipt worth writing down.
+     *
      * @param  list<int>  $destinations
      */
-    private function routeConfirmation(Document $document, array $destinations): string
-    {
+    private function routeConfirmation(
+        Document $document,
+        array $destinations,
+        ?DocumentSignature $signature = null,
+    ): string {
         $names = $this->officeNames($destinations);
         $first = array_shift($names);
 
-        if ($names === []) {
-            return "{$document->control_number} sent to {$first}.";
+        $sent = $names === []
+            ? "{$document->control_number} sent to {$first}."
+            : "{$document->control_number} sent to {$first}, then queued for ".$this->list($names).'.';
+
+        if ($signature === null) {
+            return $sent;
         }
 
-        return "{$document->control_number} sent to {$first}, then queued for "
-            .$this->list($names).'.';
+        return $sent." Signed on release — certificate serial {$signature->serial}.";
     }
 
     /**

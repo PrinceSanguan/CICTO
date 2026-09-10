@@ -66,11 +66,24 @@ export default function ShowDocument({
         action: string;
         to_office_ids: number[];
         remarks: string;
+        signature_method: string;
+        signature_image: string | null;
     }>({
         action: '',
         to_office_ids: [],
         remarks: '',
+        // Mirrors App\Enums\SignatureMethod. Only `drawn` is offered here; the
+        // pad captures a mark, and a typed name has no canvas to come from.
+        signature_method: 'drawn',
+        signature_image: null,
     });
+
+    /*
+     * §15 handoff. Signing before sending a document onward is OFFERED, never
+     * required, so the pad stays closed until somebody asks for it — an
+     * unopened pad must post exactly what a forward posted before this existed.
+     */
+    const [signOnSend, setSignOnSend] = useState(false);
 
     const comment = useForm({ body: '', is_internal: false as boolean });
 
@@ -95,26 +108,45 @@ export default function ShowDocument({
         // submit" that never happened. Reading it from props at submit time
         // keeps the guard honest: it still catches a genuinely stale tab,
         // because the props only change when the page actually reloads.
-        action.transform((data) => ({
-            ...data,
-            action: value,
-            expected_movement_id: document.expected_movement_id ?? '',
-            /*
-                Destinations belong to a forward and nowhere else. The picker
-                only renders for one, but its value stays in form state, so
-                approving used to post an empty `to_office_ids[]` -- a blank
-                the server then had to read as "no offices" rather than as one
-                unparseable office. It is defended on both sides now; sending
-                nothing is simply the honest payload.
-            */
-            to_office_ids: value === 'forwarded' ? data.to_office_ids : [],
-        }));
+        action.transform((data) => {
+            const forwarding = value === 'forwarded';
+
+            // Only a forward that was actually signed carries the block. The
+            // server reads a PRESENT signature_method as "this submit signs",
+            // and asks the policy about it — so posting an empty one would
+            // refuse ordinary forwards from anyone who may not sign.
+            const signing = forwarding && signOnSend && !!data.signature_image;
+
+            return {
+                action: value,
+                remarks: data.remarks,
+                expected_movement_id: document.expected_movement_id ?? '',
+                /*
+                    Destinations belong to a forward and nowhere else. The picker
+                    only renders for one, but its value stays in form state, so
+                    approving used to post an empty `to_office_ids[]` -- a blank
+                    the server then had to read as "no offices" rather than as one
+                    unparseable office. It is defended on both sides now; sending
+                    nothing is simply the honest payload.
+                */
+                to_office_ids: forwarding ? data.to_office_ids : [],
+                ...(signing
+                    ? {
+                          signature_method: data.signature_method,
+                          signature_image: data.signature_image,
+                      }
+                    : {}),
+            };
+        });
 
         action.post(
             DocumentWorkflowController.store.url({ document: document.id }),
             {
                 preserveScroll: true,
-                onSuccess: () => action.reset(),
+                onSuccess: () => {
+                    action.reset();
+                    setSignOnSend(false);
+                },
             },
         );
     };
@@ -499,27 +531,185 @@ export default function ShowDocument({
                                 {action.data.action && (
                                     <div className="space-y-3">
                                         {isForward && (
-                                            <div className="grid gap-2">
-                                                <OfficeRoutePicker
-                                                    offices={offices}
-                                                    value={
-                                                        action.data
-                                                            .to_office_ids
-                                                    }
-                                                    disabled={action.processing}
-                                                    onChange={(next) =>
-                                                        action.setData(
-                                                            'to_office_ids',
-                                                            next,
-                                                        )
-                                                    }
-                                                />
-                                                <InputError
-                                                    message={routeError(
-                                                        action.errors,
+                                            <>
+                                                <div className="grid gap-2">
+                                                    <OfficeRoutePicker
+                                                        offices={offices}
+                                                        value={
+                                                            action.data
+                                                                .to_office_ids
+                                                        }
+                                                        disabled={
+                                                            action.processing
+                                                        }
+                                                        onChange={(next) =>
+                                                            action.setData(
+                                                                'to_office_ids',
+                                                                next,
+                                                            )
+                                                        }
+                                                    />
+                                                    <InputError
+                                                        message={routeError(
+                                                            action.errors,
+                                                        )}
+                                                    />
+                                                </div>
+
+                                                {/*
+                                                    §15 handoff signature. An
+                                                    office may sign the exact
+                                                    version it is releasing, at
+                                                    the moment it releases it.
+                                                    Optional throughout: nothing
+                                                    here blocks the send.
+                                                */}
+                                                <div className="grid gap-2 rounded-md border border-dashed p-3">
+                                                    {document.release_signature ? (
+                                                        <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                                                            Signed for release
+                                                            by{' '}
+                                                            <span className="font-medium">
+                                                                {
+                                                                    document
+                                                                        .release_signature
+                                                                        .signer_name
+                                                                }
+                                                            </span>{' '}
+                                                            on{' '}
+                                                            {new Date(
+                                                                document
+                                                                    .release_signature
+                                                                    .signed_at,
+                                                            ).toLocaleString()}
+                                                            {document
+                                                                .release_signature
+                                                                .file_version !==
+                                                                null &&
+                                                                ` · v${document.release_signature.file_version}`}
+                                                            .
+                                                        </p>
+                                                    ) : document.can
+                                                          .signRelease ? (
+                                                        <>
+                                                            <label className="flex items-center gap-2 text-sm font-medium">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    className="size-4 rounded border-input"
+                                                                    checked={
+                                                                        signOnSend
+                                                                    }
+                                                                    disabled={
+                                                                        action.processing
+                                                                    }
+                                                                    onChange={(
+                                                                        event,
+                                                                    ) => {
+                                                                        setSignOnSend(
+                                                                            event
+                                                                                .target
+                                                                                .checked,
+                                                                        );
+
+                                                                        // Untick and the mark goes
+                                                                        // with it, or an abandoned
+                                                                        // drawing would still post.
+                                                                        if (
+                                                                            !event
+                                                                                .target
+                                                                                .checked
+                                                                        ) {
+                                                                            action.setData(
+                                                                                'signature_image',
+                                                                                null,
+                                                                            );
+                                                                        }
+                                                                    }}
+                                                                />
+                                                                Sign this
+                                                                version before
+                                                                sending
+                                                                (optional)
+                                                            </label>
+
+                                                            {signOnSend && (
+                                                                <>
+                                                                    <SignaturePad
+                                                                        disabled={
+                                                                            action.processing
+                                                                        }
+                                                                        onChange={(
+                                                                            dataUrl,
+                                                                        ) =>
+                                                                            action.setData(
+                                                                                'signature_image',
+                                                                                dataUrl,
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                    {/*
+                                                                        The password prompt is
+                                                                        announced BEFORE the pad is
+                                                                        used, not sprung after it.
+                                                                        Signing here is gated the
+                                                                        same way signing on its own
+                                                                        is, and confirming sends you
+                                                                        back to this page with the
+                                                                        mark gone — so somebody
+                                                                        should know that before they
+                                                                        draw one.
+                                                                    */}
+                                                                    <p className="text-xs text-muted-foreground">
+                                                                        You will
+                                                                        be asked
+                                                                        to
+                                                                        confirm
+                                                                        your
+                                                                        password
+                                                                        before
+                                                                        this is
+                                                                        sent.
+                                                                        Your
+                                                                        signature
+                                                                        is
+                                                                        recorded
+                                                                        against
+                                                                        this
+                                                                        exact
+                                                                        file
+                                                                        version
+                                                                        as your
+                                                                        office&rsquo;s
+                                                                        release
+                                                                        — it is
+                                                                        not
+                                                                        printed
+                                                                        onto the
+                                                                        document
+                                                                        itself.
+                                                                    </p>
+                                                                </>
+                                                            )}
+                                                            <InputError
+                                                                message={
+                                                                    action
+                                                                        .errors
+                                                                        .signature_image ??
+                                                                    action
+                                                                        .errors
+                                                                        .signature_method
+                                                                }
+                                                            />
+                                                        </>
+                                                    ) : (
+                                                        <p className="text-xs text-muted-foreground">
+                                                            This version has not
+                                                            been signed by your
+                                                            office.
+                                                        </p>
                                                     )}
-                                                />
-                                            </div>
+                                                </div>
+                                            </>
                                         )}
 
                                         <div className="grid gap-2">
@@ -563,7 +753,11 @@ export default function ShowDocument({
                                         >
                                             {action.processing
                                                 ? 'Working…'
-                                                : 'Confirm'}
+                                                : isForward &&
+                                                    signOnSend &&
+                                                    action.data.signature_image
+                                                  ? 'Sign & send'
+                                                  : 'Confirm'}
                                         </Button>
                                     </div>
                                 )}
@@ -742,6 +936,9 @@ export default function ShowDocument({
                                                                 'Signatory'}
                                                             {item.signer_office &&
                                                                 ` · ${item.signer_office}`}
+                                                        </p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {item.purpose_label}
                                                         </p>
                                                         <p className="text-xs text-muted-foreground">
                                                             {new Date(

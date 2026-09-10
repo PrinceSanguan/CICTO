@@ -87,14 +87,30 @@ export type DocumentDetail = DocumentListItem & {
     available_actions: DocumentAction[];
     /** The open leg the page was rendered from -- posted back to defeat double-submits. */
     expected_movement_id: number | null;
+    /**
+     * §15 handoff. Present when the office currently holding this document has
+     * already signed the exact version it is holding; null when it has not, or
+     * when nobody holds it any more.
+     */
+    release_signature: ReleaseSignature | null;
     can: {
         update: boolean;
         uploadVersion: boolean;
         comment: boolean;
         sign: boolean;
+        signRelease: boolean;
         archive: boolean;
         restore: boolean;
     };
+};
+
+/** Mirrors DocumentPresenter::releaseSignature. */
+export type ReleaseSignature = {
+    serial: string;
+    signer_name: string;
+    signer_position: string | null;
+    signed_at: string;
+    file_version: number | null;
 };
 
 /** Spec §13 audit trail. */
@@ -192,6 +208,7 @@ export type SignatureItem = {
     signer_position: string | null;
     signer_office: string | null;
     purpose: string;
+    purpose_label: string;
     method: string;
     file_version: number | null;
     signed_at: string;

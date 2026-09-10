@@ -38,7 +38,22 @@ use Illuminate\Support\Carbon;
  */
 class DocumentSignature extends Model
 {
+    /**
+     * An act of DECIDING: the signer assents to the document's contents.
+     * Gated on DocumentPolicy::sign, which requires Role::Admin.
+     */
     public const PURPOSE_APPROVAL = 'approval';
+
+    /**
+     * §9 handoff. An act of HANDING OVER: the office holding the folder
+     * attests to the exact file version it is releasing to the next office.
+     *
+     * A different act from approval, so it is a different purpose rather than a
+     * second `approval` row -- which the (file, user, purpose) unique index
+     * would refuse anyway, blocking the head who both approves and releases the
+     * same version.
+     */
+    public const PURPOSE_RELEASE = 'release';
 
     /**
      * Bumped if the canonical payload format ever changes, so old signatures
@@ -46,6 +61,38 @@ class DocumentSignature extends Model
      * failing against new ones.
      */
     public const PAYLOAD_VERSION = 'v2';
+
+    /**
+     * Every purpose a signature may carry. Storage is a string(32) with no
+     * database-level enum, so this list is the only thing keeping the column
+     * honest -- validation reads it, and so does the label below.
+     *
+     * @return list<string>
+     */
+    public static function purposes(): array
+    {
+        return [self::PURPOSE_APPROVAL, self::PURPOSE_RELEASE];
+    }
+
+    /**
+     * What a reader sees. `ucfirst($purpose)` used to be inlined in the
+     * certificate Blade, which rendered the handoff signature as a bare
+     * "Release" -- a word that does not say released to whom, or from where, on
+     * the one page somebody holds in their hand.
+     */
+    public static function labelFor(string $purpose): string
+    {
+        return match ($purpose) {
+            self::PURPOSE_APPROVAL => 'Approval',
+            self::PURPOSE_RELEASE => 'Release to next office',
+            default => ucfirst($purpose),
+        };
+    }
+
+    public function purposeLabel(): string
+    {
+        return self::labelFor($this->purpose);
+    }
 
     protected $guarded = [];
 

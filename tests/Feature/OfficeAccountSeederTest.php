@@ -105,7 +105,10 @@ class OfficeAccountSeederTest extends TestCase
                 $offered = $offices;
             });
 
-        $this->assertNotEmpty($offered);
+        // Not just "some offices with admins behind them": the form has to
+        // offer every active office, or a department silently stops being a
+        // destination and nobody finds out until somebody looks for it.
+        $this->assertCount(Office::query()->active()->count(), $offered);
 
         foreach ($offered as $office) {
             $this->assertSame(
@@ -116,6 +119,48 @@ class OfficeAccountSeederTest extends TestCase
                     ->where('is_active', true)
                     ->count(),
                 "{$office['code']} is offered by the submit form with no active Admin behind it.",
+            );
+        }
+    }
+
+    public function test_every_office_the_forward_picker_offers_has_somebody_who_can_receive(): void
+    {
+        $this->seed(OfficeAccountSeeder::class);
+
+        // The second of the two pickers, and the one §5 calls "passing" a
+        // document. Submit chooses where a folder STARTS; this one chooses
+        // where it goes next, and it is the one used for the rest of the
+        // document's life -- so it needs the same guarantee, asserted
+        // separately because it is a different query on a different screen.
+        $ocm = Office::query()->where('code', 'OCM')->firstOrFail();
+        $document = $this->registerDocument($ocm, $this->seeded('ocm.clerk'));
+
+        $offered = [];
+
+        $this->actingAs($this->seeded('ocm.admin'))
+            ->get(route('documents.show', $document))
+            ->assertOk()
+            ->assertInertia(function (Assert $page) use (&$offered): void {
+                /** @var list<array{id: int, name: string}> $offices */
+                $offices = $page->toArray()['props']['offices'];
+
+                $offered = $offices;
+            });
+
+        // Everywhere the folder can go, minus where it already is: the genesis
+        // leg puts it in its own originating office.
+        $this->assertCount(Office::query()->active()->count() - 1, $offered);
+        $this->assertNotContains($ocm->id, array_column($offered, 'id'));
+
+        foreach ($offered as $office) {
+            $this->assertSame(
+                1,
+                User::query()
+                    ->where('office_id', $office['id'])
+                    ->where('role', Role::Admin)
+                    ->where('is_active', true)
+                    ->count(),
+                "{$office['name']} can be forwarded to with no active Admin behind it.",
             );
         }
     }

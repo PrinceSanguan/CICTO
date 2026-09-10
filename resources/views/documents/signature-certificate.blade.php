@@ -52,7 +52,7 @@
 </table>
 
 <table style="margin-top:3mm">
-    <tr><td class="label">Purpose</td><td>{{ ucfirst($signature->purpose) }}</td></tr>
+    <tr><td class="label">Purpose</td><td>{{ $signature->purposeLabel() }}</td></tr>
     <tr>
         <td class="label">File version</td>
         <td>{{ $signature->file ? 'Version '.$signature->file->version : 'No file attached' }}</td>

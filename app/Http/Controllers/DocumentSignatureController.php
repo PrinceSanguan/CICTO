@@ -47,12 +47,17 @@ class DocumentSignatureController extends Controller
             signer: $request->user(),
             method: $method,
             drawnPng: $request->input('image'),
+            purpose: $request->input('purpose') ?: DocumentSignature::PURPOSE_APPROVAL,
             request: $request,
         );
 
         return back()->with('toast', [
             'type' => 'success',
-            'message' => "Signed. Certificate serial {$signature->serial}.",
+            'message' => sprintf(
+                '%s signature recorded. Certificate serial %s.',
+                $signature->purposeLabel(),
+                $signature->serial,
+            ),
         ]);
     }
 

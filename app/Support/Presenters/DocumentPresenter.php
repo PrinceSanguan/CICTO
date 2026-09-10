@@ -205,11 +205,20 @@ class DocumentPresenter
             'submitted_with' => $this->submittedWith($document),
 
             'expected_movement_id' => $leg?->id,
+
+            /*
+             * §15 handoff: has the office holding this folder already signed
+             * the exact version it is holding? Drives the line above the
+             * forward panel, and hides a second pad once it has.
+             */
+            'release_signature' => $this->releaseSignature($document, $leg),
+
             'can' => [
                 'update' => $viewer->can('update', $document),
                 'uploadVersion' => $viewer->can('uploadVersion', $document),
                 'comment' => $viewer->can('comment', $document),
                 'sign' => $viewer->can('sign', $document),
+                'signRelease' => $viewer->can('signRelease', $document),
                 'archive' => $viewer->can('archive', $document),
                 'restore' => $viewer->can('restore', $document),
             ],
@@ -370,6 +379,51 @@ class DocumentPresenter
     }
 
     /**
+     * The handoff signature covering the version currently on this desk, if
+     * there is one.
+     *
+     * Matched on document_movement_id, NOT on the signer_office name snapshot.
+     * The movement IS the office's custody record, so a release signature
+     * carrying the open leg's id is by construction one made by the office that
+     * holds the folder now -- and it keeps answering correctly after an office
+     * is renamed, which a string comparison would not.
+     *
+     * Read from the already-loaded relation when the caller loaded it, which
+     * DocumentController::show does. Falling through to a query here would put
+     * one back on a page that just fetched every signature it needed.
+     *
+     * @return array{signer_name: string, signer_position: string|null, signed_at: string, serial: string, file_version: int|null}|null
+     */
+    private function releaseSignature(Document $document, ?DocumentMovement $leg): ?array
+    {
+        if ($leg === null) {
+            return null;
+        }
+
+        $signatures = $document->relationLoaded('signatures')
+            ? $document->signatures
+            : $document->signatures()->get();
+
+        $match = $signatures
+            ->filter(fn (DocumentSignature $signature): bool => $signature->purpose === DocumentSignature::PURPOSE_RELEASE
+                && $signature->document_movement_id === $leg->id)
+            ->sortByDesc('signed_at')
+            ->first();
+
+        if (! $match instanceof DocumentSignature) {
+            return null;
+        }
+
+        return [
+            'serial' => $match->serial,
+            'signer_name' => $match->signer_name,
+            'signer_position' => $match->signer_position,
+            'signed_at' => $match->signed_at->toIso8601String(),
+            'file_version' => $match->file?->version,
+        ];
+    }
+
+    /**
      * §15 signatures.
      *
      * `valid` and `superseded` are computed per row rather than stored, so the
@@ -395,6 +449,7 @@ class DocumentPresenter
                 'signer_position' => $signature->signer_position,
                 'signer_office' => $signature->signer_office,
                 'purpose' => $signature->purpose,
+                'purpose_label' => $signature->purposeLabel(),
                 'method' => $signature->method->value,
                 'file_version' => $signature->file?->version,
                 'signed_at' => $signature->signed_at->toIso8601String(),

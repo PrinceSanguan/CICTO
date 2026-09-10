@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Documents;
 
 use App\Enums\MovementAction;
+use App\Enums\SignatureMethod;
 use App\Exceptions\StaleWorkflowStateException;
 use App\Models\Document;
 use Illuminate\Foundation\Http\FormRequest;
@@ -44,7 +45,31 @@ class TransitionDocumentRequest extends FormRequest
             throw new StaleWorkflowStateException;
         }
 
-        return $this->user()?->can('act', [$document, $action]) ?? false;
+        if (! ($this->user()?->can('act', [$document, $action]) ?? false)) {
+            return false;
+        }
+
+        /*
+         * §15 handoff signature, when one rides along with the forward.
+         *
+         * Asked separately from `act`, because holding the folder is not the
+         * same permission as signing for it -- DocumentPolicy::signRelease also
+         * wants a file to bind to and refuses a version this person already
+         * released. The document page hides the pad when it would fail, so a
+         * request reaching here with a signature it may not make is a crafted
+         * one, and a bare refusal is the right answer.
+         */
+        if ($this->carriesSignature() && ! $this->user()->can('signRelease', $document)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /** Did this submit bring a signature along with it? */
+    public function carriesSignature(): bool
+    {
+        return filled($this->input('signature_method'));
     }
 
     /**
@@ -132,6 +157,24 @@ class TransitionDocumentRequest extends FormRequest
             'expected_movement_id' => ['nullable', 'integer'],
 
             'remarks' => ['nullable', 'string', 'max:2000'],
+
+            /*
+             * §15 "Sign & send". Optional, and absent from every submit that
+             * does not use it -- signing before a handoff is offered, never
+             * required, so these rules must stay silent when the block is not
+             * there.
+             *
+             * Prefixed rather than reusing `method`/`image` because this form
+             * already carries an `action`, and two fields a keystroke apart
+             * meaning different things is how the wrong one ends up read.
+             */
+            'signature_method' => ['nullable', Rule::enum(SignatureMethod::class)],
+
+            // Cap mirrors StoreSignatureRequest: base64 of SignDocument's
+            // 512 KB byte limit, so an oversized mark is a sentence rather than
+            // a RuntimeException surfacing as a 500.
+            'signature_image' => ['nullable', 'string', 'max:683008'],
+            'signature_typed_name' => ['nullable', 'string', 'max:191'],
         ];
     }
 
@@ -166,6 +209,8 @@ class TransitionDocumentRequest extends FormRequest
                 $validator->errors()->add('remarks', 'Please say why you are '.$action->verb().' this document.');
             }
 
+            $this->validateSignature($validator, $action);
+
             if ($action === MovementAction::Forwarded) {
                 $document = $this->route('document');
                 $leg = $document instanceof Document ? $document->openMovement : null;
@@ -187,6 +232,57 @@ class TransitionDocumentRequest extends FormRequest
                 }
             }
         });
+    }
+
+    /**
+     * The §15 block, when one was sent.
+     *
+     * Mirrors StoreSignatureRequest deliberately: the same two ways of
+     * capturing a mark, refused for the same two reasons. Both paths end in the
+     * same SignDocument call, so a rule enforced on one form and not the other
+     * is a hole rather than a shortcut.
+     */
+    private function validateSignature(Validator $validator, ?MovementAction $action): void
+    {
+        if (! $this->carriesSignature()) {
+            return;
+        }
+
+        /*
+         * A release signature is a statement about a handoff, so there has to
+         * BE a handoff. Approving or completing with a signature attached would
+         * write a row claiming the folder was released to an office it never
+         * went to.
+         */
+        if ($action !== MovementAction::Forwarded) {
+            $validator->errors()->add(
+                'signature_method',
+                'A signature can only be added when sending the document to another office.',
+            );
+
+            return;
+        }
+
+        $method = $this->enum('signature_method', SignatureMethod::class);
+
+        if ($method === SignatureMethod::Drawn && blank($this->input('signature_image'))) {
+            $validator->errors()->add('signature_image', 'Please draw your signature before signing.');
+        }
+
+        if ($method === SignatureMethod::Typed) {
+            $typed = trim((string) $this->input('signature_typed_name'));
+
+            if ($typed === '') {
+                $validator->errors()->add('signature_typed_name', 'Please type your full name.');
+            } elseif (mb_strtolower($typed) !== mb_strtolower((string) $this->user()?->name)) {
+                // You sign as yourself. Typing somebody else's name is not a
+                // signature, it is impersonation with extra steps.
+                $validator->errors()->add(
+                    'signature_typed_name',
+                    'The typed name must match the name on your account.',
+                );
+            }
+        }
     }
 
     /**

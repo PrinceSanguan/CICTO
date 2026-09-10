@@ -9,6 +9,7 @@ use App\Http\Controllers\DocumentSignatureController;
 use App\Http\Controllers\DocumentWorkflowController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ScanController;
+use App\Http\Middleware\ConfirmPasswordWhenSigning;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -34,7 +35,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('documents/{document}/qr.svg', [DocumentLabelController::class, 'svg'])->name('documents.qr');
 
     // §9 approve / reject / return / forward / complete
+    //
+    // ConfirmPasswordWhenSigning is a no-op for all of those. It only bites on
+    // a forward that carries a §15 handoff signature, so signing while sending
+    // is held to the same identity check as signing on its own -- see the
+    // signatures route below -- without demanding a password to press Received.
     Route::post('documents/{document}/transitions', [DocumentWorkflowController::class, 'store'])
+        ->middleware(ConfirmPasswordWhenSigning::class)
         ->name('documents.transitions.store');
 
     // scopeBindings() is load-bearing: without it {file} resolves globally and

@@ -1,7 +1,10 @@
 # Claude web prompts for the CICTO system diagrams
 
 Paste the **SYSTEM BRIEF** block first, then one diagram prompt underneath it,
-into a fresh claude.ai chat. One chat per diagram. The brief is written from
+into a fresh claude.ai chat. One chat per diagram. Every prompt asks for a
+downloadable PDF, which needs the file-creation feature switched on in
+claude.ai (Settings → Capabilities, "Create and edit files"). If it is off,
+Claude falls back to an SVG artifact you can print to PDF from the browser. The brief is written from
 the code as of 2026-09-09 (workflow after the client's 2026-09-03 decision to
 drop approve / reject / return).
 
@@ -85,10 +88,12 @@ Rules:
 - Keep text inside shapes to 6 words or fewer; longer explanations go in a note beside the shape.
 - Landscape, top-to-bottom main flow, side flows on the right, Scheduler lane at the bottom.
 
-Output:
-1. A rendered SVG artifact I can download and print on A3.
-2. The Mermaid source (flowchart TD) for the same diagram in a code block, so I can edit and regenerate it.
-3. A legend listing every symbol used.
+Output: ONE PDF FILE for download, named cicto-01-system-flowchart.pdf.
+- Page 1: the diagram only. A3 landscape, 15 mm margins, drawn as vector graphics (no raster screenshots), fonts embedded, no text smaller than 9 pt. Title block top-left: "CICTO Document Tracking System — System Flowchart", Version 1.0, today's date, "Notation: ANSI/ISO flowchart symbols".
+- Page 2: the legend of every symbol used, followed by the list of assumptions you made.
+- Last page: the Mermaid source (flowchart TD) in a monospace font, so I can regenerate the diagram later.
+Build it with a vector pipeline: draw the diagram as SVG and convert with cairosvg, or draw it directly with reportlab. Then open the finished PDF and check that no text overflows its shape, no label sits on top of an arrow, and the whole diagram fits inside the margins; fix and re-export before handing it over.
+If file creation is not available in this chat, say so plainly and give me the diagram as an SVG artifact instead, so I can print it to PDF myself.
 Do not add features that are not in the brief. Where something is ambiguous, choose the simplest reading and list the assumption under the diagram.
 ```
 
@@ -130,10 +135,12 @@ Rules:
 - Keep arrows orthogonal and avoid crossing lanes more than necessary.
 - Do not add approve, reject or return actions.
 
-Output:
-1. Rendered SVG artifact, landscape, A3-printable.
-2. PlantUML source (@startuml ... @enduml, using |Swimlane| partitions) in a code block. If you cannot produce PlantUML, give Mermaid flowchart source with subgraphs as swimlanes and say so.
-3. A legend.
+Output: ONE PDF FILE for download, named cicto-02-activity-diagram.pdf.
+- Page 1: the diagram only. A3 landscape, 15 mm margins, drawn as vector graphics (no raster screenshots), fonts embedded, no text smaller than 9 pt. Title block top-left: "CICTO Document Tracking System — Activity Diagram", Version 1.0, today's date, "Notation: UML 2.5 activity diagram with swimlanes".
+- Page 2: the legend.
+- Last page: the PlantUML source (@startuml ... @enduml with |Swimlane| partitions; if PlantUML is impossible, Mermaid flowchart source with subgraphs as swimlanes, and say so) in a monospace font, so I can regenerate the diagram later.
+Build it with a vector pipeline: draw the diagram as SVG and convert with cairosvg, or draw it directly with reportlab. Then open the finished PDF and check that no text overflows its shape, no label sits on top of an arrow, and the whole diagram fits inside the margins; fix and re-export before handing it over.
+If file creation is not available in this chat, say so plainly and give me the diagram as an SVG artifact instead, so I can print it to PDF myself.
 Stick to the brief; do not invent extra actors or steps.
 ```
 
@@ -210,10 +217,12 @@ Rules:
 - Keep <<include>> and <<extend>> arrows to the ones listed; do not chain them.
 - Under the diagram add a numbered table: use case, primary actor, one-line goal.
 
-Output:
-1. Rendered SVG artifact (portrait A3 or landscape A2, legible).
-2. PlantUML source (@startuml with actor / usecase / rectangle / package syntax) in a code block.
-3. The use case table.
+Output: ONE PDF FILE for download, named cicto-03-use-case-diagram.pdf.
+- Page 1: the diagram only. A3 portrait (switch to A2 landscape only if A3 cannot stay legible), 15 mm margins, drawn as vector graphics (no raster screenshots), fonts embedded, no text smaller than 9 pt. Title block top-left: "CICTO Document Tracking System — Use Case Diagram", Version 1.0, today's date, "Notation: UML 2.5 use case diagram".
+- Page 2 onward: the numbered use case table (use case, primary actor, one-line goal).
+- Last page: the PlantUML source (@startuml with actor / usecase / rectangle / package syntax) in a monospace font, so I can regenerate the diagram later.
+Build it with a vector pipeline: draw the diagram as SVG and convert with cairosvg, or draw it directly with reportlab. Then open the finished PDF and check that no text overflows its shape, no label sits on top of an arrow, and the whole diagram fits inside the margins; fix and re-export before handing it over.
+If file creation is not available in this chat, say so plainly and give me the diagram as an SVG artifact instead, so I can print it to PDF myself.
 Do not add use cases beyond this list.
 ```
 
@@ -255,10 +264,12 @@ Rules:
 - Every arrow has a noun-phrase label.
 - Keep the process centred and labels non-overlapping.
 
-Output:
-1. Rendered SVG artifact, landscape.
-2. Mermaid source (flowchart LR; entities as rectangles, process as a stadium node) in a code block.
-3. A data flow table: number, source, destination, flow name, contents.
+Output: ONE PDF FILE for download, named cicto-04-context-diagram-level-0.pdf.
+- Page 1: the diagram only. A3 landscape, 15 mm margins, drawn as vector graphics (no raster screenshots), fonts embedded, no text smaller than 9 pt. Title block top-left: "CICTO Document Tracking System — Context Diagram (Level 0 DFD)", Version 1.0, today's date, "Notation: Gane & Sarson".
+- Page 2: the data flow table (number, source, destination, flow name, contents).
+- Last page: the Mermaid source (flowchart LR; entities as rectangles, process as a stadium node) in a monospace font, so I can regenerate the diagram later.
+Build it with a vector pipeline: draw the diagram as SVG and convert with cairosvg, or draw it directly with reportlab. Then open the finished PDF and check that no text overflows its shape, no label sits on top of an arrow, and the whole diagram fits inside the margins; fix and re-export before handing it over.
+If file creation is not available in this chat, say so plainly and give me the diagram as an SVG artifact instead, so I can print it to PDF myself.
 Do not add external entities beyond this list.
 ```
 
@@ -305,10 +316,12 @@ Rules:
 - Layout: external entities on the outer edge, processes in numeric order in a ring or grid, data stores between the processes that share them. Duplicate D5, D6 and D13 if that removes crossings.
 - No approve, reject or return flows.
 
-Output:
-1. Rendered SVG artifact, landscape A2, font no smaller than 9 pt.
-2. Mermaid source (flowchart LR; processes as stadium nodes, data stores as cylinders [( )], entities as rectangles) in a code block.
-3. A balancing table: each Level 0 flow → the Level 1 process that now carries it.
-4. A data dictionary for the 15 stores: ID, table, key fields, processes that read it, processes that write it.
+Output: ONE PDF FILE for download, named cicto-05-data-flow-diagram-level-1.pdf.
+- Page 1: the diagram only. A2 landscape, 15 mm margins, drawn as vector graphics (no raster screenshots), fonts embedded, no text smaller than 9 pt. Title block top-left: "CICTO Document Tracking System — Data Flow Diagram (Level 1)", Version 1.0, today's date, "Notation: Gane & Sarson".
+- Page 2: the balancing table (each Level 0 flow → the Level 1 process that now carries it).
+- Page 3: the data dictionary for the 15 stores (ID, table, key fields, processes that read it, processes that write it).
+- Last page: the Mermaid source (flowchart LR; processes as stadium nodes, data stores as cylinders [( )], entities as rectangles) in a monospace font, so I can regenerate the diagram later.
+Build it with a vector pipeline: draw the diagram as SVG and convert with cairosvg, or draw it directly with reportlab. Then open the finished PDF and check that no text overflows its shape, no label sits on top of an arrow, and the whole diagram fits inside the margins; fix and re-export before handing it over.
+If file creation is not available in this chat, say so plainly and give me the diagram as an SVG artifact instead, so I can print it to PDF myself.
 Do not add processes, stores or entities beyond this list.
 ```

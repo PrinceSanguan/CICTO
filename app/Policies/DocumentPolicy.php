@@ -233,6 +233,65 @@ class DocumentPolicy
         return $this->holdsDocument($user, $document);
     }
 
+    /**
+     * §9 + §15. The handoff signature: the office holding the folder attesting
+     * to the exact file version it is about to send to the next office.
+     *
+     * Deliberately NOT the same rule as sign(), because it is not the same act.
+     * An approval signature is a DECISION, so it is gated on Role::Admin and on
+     * the §A6 separation-of-duties switch. A release signature is a statement of
+     * CUSTODY -- "this is the version that left our desk" -- so:
+     *
+     *  - No Role::Admin gate. Whoever actually releases the folder is the person
+     *    whose name belongs on it. In practice view() still narrows this to the
+     *    office's Admins plus the document's own submitter, because a plain user
+     *    cannot read a colleague's document in the first place; widening THAT is
+     *    a separate decision with a much larger blast radius.
+     *
+     *  - No self-approval gate. The submitter is the one role that can always
+     *    see their own document, so applying §A6 here would mean the most common
+     *    plain-user case could never sign the handoff at all -- it would refuse
+     *    exactly the people the rule above just admitted.
+     *
+     * Nothing here blocks forwarding. Signing before a handoff is offered, not
+     * required; DocumentWorkflowController forwards with or without it.
+     */
+    public function signRelease(User $user, Document $document): bool
+    {
+        if (! $user->is_active || $document->isArchived() || $document->status->isTerminal()) {
+            return false;
+        }
+
+        if (! $this->view($user, $document)) {
+            return false;
+        }
+
+        // You can only release what is on your desk.
+        if (! $this->holdsDocument($user, $document)) {
+            return false;
+        }
+
+        // Same reason as sign(): a signature is a binding to one exact file
+        // version, so with no file there is no hash and nothing to bind to.
+        $file = $document->relationLoaded('currentFile')
+            ? $document->currentFile
+            : $document->currentFile()->first();
+
+        if ($file === null) {
+            return false;
+        }
+
+        // Already released this exact version. The unique index says so too,
+        // but reaching it means a 500 and an orphaned PNG.
+        $signed = DocumentSignature::query()
+            ->where('document_file_id', $file->id)
+            ->where('user_id', $user->id)
+            ->where('purpose', DocumentSignature::PURPOSE_RELEASE)
+            ->exists();
+
+        return ! $signed;
+    }
+
     public function comment(User $user, Document $document): bool
     {
         return $user->is_active && ! $document->isArchived() && $this->view($user, $document);
