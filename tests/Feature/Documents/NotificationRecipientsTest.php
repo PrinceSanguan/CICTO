@@ -75,7 +75,7 @@ class NotificationRecipientsTest extends TestCase
         }
     }
 
-    public function test_a_plain_clerk_in_the_receiving_office_is_not_notified(): void
+    public function test_a_plain_clerk_in_the_receiving_office_is_notified_too(): void
     {
         $mpdo = $this->office('MPDO');
         $mto = $this->office('MTO', 'Treasury');
@@ -93,13 +93,33 @@ class NotificationRecipientsTest extends TestCase
             expectedMovementId: $document->openMovement->id,
         );
 
-        // §2 limits a plain User to their own documents, so they have nothing to
-        // do with a folder arriving for the office.
-        $this->assertFalse($clerkAtDestination->can('view', $document));
-        $this->assertSame(0, Notification::query()->where('user_id', $clerkAtDestination->id)->count());
+        /*
+         * REVERSED DELIBERATELY, and the old name of this test is the point.
+         *
+         * It used to assert the clerk gets nothing, because row access followed
+         * role and a clerk could not open a document they had not filed -- so a
+         * notification would have been a bell that 403s. Row access now follows
+         * office_id, and a clerk can both open AND receive the folder that
+         * arrives for their office, so the clerk is precisely who needs telling.
+         * Notifying only the Admin left the counter staff doing the receiving
+         * with no idea anything had come in, which is how a route stalls at an
+         * office that is perfectly well staffed.
+         *
+         * The invariant this file exists for is untouched: every recipient is
+         * still someone who can open what they were told about, asserted
+         * wholesale in the test above.
+         */
+        $this->assertTrue($clerkAtDestination->can('view', $document));
+        $this->assertSame(1, Notification::query()->where('user_id', $clerkAtDestination->id)->count());
 
         $this->assertTrue($adminAtDestination->can('view', $document));
         $this->assertSame(1, Notification::query()->where('user_id', $adminAtDestination->id)->count());
+
+        // Still bounded by office: a clerk somewhere else hears nothing.
+        $elsewhere = $this->staff($this->office('HRMO', 'Human Resource'));
+
+        $this->assertFalse($elsewhere->can('view', $document));
+        $this->assertSame(0, Notification::query()->where('user_id', $elsewhere->id)->count());
     }
 
     public function test_following_a_notification_link_never_lands_on_a_403(): void

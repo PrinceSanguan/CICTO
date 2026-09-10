@@ -53,9 +53,12 @@ class NotificationTest extends TestCase
         $this->assertSame(0, (clone $forwarded)->where('user_id', $sender->id)->count());
         $this->assertSame(0, Notification::query()->where('user_id', $bystander->id)->count());
 
-        // A plain clerk cannot open another person's document (§2), so telling
-        // them about it would only produce a bell that 403s.
-        $this->assertSame(0, Notification::query()->where('user_id', $clerkAtDestination->id)->count());
+        // The clerk at the destination IS told, and that is the change of
+        // 2026-09-10: row access follows office_id, so they can open the folder
+        // -- and they are the ones who receive it, so they are the ones waiting
+        // on this bell. The bystander assertion above is what keeps it bounded:
+        // an office hears about its own work and nobody else's.
+        $this->assertSame(1, Notification::query()->where('user_id', $clerkAtDestination->id)->count());
 
         $notification = (clone $forwarded)->where('user_id', $receiverA->id)->first();
         $this->assertSame(NotificationType::Forwarded, $notification->type);

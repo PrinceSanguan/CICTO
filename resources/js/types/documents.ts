@@ -167,6 +167,16 @@ export type IdNameOption = {
     name: string;
     code?: string;
     turnaround_days?: number | null;
+    /**
+     * Is there anybody at this office who can take a document in?
+     *
+     * False means the office has no active Admin account, so a document sent
+     * there arrives and cannot be received by anyone -- see Office::withReceiver.
+     * OPTIONAL, and undefined is not false: only the payloads that ship the flag
+     * can warn about it, and a caller that does not must not imply every office
+     * is unstaffed.
+     */
+    can_receive?: boolean;
 };
 
 export type Paginated<T> = {

@@ -607,6 +607,185 @@ class RoutingTest extends TestCase
         );
     }
 
+    /**
+     * THE DEAD END, named before the folder falls into it.
+     *
+     * §5's department list and §9's send-to list are every ACTIVE office,
+     * staffed or not, so a document can always be sent somewhere nobody works.
+     * It arrives, becomes the open leg, and cannot be received: view() grants
+     * office-scoped read to Role::Admin only and act() calls view() first.
+     *
+     * This is the client's "hindi na-rereceive sa pangatlong office" -- the
+     * office number is a coincidence, it is just the first stop on their route
+     * with no Admin account. Removing the approval gate on 2026-09-03 cured a
+     * different gate with the same symptom, which is why it read as a
+     * regression.
+     *
+     * The behaviour is deliberate and stays; what this pins is that the payload
+     * SAYS SO, so the picker can warn before the send instead of after.
+     */
+    public function test_an_office_with_no_admin_is_flagged_as_unable_to_receive(): void
+    {
+        $staffed = $this->office('MTO', 'Treasury');
+        $this->admin($staffed);
+
+        // A real department with nobody in it -- the client's pilot database is
+        // mostly these, and the testing guide has to warn testers by hand.
+        $empty = $this->office('HRMO', 'Human Resource');
+
+        // A clerk is not enough: filing is not receiving.
+        $clerkOnly = $this->office('MPDO', 'Planning');
+        $this->staff($clerkOnly);
+
+        $flags = Office::query()->active()->withReceiver()->get()
+            ->mapWithKeys(fn (Office $office) => [$office->code => (bool) $office->can_receive]);
+
+        $this->assertTrue($flags['MTO']);
+        $this->assertFalse($flags['HRMO'], 'An office with nobody in it cannot receive.');
+        $this->assertFalse($flags['MPDO'], 'A clerk can file, but cannot take a folder in.');
+    }
+
+    /** The Submit form has to be told, or it cannot warn. */
+    public function test_the_submit_form_is_told_which_departments_cannot_receive(): void
+    {
+        $staffed = $this->office('MTO', 'Treasury');
+        $this->admin($staffed);
+        $this->office('HRMO', 'Human Resource');
+
+        $clerk = $this->staff($staffed);
+
+        $offices = $this->actingAs($clerk)
+            ->get(route('documents.create'))
+            ->assertOk()
+            ->viewData('page')['props']['offices'];
+
+        $flags = collect($offices)->mapWithKeys(
+            fn (array $office) => [$office['code'] => $office['can_receive']],
+        );
+
+        $this->assertTrue($flags['MTO']);
+        $this->assertFalse($flags['HRMO']);
+
+        /*
+         * And nothing more than the picker needs. withExists() selects
+         * `offices.*` unless columns are chosen first, and a column list passed
+         * to get() afterwards is quietly discarded -- so this fails the day
+         * somebody reorders those two calls and starts shipping every office
+         * column, timestamps and all, into the page payload.
+         */
+        $this->assertEqualsCanonicalizing(
+            ['id', 'code', 'name', 'can_receive'],
+            array_keys($offices[0]),
+        );
+    }
+
+    /**
+     * And the consequence itself, stated as a test rather than as prose in a
+     * seeder docblock: the folder reaches the unstaffed office and stops dead,
+     * with the stop behind it still waiting.
+     */
+    public function test_a_route_stalls_at_the_first_office_with_nobody_to_receive(): void
+    {
+        $mpdo = $this->office('MPDO');
+        $mto = $this->office('MTO', 'Treasury');
+        $empty = $this->office('HRMO', 'Human Resource');
+        $last = $this->office('MAYOR', "Mayor's Office");
+        $this->admin($last);
+
+        $document = $this->registerDocument($mpdo, $this->staff($mpdo));
+
+        // MTO -> HRMO (nobody) -> MAYOR.
+        $this->send($this->admin($mpdo), $document, [$mto, $empty, $last]);
+        $this->act($this->admin($mto), $document, MovementAction::Received);
+
+        $document->refresh();
+        $this->assertSame(
+            $empty->id,
+            $document->openMovement->to_office_id,
+            'The folder does arrive -- forwarding never checks whether anyone is there.',
+        );
+
+        // Nobody at the empty office can act, because nobody is there at all.
+        $this->assertSame(
+            0,
+            User::query()->where('office_id', $empty->id)->count(),
+        );
+
+        // And the stop behind it is still waiting, which is what the client saw.
+        $this->assertSame(
+            RouteStopStatus::Pending,
+            DocumentRouteStop::query()
+                ->where('document_id', $document->id)
+                ->where('office_id', $last->id)
+                ->value('status'),
+        );
+    }
+
+    /**
+     * THE CLIENT'S BUG, end to end: "hindi pa rin na-rereceive yung document
+     * pag pangatlong office na tatanggap."
+     *
+     * Three departments picked on the §5 Submit form, and every office staffed
+     * the way the client's really are -- by a CLERK, not a department head.
+     * Before row access followed office_id this died at the very first receipt
+     * with a 403, and in the client's own database it read as "the third office"
+     * because the two offices ahead of it happened to be the two with practice
+     * Admin accounts.
+     *
+     * Walked through the HTTP layer rather than the actions, because the 403
+     * came from the policy and the policy is only reached through a request.
+     */
+    public function test_three_departments_are_received_in_turn_by_ordinary_clerks(): void
+    {
+        Storage::fake('documents');
+
+        [$first, $second, $third] = $this->offices();
+
+        $clerks = [
+            $first->id => $this->staff($first),
+            $second->id => $this->staff($second),
+            $third->id => $this->staff($third),
+        ];
+
+        $this->actingAs($clerks[$first->id])
+            ->post(route('documents.store'), [
+                'title' => 'Three department route',
+                'document_type_id' => $this->documentType()->id,
+                'office_ids' => [$first->id, $second->id, $third->id],
+                'distribution' => 'in_order',
+                'priority' => 'normal',
+                'file' => UploadedFile::fake()->create('memo.pdf', 40, 'application/pdf'),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $document = Document::query()->latest('id')->firstOrFail();
+
+        // The originating office acknowledges, and the folder leaves for stop 1.
+        $this->act($clerks[$first->id], $document, MovementAction::Received);
+        $this->assertSame($second->id, $document->refresh()->openMovement->to_office_id);
+
+        // Stop 1 acknowledges, and the folder leaves for stop 2 -- the hop that
+        // never used to happen.
+        $this->act($clerks[$second->id], $document->refresh(), MovementAction::Received);
+        $this->assertSame(
+            $third->id,
+            $document->refresh()->openMovement->to_office_id,
+            'The THIRD office must actually receive the folder.',
+        );
+
+        // The third office is the end of the line, so its receipt closes it.
+        $this->act($clerks[$third->id], $document->refresh(), MovementAction::Received);
+
+        $document->refresh();
+
+        $this->assertSame(DocumentStatus::Completed, $document->status);
+        $this->assertNull($document->openMovement);
+        $this->assertSame(
+            0,
+            $document->routeStops()->where('status', RouteStopStatus::Pending)->count(),
+        );
+    }
+
     // ---------------------------------------------------------------- helpers
 
     /** @return list<Office> */

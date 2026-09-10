@@ -46,7 +46,13 @@ class DocumentPolicy
             return true;
         }
 
-        if ($user->role !== Role::Admin || $user->office_id === null) {
+        /*
+         * office_id, not role -- mirroring DocumentBuilder::visibleTo, which
+         * carries the full reasoning. Gating the ROW on Role::Admin here is what
+         * stopped a clerk opening the folder on their own desk, and act() calls
+         * this first, so it stopped them receiving it too.
+         */
+        if ($user->office_id === null) {
             return false;
         }
 

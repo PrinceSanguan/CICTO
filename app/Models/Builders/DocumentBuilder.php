@@ -37,7 +37,38 @@ class DocumentBuilder extends Builder
             return $this;
         }
 
-        if ($user->role === Role::Admin && $user->office_id !== null) {
+        /*
+         * ROWS ARE GOVERNED BY office_id, NOT BY ROLE.
+         *
+         * 00-architecture.md §7 says it in two lines -- "Verbs are governed by
+         * role level. Rows are governed by office_id" -- and this method used to
+         * contradict it by reading `$user->role === Role::Admin && ...`, making
+         * office scoping an Admin privilege. Every plain user saw only their own
+         * submissions, including the folder sitting on their own desk, forwarded
+         * to their office by name.
+         *
+         * That was the SECOND HALF of the stall the client reported on
+         * 2026-09-03. Removing the `approved` gate was necessary and not
+         * sufficient: DocumentPolicy::act() calls view() first, and view()
+         * mirrors this method, so an office staffed by a Clerk rather than an
+         * Admin still could not SEE the document and therefore still could not
+         * press Received. Identical symptom, one gate further down -- which is
+         * why the same route kept dying at the same department.
+         *
+         * ROLE STILL DECIDES WHAT YOU MAY DO. Complete and Sign remain
+         * Admin-only in DocumentPolicy::act() and ::sign(), and the
+         * separation-of-duties setting still applies to them. Receiving is a
+         * receipt, not a judgement, so it is open to the office holding the
+         * folder -- which is exactly what the client asked for: "dapat yung mga
+         * offices wala ng approval, only received na lang".
+         *
+         * WHAT IT COSTS, stated plainly: a clerk can now read every document
+         * their own office has handled, not only the ones they filed. That is
+         * the meaning of office-level scoping, it is what §2 describes, and it
+         * is bounded by office -- a clerk still cannot reach another office's
+         * work. See WritePathAuthorizationTest for the boundary that matters.
+         */
+        if ($user->office_id !== null) {
             $officeId = $user->office_id;
 
             return $this->where(function (self $query) use ($officeId, $user): void {
@@ -56,8 +87,9 @@ class DocumentBuilder extends Builder
             });
         }
 
-        // Plain users, and admins who have not been assigned an office yet, see
-        // only what they submitted.
+        // Anyone with no office at all -- a self-registered account before an
+        // administrator assigns one -- has no office whose work could be shown
+        // to them, so they see only what they submitted.
         return $this->where('documents.created_by_id', $user->id);
     }
 

@@ -1,8 +1,19 @@
-import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Plus, TriangleAlert, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import type { IdNameOption } from '@/types';
+
+/**
+ * An office nobody can receive for.
+ *
+ * `can_receive === false` and nothing else: the flag is optional, and a payload
+ * that omits it has not answered the question rather than answered "no". Warning
+ * on `!office.can_receive` would paint every office in every caller that does
+ * not ship the flag, which is the fastest way to teach people to ignore it.
+ */
+const unstaffed = (office: IdNameOption): boolean =>
+    office.can_receive === false;
 
 const SELECT =
     'h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-60';
@@ -180,6 +191,7 @@ export function OfficeRoutePicker({
                     {remaining.map((office) => (
                         <option key={office.id} value={office.id}>
                             {office.name}
+                            {unstaffed(office) ? ' — no account yet' : ''}
                         </option>
                     ))}
                 </select>
@@ -217,6 +229,25 @@ export function OfficeRoutePicker({
                             >
                                 {office.name}
                             </span>
+
+                            {/*
+                                Named on the row, not only in the dropdown: a
+                                route is built once and read many times, and the
+                                stop that will strand the folder has to stay
+                                visible after it has been picked.
+                            */}
+                            {unstaffed(office) && (
+                                <span
+                                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#FDF1E3] px-2 py-0.5 text-[11px] font-bold text-[#9A5B22]"
+                                    title={`${office.name} has no account that can receive a document yet.`}
+                                >
+                                    <TriangleAlert
+                                        className="size-3"
+                                        aria-hidden="true"
+                                    />
+                                    No account yet
+                                </span>
+                            )}
 
                             {ordered && (
                                 <>
@@ -285,6 +316,39 @@ export function OfficeRoutePicker({
                     {hint(chosen[0])}
                 </p>
             )}
+
+            {/*
+                THE WARNING THAT WAS MISSING.
+                
+                Stated before the send, in the words of what will actually
+                happen -- the document arrives and then stops -- because "no
+                account" on its own reads like a cosmetic gap rather than a
+                folder nobody can move. The send is still allowed: the office is
+                real, the document genuinely belongs there, and an account can be
+                made in a minute. What is not allowed any more is finding out
+                three hops later.
+            */}
+            {chosen.some(unstaffed) && (
+                <p
+                    role="status"
+                    className="flex items-start gap-1.5 rounded-md border border-[#F0D7B6] bg-[#FDF7EF] px-3 py-2 text-xs text-[#8A5219]"
+                >
+                    <TriangleAlert
+                        className="mt-0.5 size-3.5 shrink-0"
+                        aria-hidden="true"
+                    />
+                    <span>
+                        {formatList(
+                            chosen.filter(unstaffed).map((o) => o.name),
+                        )}{' '}
+                        {chosen.filter(unstaffed).length === 1
+                            ? 'has no account yet, so nobody there can receive the document'
+                            : 'have no accounts yet, so nobody there can receive the document'}
+                        . It will arrive and wait until an administrator creates
+                        one — anything queued behind it waits too.
+                    </span>
+                </p>
+            )}
         </div>
     );
 }
@@ -297,6 +361,12 @@ const defaultHint = (first: IdNameOption): ReactNode => (
 );
 
 const article = (noun: string): string => (/^[aeiou]/i.test(noun) ? 'an' : 'a');
+
+/** "A", "A and B", "A, B and C" -- the warning names every office, not a count. */
+const formatList = (names: string[]): string =>
+    names.length <= 1
+        ? (names[0] ?? '')
+        : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 
 /**
  * Whatever the server said about the destinations, whichever key it used.

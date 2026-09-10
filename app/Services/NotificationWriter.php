@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Enums\NotificationType;
-use App\Enums\Role;
 use App\Models\Document;
 use App\Models\DocumentMovement;
 use App\Models\User;
@@ -40,20 +39,25 @@ class NotificationWriter
             return 0;
         }
 
-        // Only people who can actually OPEN the document get told about it.
+        // Only people who can actually OPEN the document get told about it --
+        // a bell that 403s when clicked is worse than no bell at all.
         //
-        // §2 limits a plain User to "their own documents", so notifying every
-        // clerk in the receiving office would hand them a bell that 403s when
-        // clicked -- worse than no notification. Recipients are therefore the
-        // office's Admins, who are the ones §2 puts in charge of reviewing and
-        // routing anyway.
+        // EVERYONE AT THE OFFICE, not only its Admins. This was Admin-only for
+        // one reason: DocumentPolicy::view refused a plain User any document
+        // they had not filed themselves, so a clerk's notification would have
+        // been exactly that dead bell. Row access now follows office_id rather
+        // than role (see DocumentBuilder::visibleTo), so the clerk can open the
+        // folder -- and since a clerk can now RECEIVE it, they are the person
+        // most likely to be waiting for this notification. Telling only the
+        // Admin would leave the counter staff who do the receiving unaware that
+        // anything arrived.
         //
-        // NotificationRecipientsTest asserts this stays true by checking every
-        // recipient against DocumentPolicy::view.
+        // NotificationRecipientsTest asserts the invariant that actually
+        // matters, and it is unchanged: every recipient is checked against
+        // DocumentPolicy::view.
         $recipients = User::query()
             ->active()
             ->inOffice($officeId)
-            ->whereIn('role', [Role::Admin->value, Role::SuperAdmin->value])
             ->when($except !== null, fn ($query) => $query->whereKeyNot($except->id))
             ->pluck('id');
 

@@ -91,7 +91,24 @@ class DocumentController extends Controller
     {
         $this->authorize('create', Document::class);
 
-        $offices = Office::query()->active()->ordered()->get(['id', 'code', 'name']);
+        /*
+         * withReceiver: each option carries whether anybody at that office can
+         * actually take the folder in. An office with no Admin account accepts
+         * a document and then strands it -- see Office::withReceiver -- so the
+         * picker says so at the moment the department is chosen rather than
+         * letting the route die three hops later.
+         */
+        /*
+         * select() BEFORE withReceiver(), and it has to be that order.
+         * withExists() selects `offices.*` itself when no columns have been
+         * chosen yet, and a column list handed to get() after that is silently
+         * ignored -- so `->withReceiver()->get(['id', 'name'])` ships every
+         * column of every office to the browser and reads as if it does not.
+         */
+        $offices = Office::query()->active()->ordered()
+            ->select(['id', 'code', 'name'])
+            ->withReceiver()
+            ->get();
 
         /*
          * Only pre-select the user's office if it is still on the list.
@@ -303,7 +320,10 @@ class DocumentController extends Controller
              */
             'offices' => Office::query()->active()->ordered()
                 ->whereKeyNot($document->openMovement()->value('to_office_id') ?? 0)
-                ->get(['id', 'name']),
+                // See create(): the select must precede withReceiver().
+                ->select(['id', 'name'])
+                ->withReceiver()
+                ->get(),
         ]);
     }
 
