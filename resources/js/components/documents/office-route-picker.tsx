@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import type { IdNameOption } from '@/types';
 
 const SELECT =
-    'h-9 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-60';
+    'h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-60';
 
 /**
  * An ordered list of offices, built one pick at a time.
@@ -120,9 +120,25 @@ export function OfficeRoutePicker({
         commit(next);
     };
 
+    /*
+     * min-w-0 ON EVERY BOX DOWN TO THE SELECT, and it is load-bearing.
+     *
+     * A <select> reports its MIN-CONTENT WIDTH as the width of its widest
+     * <option>. Grid and flex children default to `min-width: auto`, which
+     * refuses to shrink a child below that -- and `w-full` does not save it,
+     * because a percentage is not a definite size while the track is still
+     * being measured. So one 84-character office name ("Office of the City
+     * Environmental and Natural Resources Officer - Sanitation Services")
+     * silently widened the whole column, then the form, then the card, and the
+     * per-row reorder buttons were pushed off the right edge of the page where
+     * no one could click them. The list looked frozen; nothing was frozen.
+     *
+     * The chain is only as good as its weakest link: the constraint propagates
+     * up through EVERY ancestor, so a single box left at `auto` re-breaks it.
+     */
     return (
-        <div className={className}>
-            <div className="grid gap-2">
+        <div className={`min-w-0 ${className}`}>
+            <div className="grid min-w-0 gap-2">
                 {label !== null && (
                     <label htmlFor={id} className="text-sm font-medium">
                         {label}
@@ -170,11 +186,11 @@ export function OfficeRoutePicker({
             </div>
 
             {chosen.length > 0 && (
-                <ListTag className="grid gap-2">
+                <ListTag className="grid min-w-0 gap-2">
                     {chosen.map((office, index) => (
                         <li
                             key={office.id}
-                            className="flex items-center gap-2 rounded-md border border-[#E4EAF2] bg-[#F7FAFF] px-3 py-2"
+                            className="flex min-w-0 items-center gap-2 rounded-md border border-[#E4EAF2] bg-[#F7FAFF] px-3 py-2"
                         >
                             <span
                                 aria-hidden={ordered ? undefined : true}
@@ -187,7 +203,18 @@ export function OfficeRoutePicker({
                                 {ordered ? index + 1 : ''}
                             </span>
 
-                            <span className="min-w-0 flex-1 truncate text-sm font-medium text-navy">
+                            {/*
+                                title: the row truncates by design, so the full
+                                name has to stay reachable -- on a phone the
+                                visible half of "Office of the City
+                                Environmental ... - Sanitation Services" does
+                                not tell you which of the two CENRO entries this
+                                row is.
+                            */}
+                            <span
+                                title={office.name}
+                                className="min-w-0 flex-1 truncate text-sm font-medium text-navy"
+                            >
                                 {office.name}
                             </span>
 
@@ -197,7 +224,7 @@ export function OfficeRoutePicker({
                                         type="button"
                                         size="icon"
                                         variant="ghost"
-                                        className="size-7"
+                                        className="size-7 shrink-0"
                                         disabled={disabled || index === 0}
                                         aria-label={`Move ${office.name} earlier`}
                                         onClick={() => move(index, index - 1)}
@@ -209,7 +236,7 @@ export function OfficeRoutePicker({
                                         type="button"
                                         size="icon"
                                         variant="ghost"
-                                        className="size-7"
+                                        className="size-7 shrink-0"
                                         disabled={
                                             disabled ||
                                             index === chosen.length - 1
@@ -226,7 +253,7 @@ export function OfficeRoutePicker({
                                 type="button"
                                 size="icon"
                                 variant="ghost"
-                                className="size-7"
+                                className="size-7 shrink-0"
                                 disabled={disabled}
                                 aria-label={`Remove ${office.name}`}
                                 onClick={() =>

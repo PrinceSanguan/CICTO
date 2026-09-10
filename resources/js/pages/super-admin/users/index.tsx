@@ -618,7 +618,7 @@ function AddAccountForm({
                                 onChange={(event) =>
                                     setRole(event.target.value)
                                 }
-                                className="mt-2 h-11 w-full rounded-lg border border-[#E3E8EF] bg-white px-3 text-[15px] text-navy focus-visible:ring-2 focus-visible:ring-[#3B72C4] focus-visible:outline-none"
+                                className="mt-2 h-11 w-full min-w-0 rounded-lg border border-[#E3E8EF] bg-white px-3 text-[15px] text-navy focus-visible:ring-2 focus-visible:ring-[#3B72C4] focus-visible:outline-none"
                             >
                                 {roles.map((option) => (
                                     <option
@@ -632,7 +632,16 @@ function AddAccountForm({
                             <InputError message={errors.role} />
                         </div>
 
-                        <div>
+                        {/*
+                            min-w-0, for the same reason as the Submit Document
+                            form: this select's options are office names up to
+                            84 characters, a select's min-content width is its
+                            widest option, and a grid child will not shrink
+                            below that on its own -- so the panel grew wider
+                            than the page instead of the dropdown staying inside
+                            its column.
+                        */}
+                        <div className="min-w-0">
                             <Label htmlFor="office_id">Office</Label>
                             <select
                                 id="office_id"
@@ -642,7 +651,7 @@ function AddAccountForm({
                                 // the field goes away rather than being sent
                                 // and ignored.
                                 disabled={role === 'super_admin'}
-                                className="mt-2 h-11 w-full rounded-lg border border-[#E3E8EF] bg-white px-3 text-[15px] text-navy focus-visible:ring-2 focus-visible:ring-[#3B72C4] focus-visible:outline-none disabled:bg-[#EEF2F7] disabled:text-copy"
+                                className="mt-2 h-11 w-full min-w-0 rounded-lg border border-[#E3E8EF] bg-white px-3 text-[15px] text-navy focus-visible:ring-2 focus-visible:ring-[#3B72C4] focus-visible:outline-none disabled:bg-[#EEF2F7] disabled:text-copy"
                             >
                                 <option value="">
                                     {role === 'super_admin'
@@ -747,7 +756,7 @@ function Field({
                 name={name}
                 type={type}
                 aria-invalid={error ? true : undefined}
-                className="mt-2 h-11 w-full rounded-lg border border-[#E3E8EF] bg-white px-3 text-[15px] text-navy focus-visible:ring-2 focus-visible:ring-[#3B72C4] focus-visible:outline-none"
+                className="mt-2 h-11 w-full min-w-0 rounded-lg border border-[#E3E8EF] bg-white px-3 text-[15px] text-navy focus-visible:ring-2 focus-visible:ring-[#3B72C4] focus-visible:outline-none"
                 {...props}
             />
             <InputError message={error} />

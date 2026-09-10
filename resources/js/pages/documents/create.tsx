@@ -40,8 +40,16 @@ const DELIVERY = [
 
 type Delivery = (typeof DELIVERY)[number]['value'];
 
+/*
+ * min-w-0 is not cosmetic here. Three of the controls wearing this class are
+ * <select>s, and a select's min-content width is its WIDEST OPTION -- so the
+ * department dropdown, holding office names up to 84 characters, demanded a
+ * column wider than the page and got it, because grid children default to
+ * `min-width: auto` and `w-full` is only a percentage. See OfficeRoutePicker
+ * for the full account of what that broke.
+ */
 const FIELD =
-    'h-12 w-full rounded-md border border-[#DCE4EE] bg-white px-4 text-[15px] text-navy ' +
+    'h-12 w-full min-w-0 rounded-md border border-[#DCE4EE] bg-white px-4 text-[15px] text-navy ' +
     'placeholder:text-[#9AA5B4] focus-visible:border-brand focus-visible:ring-2 ' +
     'focus-visible:ring-brand/25 focus-visible:outline-none';
 
@@ -363,7 +371,7 @@ function Field({
     children: React.ReactNode;
 }) {
     return (
-        <div>
+        <div className="min-w-0">
             <label
                 htmlFor={htmlFor}
                 className="block text-sm font-bold text-navy"
