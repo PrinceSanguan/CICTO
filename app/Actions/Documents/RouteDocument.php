@@ -76,9 +76,43 @@ final class RouteDocument
                 request: $request,
             );
 
-            // Everything after the first is the plan.
             $position = $this->nextPosition($document);
 
+            /*
+             * The first office is written onto the plan too, already VISITED.
+             *
+             * It used to be left out, on the reasoning that it is a movement
+             * rather than something still queued. But the Route panel reads
+             * these rows, so a four-office send drew a three-office route,
+             * missing the one the folder had just gone to -- the same class of
+             * bug the client reported against the originating office on
+             * 2026-09-13. The sender picked four offices; the panel has to show
+             * four offices.
+             *
+             * Nothing in the routing MACHINERY sees it. AdvanceRoute takes the
+             * first PENDING stop, so a visited row is never a candidate, and
+             * `closeFinishedRoute` only asks whether any stop exists at all --
+             * a multi-office send always wrote at least one before this and
+             * always writes at least one now, so that answer cannot flip.
+             *
+             * ONE office is still not a route, and still writes no row at all:
+             * that is an ordinary hand-picked forward, it has no plan to draw,
+             * and giving it a stop row WOULD flip `closeFinishedRoute` -- a
+             * document forwarded once would start completing itself the moment
+             * the office it went to acknowledged it.
+             */
+            if (count($officeIds) > 1) {
+                DocumentRouteStop::create([
+                    'document_id' => $document->id,
+                    'position' => $position++,
+                    'office_id' => $officeIds[0],
+                    'status' => RouteStopStatus::Visited,
+                    'created_by_id' => $actor->id,
+                    'resolved_at' => Deadlines::now(),
+                ]);
+            }
+
+            // Everything after the first is the plan.
             foreach (array_slice($officeIds, 1) as $officeId) {
                 DocumentRouteStop::create([
                     'document_id' => $document->id,

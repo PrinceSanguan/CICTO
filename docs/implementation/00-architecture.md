@@ -35,7 +35,7 @@ Read this table before writing any controller.
 | Event | What is written |
 | --- | --- |
 | Registration (§5) | INSERT `sequence=1`, `from_office_id=null`, `to_office_id=originating`, `action='registered'`, `to_status='initiated'`, `arrived_at=now()`, `departed_at=null` |
-| Receive (§9) | Close the open leg, then INSERT a new leg with `from_office_id = to_office_id` (same office), `action='received'`, `arrived_at=now()`. Same-office legs still count — that is how "it sat in HRMO for six days" becomes visible. On a routed document `AdvanceRoute` then forwards it to the next stop, or completes it if that was the last one. (Approve / reject / return wrote the same shape until 2026-09-03; see phase-2-workflow-and-trail.md §2.) |
+| Receive (§9) | Close the open leg, then INSERT a new leg with `from_office_id = to_office_id` (same office), `action='received'`, `arrived_at=now()`. Same-office legs still count — that is how "it sat in HRMO for six days" becomes visible. On a routed document `AdvanceRoute` then forwards it to the next stop, or completes it if that was the last one. (Approve / reject / return wrote the same shape until 2026-09-03; **reject returned on 2026-09-13** and writes it still. See phase-2-workflow-and-trail.md §2.) |
 | Forward A→B (§9) | One transaction: UPDATE open row `SET departed_at = now()`; INSERT `sequence = prev+1`, `from_office_id=A`, `to_office_id=B`, `action='forwarded'`, `arrived_at=now()`, `departed_at=null` |
 | Complete | Close the open leg; INSERT terminal leg `action='completed'` with both timestamps set; set `documents.completed_at` |
 | Archive (§20) | INSERT `action='archived'`, both timestamps set; set `documents.archived_at` |

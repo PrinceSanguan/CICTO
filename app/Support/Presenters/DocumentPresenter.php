@@ -48,6 +48,49 @@ class DocumentPresenter
     }
 
     /**
+     * Where the route STARTED: the originating office.
+     *
+     * The client reported the Route panel with the originating office missing
+     * from it (2026-09-13, "hindi po nakikita dito yung originating office"),
+     * and the panel really was one office short of the truth. On the §5 submit
+     * form the departments are picked as ONE ordered list; DocumentController
+     * registers the document under the FIRST pick -- it owns the control number
+     * prefix and the genesis leg -- and only the rest become
+     * document_route_stops rows. So a five-department submit drew a
+     * four-department route, silently missing the department it started at.
+     *
+     * It is a presentational row, not a stop, and deliberately so: inventing a
+     * DocumentRouteStop for the originating office would put a row in the
+     * routing PLAN for an office the folder has already been to, and
+     * AdvanceRoute would then have a stop to reason about that nothing queued.
+     * The office is read off documents.originating_office_id, which is NOT NULL
+     * and is exactly what the genesis leg points at.
+     *
+     * Returned whatever the route looks like; the panel that renders it is
+     * still gated on there being stops to show.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function routeOrigin(Document $document): ?array
+    {
+        $office = $document->originatingOffice;
+
+        if ($office === null) {
+            return null;
+        }
+
+        return [
+            'office' => $office->name,
+
+            // NOT one of RouteStopStatus's labels, because it is not one of its
+            // states. "Visited" would be true but says the folder passed
+            // through; this row is where the document came into existence.
+            'status_label' => 'Origin',
+            'status_tone' => 'sky',
+        ];
+    }
+
+    /**
      * The other documents one simultaneous submit produced.
      *
      * Never used to authorise anything: a viewer who cannot see a sibling still
@@ -192,6 +235,15 @@ class DocumentPresenter
              * Nothing already reading `tracking` changes shape.
              */
             'route' => $this->route($document),
+
+            /*
+             * The first office of that same plan -- see routeOrigin(). A
+             * sibling of `route` rather than an element of it, so the panel's
+             * "render only when there is a route" test stays a test on the
+             * STOPS and a document nobody routed does not grow a one-row Route
+             * card naming the office it has never left.
+             */
+            'route_origin' => $this->routeOrigin($document),
 
             /*
              * The rest of the same submit, when it went to several departments

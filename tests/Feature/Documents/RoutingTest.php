@@ -99,9 +99,9 @@ class RoutingTest extends TestCase
      * The flat submit's whole point: no department can hold up another. One
      * finishing with its copy leaves the other two exactly where they were.
      *
-     * Used to be asserted through a rejection. Rejecting was removed from the
-     * workflow on 2026-09-03, so the isolation is shown with the strongest
-     * thing a department can still do to its own copy -- close it outright.
+     * Asserted by closing one copy outright rather than by rejecting it: both
+     * are terminal, and completing is the one that cannot be waved away as
+     * "well, it failed anyway".
      */
     public function test_one_department_finishing_does_not_touch_the_others(): void
     {
@@ -211,17 +211,28 @@ class RoutingTest extends TestCase
         $this->assertSame($mto->id, $document->openMovement->to_office_id);
         $this->assertSame(DocumentStatus::UnderReview, $document->status);
 
-        // The rest are a plan, not custody.
+        /*
+         * The WHOLE list the sender picked is written down, in their order --
+         * the office it went to now marked visited, the rest still queued.
+         *
+         * The first office used to be left out entirely, on the reasoning that
+         * it is a movement rather than a plan. But the Route panel renders
+         * these rows, so a three-office send drew a two-office route and the
+         * office the folder had just gone to was missing from it. Same class of
+         * bug as the originating office (2026-09-13).
+         */
         $queue = $document->routeStops()->get();
-        $this->assertCount(2, $queue);
+        $this->assertCount(3, $queue);
         $this->assertSame(
-            [$hrmo->id, $mayor->id],
+            [$mto->id, $hrmo->id, $mayor->id],
             $queue->pluck('office_id')->all(),
             'The queue must keep the order the sender picked.',
         );
-        $this->assertTrue($queue->every(
-            fn (DocumentRouteStop $stop) => $stop->status === RouteStopStatus::Pending,
-        ));
+        $this->assertSame(
+            [RouteStopStatus::Visited, RouteStopStatus::Pending, RouteStopStatus::Pending],
+            $queue->pluck('status')->all(),
+            'Only the office the folder actually went to is resolved.',
+        );
 
         $this->assertOneOpenLeg($document);
     }
@@ -255,13 +266,13 @@ class RoutingTest extends TestCase
     /**
      * The Actions panel a queued office actually sees.
      *
-     * The client asked for "received lang, wala nang iba" while a document is
-     * travelling. This is that button set, asserted through the same
-     * `available_actions` payload the page renders from -- so it fails if a
-     * decision action creeps back into the workflow map, and it fails if
-     * Completed starts being offered halfway down a route.
+     * The client asked for no APPROVAL step while a document is travelling, and
+     * got one back on 2026-09-13: a reject button. This is that button set,
+     * asserted through the same `available_actions` payload the page renders
+     * from -- so it fails if approve or return creeps back into the workflow
+     * map, and it fails if Completed starts being offered halfway down a route.
      */
-    public function test_a_queued_office_is_offered_only_received_and_send_to_another_office(): void
+    public function test_a_queued_office_is_offered_receive_send_and_reject(): void
     {
         [$mpdo, $mto, $hrmo] = $this->offices();
         $document = $this->registerDocument($mpdo, $this->staff($mpdo));
@@ -274,16 +285,16 @@ class RoutingTest extends TestCase
             ->viewData('page')['props']['document']['available_actions'];
 
         $this->assertEqualsCanonicalizing(
-            ['forwarded', 'received'],
+            ['forwarded', 'received', 'rejected'],
             array_column($actions, 'value'),
-            'A stop with an office still queued behind it gets a receipt and nothing else.',
+            'A stop with an office still queued behind it may receive, send on, or refuse -- and nothing else.',
         );
 
-        // Neither of them nags for a reason. Remarks were mandatory on reject
-        // and return; acknowledging a folder is not a decision to justify.
+        // Exactly one of them nags for a reason, and it is the refusal.
+        // Acknowledging a folder is not a decision to justify.
         $this->assertSame(
-            [false, false],
-            array_column($actions, 'requires_remarks'),
+            ['rejected' => true],
+            array_filter(array_column($actions, 'requires_remarks', 'value')),
         );
 
         // At the LAST stop the queue is empty, so closing the document by hand
@@ -296,9 +307,181 @@ class RoutingTest extends TestCase
             ->viewData('page')['props']['document']['available_actions'];
 
         $this->assertEqualsCanonicalizing(
-            ['forwarded', 'received', 'completed'],
+            ['forwarded', 'received', 'rejected', 'completed'],
             array_column($actions, 'value'),
         );
+    }
+
+    /**
+     * The client's report of 2026-09-13: "hindi po nakikita dito yung
+     * originating office" -- the Route panel, one office short.
+     *
+     * The §5 form picks the departments as ONE ordered list and registers the
+     * document under the first of them, so only picks 2..N ever became
+     * document_route_stops rows. A five-department submit therefore drew a
+     * four-department route, missing the department it started at.
+     *
+     * The origin is carried as its own payload key rather than faked into
+     * `route`: it has no stop row, nothing queues it, and AdvanceRoute must not
+     * find a stop for an office the folder has already left.
+     */
+    public function test_the_route_payload_names_the_originating_office(): void
+    {
+        Storage::fake('documents');
+
+        [$mpdo, $mto, $hrmo] = $this->offices();
+        $clerk = $this->staff($mpdo);
+
+        $this->actingAs($clerk)
+            ->post(route('documents.store'), [
+                'title' => 'Request for office supplies',
+                'document_type_id' => $this->documentType()->id,
+                'office_ids' => [$mpdo->id, $mto->id, $hrmo->id],
+                'priority' => 'normal',
+                'file' => UploadedFile::fake()->create('request.pdf', 40, 'application/pdf'),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $document = Document::query()->firstOrFail();
+
+        $props = $this->actingAs($clerk)
+            ->get(route('documents.show', $document))
+            ->assertOk()
+            ->viewData('page')['props']['document'];
+
+        $this->assertSame($mpdo->name, $props['route_origin']['office']);
+        $this->assertSame('Origin', $props['route_origin']['status_label']);
+
+        // Origin plus the two stops is the three departments that were picked.
+        $this->assertSame(
+            [$mpdo->name, $mto->name, $hrmo->name],
+            [$props['route_origin']['office'], ...array_column($props['route'], 'office')],
+            'The panel must name every department the submitter picked, in order.',
+        );
+
+        // And it is still there once the route has been walked, so a finished
+        // document does not lose the department it came from.
+        $this->act($this->admin($mpdo), $document, MovementAction::Received);
+        $this->act($this->admin($mto), $document->refresh(), MovementAction::Received);
+        $this->act($this->admin($hrmo), $document->refresh(), MovementAction::Received);
+
+        $props = $this->actingAs($clerk)
+            ->get(route('documents.show', $document->refresh()))
+            ->assertOk()
+            ->viewData('page')['props']['document'];
+
+        $this->assertSame(DocumentStatus::Completed, $document->refresh()->status);
+        $this->assertSame($mpdo->name, $props['route_origin']['office']);
+    }
+
+    /**
+     * The same gap on the other route-building path.
+     *
+     * "Send to Another Office" with several offices picked forwards to the
+     * first and queued the rest, so the panel drew the folder's destination as
+     * if it were not part of the plan at all.
+     */
+    public function test_a_mid_life_route_names_every_office_that_was_picked(): void
+    {
+        [$mpdo, $mto, $hrmo, $mayor] = $this->offices();
+        $document = $this->registerDocument($mpdo, $this->staff($mpdo));
+
+        $this->send($this->admin($mpdo), $document, [$mto, $hrmo, $mayor]);
+
+        $props = $this->actingAs($this->admin($mto))
+            ->get(route('documents.show', $document->refresh()))
+            ->assertOk()
+            ->viewData('page')['props']['document'];
+
+        $this->assertSame(
+            [$mpdo->name, $mto->name, $hrmo->name, $mayor->name],
+            [$props['route_origin']['office'], ...array_column($props['route'], 'office')],
+        );
+
+        // The one it went to reads as visited; the two behind it as waiting.
+        $this->assertSame(
+            ['Visited', 'Waiting', 'Waiting'],
+            array_column($props['route'], 'status_label'),
+        );
+    }
+
+    /**
+     * Changing your mind mid-route must not corrupt the plan.
+     *
+     * The second send cancels what was queued and appends its own offices at
+     * higher positions -- positions are monotonic per document and never
+     * reused, so the unique(document_id, position) index holds. What the panel
+     * then reads back is the whole journey: where it started, where it went,
+     * the leg that was dropped, and where it is going now.
+     */
+    public function test_re_routing_appends_to_the_plan_rather_than_corrupting_it(): void
+    {
+        [$mpdo, $mto, $hrmo, $mayor] = $this->offices();
+        $legal = $this->office('LEGAL', 'Legal Office');
+
+        $document = $this->registerDocument($mpdo, $this->staff($mpdo));
+
+        // First plan: MTO now, HRMO queued behind it.
+        $this->send($this->admin($mpdo), $document, [$mto, $hrmo]);
+
+        // MTO changes its mind and sends it to the Mayor, then Legal, instead.
+        $this->send($this->admin($mto), $document->refresh(), [$mayor, $legal]);
+
+        $document->refresh();
+
+        $props = $this->actingAs($this->admin($mayor))
+            ->get(route('documents.show', $document))
+            ->assertOk()
+            ->viewData('page')['props']['document'];
+
+        $this->assertSame($mpdo->name, $props['route_origin']['office']);
+        $this->assertSame(
+            [$mto->name, $hrmo->name, $mayor->name, $legal->name],
+            array_column($props['route'], 'office'),
+            'Stops must read back in position order, the dropped one included.',
+        );
+        $this->assertSame(
+            ['Visited', 'Cancelled', 'Visited', 'Waiting'],
+            array_column($props['route'], 'status_label'),
+        );
+
+        // Positions are still unique and still ascending.
+        $positions = $document->routeStops()->pluck('position')->all();
+        $this->assertSame($positions, array_values(array_unique($positions)));
+        $this->assertSame($positions, collect($positions)->sort()->values()->all());
+
+        // And the plan still drives the folder: Legal is next, not HRMO.
+        $this->act($this->admin($mayor), $document, MovementAction::Received);
+        $this->assertSame($legal->id, $document->refresh()->openMovement->to_office_id);
+    }
+
+    /**
+     * A document nobody routed grows no Route panel, and the origin key must
+     * not be what puts one there.
+     *
+     * show.tsx renders the panel on `route.length > 0`. Sending to exactly one
+     * office is an ordinary forward, not a plan -- and a stop row for it would
+     * also make AdvanceRoute complete the document the moment that office
+     * acknowledged it.
+     */
+    public function test_a_single_office_forward_still_draws_no_route(): void
+    {
+        [$mpdo, $mto] = $this->offices();
+        $document = $this->registerDocument($mpdo, $this->staff($mpdo));
+
+        $this->send($this->admin($mpdo), $document, [$mto]);
+
+        $props = $this->actingAs($this->admin($mto))
+            ->get(route('documents.show', $document->refresh()))
+            ->assertOk()
+            ->viewData('page')['props']['document'];
+
+        $this->assertSame([], $props['route']);
+        $this->assertSame(0, DocumentRouteStop::query()->count(), 'One office is not a route.');
+
+        // Receiving it must leave the document open, not close it.
+        $this->act($this->admin($mto), $document->refresh(), MovementAction::Received);
+        $this->assertSame(DocumentStatus::UnderReview, $document->refresh()->status);
     }
 
     /**
@@ -392,10 +575,10 @@ class RoutingTest extends TestCase
     /**
      * Sending the folder somewhere off the plan tears the plan down.
      *
-     * This used to be asserted through a rejection, which is no longer an
-     * action anybody can perform. A hand-picked destination is the case that
-     * remains and it is the more important one: a queue that survived the
-     * override would send the folder somewhere nobody asked for two hops later.
+     * A hand-picked destination is the more important case of the two, and the
+     * one this covers: a queue that survived the override would send the folder
+     * somewhere nobody asked for two hops later. (Rejection tears the plan down
+     * too -- EndToEndTest covers that side.)
      */
     public function test_sending_the_folder_off_the_plan_cancels_the_rest_of_the_route(): void
     {
@@ -556,13 +739,24 @@ class RoutingTest extends TestCase
             ->assertSessionHasNoErrors();
     }
 
-    /** @return array<string, array{string, array<string, mixed>}> */
+    /**
+     * Every button the Actions panel can render for a document that is under
+     * review with nothing queued behind it.
+     *
+     * It used to list approve / reject / return, which stopped meaning anything
+     * on 2026-09-03: all three became unauthorised, and an unauthorised POST is
+     * a 403, which carries no session errors -- so `assertSessionHasNoErrors`
+     * passed without the payload ever reaching the rules. These are the actions
+     * that are genuinely reachable, so the assertion is load-bearing again.
+     *
+     * @return array<string, array{string, array<string, mixed>}>
+     */
     public static function formActions(): array
     {
         return [
-            'approve' => ['approved', []],
+            'receive' => ['received', []],
             'reject' => ['rejected', ['remarks' => 'Missing attachment.']],
-            'return' => ['returned', ['remarks' => 'Please correct the total.']],
+            'complete' => ['completed', ['remarks' => 'Handled.']],
         ];
     }
 

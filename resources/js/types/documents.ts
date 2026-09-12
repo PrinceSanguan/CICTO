@@ -52,6 +52,20 @@ export type RouteStop = {
     status_tone: Tone;
 };
 
+/**
+ * Where a document's route started: its originating office.
+ *
+ * Not a RouteStop, because it is not a stop -- it has no row in
+ * document_route_stops and nothing queues it. The §5 submit form picks the
+ * departments as one ordered list and registers the document under the first
+ * of them, so without this the Route panel drew every route one office short.
+ */
+export type RouteOrigin = {
+    office: string | null;
+    status_label: string;
+    status_tone: Tone;
+};
+
 /** One of the other documents produced by a single simultaneous submit. */
 export type SubmissionSibling = {
     id: number;
@@ -76,6 +90,11 @@ export type DocumentDetail = DocumentListItem & {
      * IS, which is always one office, and this says where it is GOING.
      */
     route: RouteStop[];
+    /**
+     * The office the route started from. Rendered above `route` as its first
+     * step, so the panel names every department the submitter picked.
+     */
+    route_origin: RouteOrigin | null;
     /**
      * The other documents the same submit produced, when it was sent to several
      * departments at the same time. Empty for every other document.

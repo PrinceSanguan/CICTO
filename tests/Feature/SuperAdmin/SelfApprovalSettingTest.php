@@ -140,6 +140,75 @@ class SelfApprovalSettingTest extends TestCase
     }
 
     /**
+     * Rejecting is a decision too, so the same switch decides it -- and the
+     * important half is what happens while it is OFF.
+     *
+     * That gate is exactly what made APPROVAL unusable: the route waited on it,
+     * so an Admin who could not approve their own document stalled the queue
+     * behind them forever. It is harmless on a rejection because nothing waits
+     * on one. The Admin below cannot refuse their own document, and can still
+     * receive it -- so the folder keeps moving either way.
+     */
+    public function test_the_stored_choice_also_decides_a_rejection_without_stalling_the_folder(): void
+    {
+        config(['cicto.workflow.allow_self_approval' => false]);
+
+        $office = $this->office();
+        $other = $this->office('MTO', 'Treasury');
+        $admin = $this->admin($office);
+        $document = $this->registerDocument($office, $admin);
+
+        $this->actingAs($admin)->post(route('documents.transitions.store', $document), [
+            'action' => 'received',
+            'expected_movement_id' => $document->openMovement->id,
+        ])->assertRedirect();
+
+        $document->refresh();
+
+        $this->actingAs($admin)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'rejected',
+                'remarks' => 'Refusing my own request',
+                'expected_movement_id' => $document->openMovement->id,
+            ])
+            ->assertForbidden();
+
+        // The folder is not stuck: what they cannot decide, they can still move.
+        $this->actingAs($admin)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'forwarded',
+                'to_office_id' => $other->id,
+                'expected_movement_id' => $document->openMovement->id,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(DocumentStatus::UnderReview, $document->fresh()->status);
+
+        // And with the switch on, the same person may refuse the same document.
+        $this->actingAs($this->superAdmin())
+            ->post(route('super-admin.settings.workflow'), ['allow_self_approval' => true])
+            ->assertRedirect();
+
+        $this->actingAs($this->admin($other))
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'forwarded',
+                'to_office_id' => $office->id,
+                'expected_movement_id' => $document->fresh()->openMovement->id,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs($admin)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'rejected',
+                'remarks' => 'Refusing my own request',
+                'expected_movement_id' => $document->fresh()->openMovement->id,
+            ])
+            ->assertRedirect();
+
+        $this->assertSame(DocumentStatus::Rejected, $document->fresh()->status);
+    }
+
+    /**
      * A settings table this APP_KEY cannot read must not take the app down.
      *
      * DocumentPolicy reads app_settings on every approval, every signature and

@@ -4,6 +4,7 @@ import {
     ChevronRight,
     Clock,
     Hourglass,
+    X,
 } from 'lucide-react';
 import { StatusPill } from '@/components/documents/status-pill';
 import type { DocumentDetail, TimelineEntry } from '@/types';
@@ -57,7 +58,8 @@ function stageIndex(status: string): number {
         case 'completed':
             return 2;
         case 'rejected':
-            // Stopped where it was decided, and the status pill says so.
+            // Stopped where it was decided. StageStepper draws that stage as
+            // the STOP rather than as the live one -- see `stopped` there.
             return 1;
         default:
             return 0;
@@ -160,6 +162,19 @@ export function OfficeMark({ className }: { className?: string }) {
 export function StageStepper({ status }: { status: string }) {
     const current = stageIndex(status);
 
+    /*
+     * A rejected document reached a stage and then stopped dead in it.
+     *
+     * `stageIndex` puts it on Under Review, which is where it was refused, and
+     * the rail used to draw that as the ACTIVE stage -- the blue "you are here"
+     * banner, identical to a document genuinely still being worked on. That was
+     * a legacy display while nothing could be rejected; the button came back on
+     * 2026-09-13, so it is now the normal way a refused document renders and
+     * the banner is simply a lie. The stage is drawn as a red stop instead, and
+     * the label says which word applies.
+     */
+    const stopped = status === 'rejected';
+
     return (
         /*
          * gap-x below `sm` only.
@@ -175,7 +190,8 @@ export function StageStepper({ status }: { status: string }) {
         <ol className="flex flex-wrap items-center gap-x-3 gap-y-3 sm:gap-x-0">
             {STAGES.map((stage, index) => {
                 const done = index < current;
-                const active = index === current;
+                const halted = stopped && index === current;
+                const active = index === current && !halted;
 
                 /*
                     The disc caps the connector arriving from the stage before
@@ -219,9 +235,11 @@ export function StageStepper({ status }: { status: string }) {
                                     className={`flex size-6 items-center justify-center rounded-full text-white ${
                                         done
                                             ? 'bg-[#2FA36B]'
-                                            : active
-                                              ? 'bg-[#3B72C4]'
-                                              : 'bg-[#C9CFD9]'
+                                            : halted
+                                              ? 'bg-[#D5342A]'
+                                              : active
+                                                ? 'bg-[#3B72C4]'
+                                                : 'bg-[#C9CFD9]'
                                     }`}
                                 >
                                     {done ? (
@@ -229,6 +247,8 @@ export function StageStepper({ status }: { status: string }) {
                                             className="size-4"
                                             strokeWidth={3}
                                         />
+                                    ) : halted ? (
+                                        <X className="size-4" strokeWidth={3} />
                                     ) : (
                                         <ChevronRight
                                             className="size-4"
@@ -268,10 +288,22 @@ export function StageStepper({ status }: { status: string }) {
                             ) : (
                                 <span
                                     className={`text-[15px] font-bold ${
-                                        done ? 'text-[#2FA36B]' : 'text-navy'
+                                        done
+                                            ? 'text-[#2FA36B]'
+                                            : halted
+                                              ? 'text-[#D5342A]'
+                                              : 'text-navy'
                                     }`}
                                 >
-                                    {stage.label}
+                                    {/*
+                                        The stage the document died in is named
+                                        for what happened to it, not for the
+                                        stage it was passing through. "Under
+                                        Review" in red would read as a document
+                                        still under review that something had
+                                        gone wrong with.
+                                    */}
+                                    {halted ? 'Rejected' : stage.label}
                                 </span>
                             )}
                         </span>
@@ -286,6 +318,20 @@ export function DocumentFacts({ document }: { document: DocumentDetail }) {
     const rows: { label: string; value: React.ReactNode }[] = [
         { label: 'Control Number', value: document.control_number },
         { label: 'Title', value: document.title },
+        /*
+         * The office the document was FILED under -- which was not on this
+         * sheet at all until the client reported it missing on 2026-09-13.
+         *
+         * "Department" below is a different question with a different answer:
+         * it names where the folder IS, so a document three offices into a
+         * route answered it with an office that had nothing to do with raising
+         * the record. The two sit next to each other so neither can be mistaken
+         * for the other.
+         */
+        {
+            label: 'Originating Office',
+            value: document.originating_office ?? '—',
+        },
         {
             label: 'Department',
             value: document.tracking.resting_office ?? '—',

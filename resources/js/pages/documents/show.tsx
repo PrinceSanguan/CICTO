@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import documents from '@/routes/documents';
 import type {
+    DocumentAction,
     DocumentCommentItem,
     DocumentDetail,
     DocumentFileItem,
@@ -170,6 +171,10 @@ export default function ShowDocument({
     };
 
     const isForward = action.data.action === 'forwarded';
+
+    // Terminal and irreversible, so it is the one action on this panel that
+    // gets a warning and a red confirm rather than the shared grey one.
+    const isReject = action.data.action === 'rejected';
 
     // One plain sentence for the Processing Summary panel, derived from the
     // ledger rather than stored, so it can never contradict the timeline.
@@ -365,18 +370,61 @@ export default function ShowDocument({
                                     Route
                                 </h3>
                                 <p className="mb-3 text-xs text-copy">
-                                    Where this document is scheduled to go, in
-                                    order.
+                                    Where this document started, and where it is
+                                    scheduled to go, in order.
                                 </p>
 
                                 <ol className="grid gap-2">
+                                    {/*
+                                        Step one is the ORIGINATING OFFICE, and
+                                        it is not one of `route` -- it has no
+                                        document_route_stops row. The §5 form
+                                        picks the departments as one ordered
+                                        list and registers the document under
+                                        the first of them, so listing only the
+                                        stops drew a five-department submit as a
+                                        four-department route, missing the very
+                                        department it started at. That is the
+                                        bug the client reported on 2026-09-13.
+
+                                        Numbered ahead of the stops rather than
+                                        set apart from them, because to the
+                                        person who filled the form in it IS the
+                                        first department they picked.
+                                    */}
+                                    {document.route_origin && (
+                                        <li className="flex items-center gap-3 rounded-md border border-[#E4EAF2] px-3 py-2">
+                                            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#E8F0FB] text-xs font-bold text-navy tabular-nums">
+                                                1
+                                            </span>
+                                            <span className="min-w-0 flex-1 truncate text-sm font-medium text-navy">
+                                                {document.route_origin.office ??
+                                                    '—'}
+                                            </span>
+                                            <ToneBadge
+                                                tone={
+                                                    document.route_origin
+                                                        .status_tone
+                                                }
+                                            >
+                                                {
+                                                    document.route_origin
+                                                        .status_label
+                                                }
+                                            </ToneBadge>
+                                        </li>
+                                    )}
+
                                     {document.route.map((stop, index) => (
                                         <li
                                             key={stop.id}
                                             className="flex items-center gap-3 rounded-md border border-[#E4EAF2] px-3 py-2"
                                         >
                                             <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#E8F0FB] text-xs font-bold text-navy tabular-nums">
-                                                {index + 1}
+                                                {index +
+                                                    (document.route_origin
+                                                        ? 2
+                                                        : 1)}
                                             </span>
                                             <span
                                                 className={`min-w-0 flex-1 truncate text-sm font-medium ${
@@ -536,10 +584,13 @@ export default function ShowDocument({
                                                 key={available.value}
                                                 size="sm"
                                                 variant={
-                                                    action.data.action ===
+                                                    action.data.action !==
                                                     available.value
-                                                        ? 'default'
-                                                        : 'outline'
+                                                        ? 'outline'
+                                                        : available.value ===
+                                                            'rejected'
+                                                          ? 'destructive'
+                                                          : 'default'
                                                 }
                                                 onClick={() =>
                                                     action.setData(
@@ -548,9 +599,7 @@ export default function ShowDocument({
                                                     )
                                                 }
                                             >
-                                                {available.value === 'forwarded'
-                                                    ? 'Send to Another Office'
-                                                    : available.label}
+                                                {actionLabel(available)}
                                             </Button>
                                         ),
                                     )}
@@ -558,6 +607,20 @@ export default function ShowDocument({
 
                                 {action.data.action && (
                                     <div className="space-y-3">
+                                        {isReject && (
+                                            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-300">
+                                                Rejecting is final. The document
+                                                stops here, any offices still
+                                                queued on its route are
+                                                cancelled, and nothing can move
+                                                it again — it can only be
+                                                archived. Say why below; the
+                                                reason is recorded on the
+                                                document and the originating
+                                                office is notified.
+                                            </p>
+                                        )}
+
                                         {isForward && (
                                             <>
                                                 <div className="grid gap-2">
@@ -804,6 +867,11 @@ export default function ShowDocument({
                                         </div>
 
                                         <Button
+                                            variant={
+                                                isReject
+                                                    ? 'destructive'
+                                                    : 'default'
+                                            }
                                             onClick={() =>
                                                 submitAction(action.data.action)
                                             }
@@ -811,11 +879,14 @@ export default function ShowDocument({
                                         >
                                             {action.processing
                                                 ? 'Working…'
-                                                : isForward &&
-                                                    signOnSend &&
-                                                    action.data.signature_image
-                                                  ? 'Sign & send'
-                                                  : 'Confirm'}
+                                                : isReject
+                                                  ? 'Reject document'
+                                                  : isForward &&
+                                                      signOnSend &&
+                                                      action.data
+                                                          .signature_image
+                                                    ? 'Sign & send'
+                                                    : 'Confirm'}
                                         </Button>
                                     </div>
                                 )}
@@ -1247,6 +1318,26 @@ export default function ShowDocument({
             </div>
         </>
     );
+}
+
+/**
+ * The button verb, where the ledger's past-tense name does not make one.
+ *
+ * `available.label` comes from App\Enums\MovementAction, which names what a
+ * movement row RECORDS -- "Rejected", "Forwarded". That reads correctly in the
+ * timeline and wrongly on a button, which is an instruction rather than a
+ * report. Overridden here for the two where the difference matters; the rest
+ * ("Received", "Completed") already read as either.
+ */
+function actionLabel(action: DocumentAction): string {
+    switch (action.value) {
+        case 'forwarded':
+            return 'Send to Another Office';
+        case 'rejected':
+            return 'Reject';
+        default:
+            return action.label;
+    }
 }
 
 function requiresRemarks(document: DocumentDetail, value: string): boolean {

@@ -151,11 +151,25 @@ class DocumentPolicy
          * "received lang, wala nang iba". AdvanceRoute closes the document by
          * itself when the LAST office receives it, so nobody has to reach for
          * this on a routed document at all.
+         *
+         * Reject is deliberately NOT gated this way. Closing a document early
+         * is a mistake the route would have prevented; refusing one is the
+         * whole point of being able to refuse it, and an office that has to
+         * pass a bad folder along to the last stop before anybody may say no
+         * is exactly the workflow the reject button exists to avoid.
          */
         if ($action === MovementAction::Completed && $this->hasPendingStops($document)) {
             return false;
         }
 
+        /*
+         * Refusing a document is a DECISION, so it is gated exactly as
+         * approving was: Admin-only, and subject to the §A6 separation-of-duties
+         * switch below. That is safe in a way approval never was -- a route
+         * advances on `received`, so an office that cannot reject simply does
+         * not reject, receives the folder, and the queue keeps moving. Nothing
+         * downstream waits on a decision that is never taken.
+         */
         if ($action->isDecision() || $action === MovementAction::Completed) {
             if (! $user->atLeast(Role::Admin)) {
                 return false;

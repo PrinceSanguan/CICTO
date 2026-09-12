@@ -4,6 +4,7 @@ namespace Tests\Feature\Documents;
 
 use App\Actions\Documents\TransitionDocument;
 use App\Enums\MovementAction;
+use App\Enums\NotificationType;
 use App\Models\Document;
 use App\Models\Notification;
 use App\Models\User;
@@ -58,7 +59,30 @@ class NotificationRecipientsTest extends TestCase
         Carbon::setTestNow(now()->addDays(30));
         $this->artisan('cicto:notify-deadlines')->assertSuccessful();
 
+        /*
+         * And a rejection, LAST, because it is terminal and the sweep would
+         * skip the document afterwards.
+         *
+         * It is the one trigger that notifies BACKWARDS -- a rejection moves
+         * the folder nowhere, so it tells the originating office and the
+         * submitter rather than whoever is holding it. That is a different
+         * recipient set reached by a different code path, which makes it
+         * exactly the kind of trigger this invariant exists to catch.
+         */
+        app(TransitionDocument::class)->handle(
+            document: $document->refresh(),
+            action: MovementAction::Rejected,
+            actor: $this->admin($mto),
+            remarks: 'Unsigned quotation.',
+            expectedMovementId: $document->refresh()->openMovement->id,
+        );
+
         $notifications = Notification::query()->with(['user', 'document'])->get();
+
+        $this->assertTrue(
+            $notifications->contains(fn (Notification $row) => $row->type === NotificationType::Rejected),
+            'The rejection must have notified somebody.',
+        );
 
         $this->assertGreaterThan(0, $notifications->count(), 'Expected some notifications to exist.');
 

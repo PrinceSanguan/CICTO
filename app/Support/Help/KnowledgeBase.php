@@ -83,16 +83,16 @@ final class KnowledgeBase
                         'body' => 'An office has received the document and is working on it. On the document page itself this stage is named **Under Review**. If the document was submitted to several offices, each one presses **Received** when it arrives and the document moves straight on to the next office on the list -- there is no approval step to wait for.',
                     ],
                     /*
-                     * Approved and Rejected are still listed, and deliberately.
+                     * Approved is listed although nothing can reach it, and
+                     * deliberately: it is still a STORED status on every
+                     * document processed before the approval step was removed
+                     * on 2026-09-03, and somebody looking at one of those and
+                     * reaching for this article has to find the word they are
+                     * looking at.
                      *
-                     * Neither is reachable any more -- the client removed the
-                     * approval step on 2026-09-03 -- but both are still STORED
-                     * statuses on every document processed before that date, and
-                     * the status filter still offers Rejected as one of §8's four
-                     * client-facing names. Somebody looking at an older document
-                     * and reaching for this article has to find the word they are
-                     * looking at, so both entries say what they mean AND that
-                     * nothing new arrives in them.
+                     * Rejected is the opposite case and the entry says so --
+                     * the button came back on 2026-09-13, so this one describes
+                     * something that happens today.
                      */
                     [
                         'title' => 'Approved',
@@ -100,7 +100,7 @@ final class KnowledgeBase
                     ],
                     [
                         'title' => 'Rejected',
-                        'body' => 'An older status. It means the document did not meet the required criteria, and the reason is recorded in the document history. Nothing new is marked Rejected.',
+                        'body' => 'The office holding the document refused it. The reason is required, so it is always recorded in the document history, and the originating office is notified. This is a final state: the document stops there, any offices still queued on its route are cancelled, and it can only be archived afterwards. Only an office Admin can reject, and only while the document is with their office.',
                     ],
                     [
                         // The design's fifth status is "Released". No screen in

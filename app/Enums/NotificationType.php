@@ -4,7 +4,9 @@ namespace App\Enums;
 
 /**
  * Spec §12's four triggers. Two are events off the ledger (assigned,
- * forwarded); two are states that need a sweep (pending, overdue).
+ * forwarded); two are states that need a sweep (pending, overdue). Returned and
+ * Rejected were added later, for the same reason as each other: a document that
+ * stops moving has to say so to the people who were waiting on it.
  *
  * Stored as notifications.type string(32) -- this is a hand-written table, not
  * Laravel's database-channel table. See docs/implementation/phase-2 for why.
@@ -14,6 +16,7 @@ enum NotificationType: string
     case Assigned = 'document_assigned';
     case Forwarded = 'document_forwarded';
     case Returned = 'document_returned';
+    case Rejected = 'document_rejected';
     case Pending = 'document_pending';
     case Overdue = 'document_overdue';
 
@@ -23,6 +26,7 @@ enum NotificationType: string
             self::Assigned => 'New document assigned',
             self::Forwarded => 'Document forwarded to your office',
             self::Returned => 'Document returned',
+            self::Rejected => 'Document rejected',
             self::Pending => 'Document due soon',
             self::Overdue => 'Document overdue',
         };
@@ -34,6 +38,7 @@ enum NotificationType: string
             self::Assigned => 'inbox',
             self::Forwarded => 'send',
             self::Returned => 'undo-2',
+            self::Rejected => 'circle-x',
             self::Pending => 'clock',
             self::Overdue => 'triangle-alert',
         };

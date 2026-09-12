@@ -107,10 +107,35 @@ safely inside the limit — and its unique index is what makes the sweep idempot
 > next office"*.
 >
 > **What replaced it.** An office presses **Received** and the folder moves
-> straight on to the next office on the list. Approve, reject and return are
-> gone from `DocumentWorkflow::TRANSITIONS`, so no reachable stage offers them
-> and the buttons no longer render. `AdvanceRoute` advances on `received`, and
-> completes the document when the last office on the route receives it.
+> straight on to the next office on the list. Approve, reject and return were
+> all removed from `DocumentWorkflow::TRANSITIONS`, so no reachable stage
+> offered them and the buttons no longer rendered. `AdvanceRoute` advances on
+> `received`, and completes the document when the last office on the route
+> receives it.
+>
+> **AMENDED 2026-09-13 — reject is back; approve and return are not.** The
+> client: *"napag usapan na rin po natin yung reject button before natin gawin
+> yung system, and part po siya ng process na gusto naming magkaroon sa
+> system"*. It was §9 scope from the start ("Reject → terminal", below) and it
+> was collateral damage of the removal above rather than something they asked
+> to lose. `under_review → rejected` is back in `TRANSITIONS`; `initiated` does
+> not offer it, exactly as the original §9 stage table had it.
+>
+> **Why this does not bring the stall back.** The stall was caused by the route
+> WAITING on a gated action. It no longer does: `AdvanceRoute` advances on
+> `received`, which is ungated. Rejecting is therefore optional at every stop —
+> an office with no Admin simply never sees the button, receives the folder,
+> and the queue keeps moving. Nothing downstream waits on a rejection that is
+> never made.
+>
+> Reject keeps the decision gate it always had: Admin-only, mandatory remarks,
+> and subject to question A6's self-approval switch. `AdvanceRoute` already
+> cancelled the pending stops of a rejected document, and §20 already allowed a
+> rejected document to be archived, so neither needed changing. What was added
+> is `NotificationType::Rejected`, which notifies the **originating** office and
+> the submitter rather than the office that pressed it — a rejection moves the
+> folder nowhere, so the usual "tell the office it arrived at" rule would have
+> told the rejecting office about their own click and nobody else at all.
 >
 > **Why it was breaking.** Approving is Admin-only and, with self-approval off,
 > forbidden to the document's own author (question A6 below). Any queued office

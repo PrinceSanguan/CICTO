@@ -145,6 +145,7 @@ class NotificationWriter
             NotificationType::Assigned => "{$document->control_number} — {$document->title}",
             NotificationType::Forwarded => "{$document->control_number} has arrived at your office.",
             NotificationType::Returned => "{$document->control_number} was returned for correction.",
+            NotificationType::Rejected => "{$document->control_number} was rejected. The reason is on the document.",
             NotificationType::Pending => "{$document->control_number} is due soon.",
             NotificationType::Overdue => "{$document->control_number} has passed its expected completion date.",
         };

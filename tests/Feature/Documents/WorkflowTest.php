@@ -142,20 +142,22 @@ class WorkflowTest extends TestCase
     }
 
     /**
-     * The client asked for "received lang, wala nang iba". These three are what
-     * that removed, and this is the test that keeps them removed.
+     * The client asked for "received lang" on 2026-09-03, which removed approve,
+     * reject and return. Reject came back on 2026-09-13 -- it was §9 scope from
+     * the start and its removal was collateral damage. Approve and return did
+     * not, and this is the test that keeps them out.
      *
      * Approving in particular is why the client's documents kept dying at the
      * third department: it was the only action that advanced a route, and
      * DocumentPolicy makes it Admin-only and forbids it to the document's own
      * author, so any queued office without a qualifying approver held the
-     * folder forever.
+     * folder forever. Reject is safe to offer for the exact reason approve was
+     * not -- nothing waits on it, because the route advances on `received`.
      */
-    public function test_no_reachable_stage_offers_approve_reject_or_return(): void
+    public function test_no_reachable_stage_offers_approve_or_return(): void
     {
         $removed = [
             MovementAction::Approved,
-            MovementAction::Rejected,
             MovementAction::Returned,
         ];
 
@@ -168,13 +170,62 @@ class WorkflowTest extends TestCase
             }
         }
 
+        // Reject is offered where a document can actually be refused, and only
+        // there: `initiated` means nobody has picked the folder up yet, so no
+        // office is in a position to refuse it.
+        $this->assertTrue(
+            DocumentWorkflow::allows(DocumentStatus::UnderReview, MovementAction::Rejected),
+        );
+        $this->assertFalse(
+            DocumentWorkflow::allows(DocumentStatus::Initiated, MovementAction::Rejected),
+        );
+
         // What under_review DOES offer, in full. Asserted as a whole set rather
         // than one membership at a time, so putting an action back is a
         // deliberate edit to this list and not an accident.
         $this->assertEqualsCanonicalizing(
-            [MovementAction::Forwarded, MovementAction::Received, MovementAction::Completed],
+            [
+                MovementAction::Forwarded,
+                MovementAction::Received,
+                MovementAction::Rejected,
+                MovementAction::Completed,
+            ],
             DocumentWorkflow::allowed(DocumentStatus::UnderReview),
         );
+    }
+
+    /**
+     * Rejecting is terminal, and terminal means terminal: no open leg, no way
+     * back, and DocumentStatus::isTerminal() is what §16 reads to decide the
+     * document may be archived.
+     */
+    public function test_rejecting_stops_the_document_dead(): void
+    {
+        $office = $this->office();
+        $admin = $this->admin($office);
+        $document = $this->registerDocument($office, $this->staff($office));
+
+        app(TransitionDocument::class)->handle(
+            document: $document,
+            action: MovementAction::Received,
+            actor: $admin,
+            expectedMovementId: $document->openMovement->id,
+        );
+
+        app(TransitionDocument::class)->handle(
+            document: $document->refresh(),
+            action: MovementAction::Rejected,
+            actor: $admin,
+            remarks: 'Missing the signed attachment.',
+            expectedMovementId: $document->refresh()->openMovement->id,
+        );
+
+        $document->refresh();
+
+        $this->assertSame(DocumentStatus::Rejected, $document->status);
+        $this->assertTrue($document->status->isTerminal());
+        $this->assertNull($document->openMovement, 'A rejected document is held by nobody.');
+        $this->assertSame([], DocumentWorkflow::allowed(DocumentStatus::Rejected));
     }
 
     /**

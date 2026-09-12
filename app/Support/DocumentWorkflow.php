@@ -38,12 +38,12 @@ final class DocumentWorkflow
      * out and the Admin-only and self-approval rules in DocumentPolicy::act()
      * never apply to it.
      *
-     * WHAT THIS REMOVED. `approved`, `rejected` and `returned` are gone from
-     * under_review, which is the only status a travelling document is ever in,
-     * so none of the three can be performed any more -- the client asked for
-     * "received lang, wala nang iba". The enum cases stay: document_movements
-     * rows written before today still carry them, §13's timeline still has to
-     * render them, and §19's reports still count them.
+     * WHAT THIS REMOVED. `approved` and `returned` are gone from under_review,
+     * which is the only status a travelling document is ever in, so neither can
+     * be performed any more -- the client asked for "received lang". The enum
+     * cases stay: document_movements rows written before today still carry
+     * them, §13's timeline still has to render them, and §19's reports still
+     * count them.
      *
      * The 'approved' and 'returned' rows below are kept for the same reason --
      * a document that was already sitting in one of those stages when this
@@ -53,6 +53,24 @@ final class DocumentWorkflow
      * `approved`: with approval gone it would have become unreachable, and a
      * document that can never complete can never be archived either (§16).
      *
+     * REJECT IS BACK, and that is the client's decision of 2026-09-13: "napag
+     * usapan na rin po natin yung reject button before natin gawin yung system,
+     * and part po siya ng process na gusto naming magkaroon sa system". It was
+     * §9 scope from the start -- see phase-2-workflow-and-trail.md §2, "Reject
+     * -> terminal" -- and it was collateral damage of the 2026-09-03 removal
+     * rather than something the client asked to lose.
+     *
+     * Putting it back does NOT bring back the stall that removal fixed, and the
+     * reason is precise: the route advances on `received`, never on a decision
+     * (see AdvanceRoute). Refusing a document is therefore OPTIONAL at every
+     * stop -- an office with no Admin, or an Admin holding their own document
+     * with self-approval off, simply does not get the button and receives the
+     * folder as before. Nothing waits on a rejection that never comes.
+     *
+     * Only `under_review` offers it, exactly as the §9 stage table always had
+     * it: a document still sitting in `initiated` has not been picked up by
+     * anybody, so there is no office in a position to refuse it yet.
+     *
      * @var array<string, array<string, string>>
      */
     public const TRANSITIONS = [
@@ -61,9 +79,13 @@ final class DocumentWorkflow
             'received' => 'under_review',
         ],
         'under_review' => [
+            // Key order is button order on the document page, so the one
+            // irreversible action on the panel sits last rather than between
+            // two routine ones.
             'forwarded' => 'under_review',
             'received' => 'under_review',
             'completed' => 'completed',
+            'rejected' => 'rejected',
         ],
         // Legacy stages. Unreachable from today; kept so documents already in
         // them at deploy time are not stranded.

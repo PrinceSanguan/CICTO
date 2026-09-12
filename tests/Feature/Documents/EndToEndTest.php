@@ -3,8 +3,11 @@
 namespace Tests\Feature\Documents;
 
 use App\Enums\DocumentStatus;
+use App\Enums\NotificationType;
+use App\Enums\RouteStopStatus;
 use App\Models\Document;
 use App\Models\DocumentComment;
+use App\Models\Notification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -96,11 +99,188 @@ class EndToEndTest extends TestCase
     }
 
     /**
-     * The three removed actions are refused over HTTP, not merely hidden.
+     * §9 reject, restored on 2026-09-13, driven exactly as the page drives it.
+     *
+     * The whole behaviour in one pass, because every part of it is a claim the
+     * client will check: the button is offered, the reason is compulsory, the
+     * document goes terminal, the rest of the route is torn down, the remark is
+     * mirrored into the panel, the originating office is told, and §16 will
+     * then let it be archived.
+     */
+    public function test_a_rejection_refuses_the_document_and_tears_down_its_route(): void
+    {
+        Storage::fake('documents');
+
+        $mpdo = $this->office('MPDO', 'Planning Office');
+        $mto = $this->office('MTO', 'Treasury');
+        $hrmo = $this->office('HRMO', 'Human Resource');
+
+        $clerk = $this->staff($mpdo);
+        $mtoAdmin = $this->admin($mto);
+
+        // Filed at MPDO, routed onward through MTO and then HRMO.
+        $this->actingAs($clerk)
+            ->post(route('documents.store'), [
+                'title' => 'Request for office supplies',
+                'document_type_id' => $this->documentType()->id,
+                'office_ids' => [$mpdo->id, $mto->id, $hrmo->id],
+                'priority' => 'normal',
+                'file' => UploadedFile::fake()->create('request.pdf', 40, 'application/pdf'),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $document = Document::query()->firstOrFail();
+
+        // Move it to MTO so an office other than the submitter's holds it.
+        $this->actingAs($this->admin($mpdo))
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'received',
+                'expected_movement_id' => $document->openMovement->id,
+            ])
+            ->assertRedirect();
+
+        $document->refresh();
+        $this->assertSame($mto->id, $document->openMovement->to_office_id);
+
+        // The button is on the page for the office holding it.
+        $this->assertContains(
+            'rejected',
+            array_column(
+                $this->actingAs($mtoAdmin)
+                    ->get(route('documents.show', $document))
+                    ->assertOk()
+                    ->viewData('page')['props']['document']['available_actions'],
+                'value',
+            ),
+        );
+
+        // §9: "reject ... with remarks". No reason, no rejection.
+        $this->actingAs($mtoAdmin)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'rejected',
+                'expected_movement_id' => $document->openMovement->id,
+            ])
+            ->assertSessionHasErrors('remarks');
+
+        $this->assertSame(
+            DocumentStatus::UnderReview,
+            $document->fresh()->status,
+            'A refused submit must not have moved the document.',
+        );
+
+        $this->actingAs($mtoAdmin)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'rejected',
+                'remarks' => 'The attached quotation is unsigned.',
+                'expected_movement_id' => $document->fresh()->openMovement->id,
+            ])
+            ->assertRedirect();
+
+        $document->refresh();
+
+        $this->assertSame(DocumentStatus::Rejected, $document->status);
+        $this->assertSame('Rejected', $document->status->publicLabel());
+        $this->assertNull($document->openMovement, 'A rejected document is held by nobody.');
+
+        // The tail of the route is dropped rather than left travelling.
+        $this->assertSame(
+            0,
+            $document->routeStops()->where('status', RouteStopStatus::Pending)->count(),
+        );
+        $this->assertSame(
+            1,
+            $document->routeStops()->where('status', RouteStopStatus::Cancelled)->count(),
+            'HRMO was queued behind MTO and must now be cancelled, not deleted.',
+        );
+
+        // The reason is in the trail AND mirrored into the panel, and the
+        // mirror is not editable -- CONTEXT_REJECTION, not CONTEXT_COMMENT.
+        $remark = DocumentComment::query()
+            ->where('context', DocumentComment::CONTEXT_REJECTION)
+            ->firstOrFail();
+
+        $this->assertSame('The attached quotation is unsigned.', $remark->body);
+        $this->assertFalse($remark->isEditable());
+
+        // The people who were waiting on it are told. The office that pressed
+        // it is not -- they already know.
+        $this->assertTrue(
+            Notification::query()
+                ->where('user_id', $clerk->id)
+                ->where('type', NotificationType::Rejected)
+                ->exists(),
+            'The submitter must hear that their document was refused.',
+        );
+        $this->assertFalse(
+            Notification::query()
+                ->where('user_id', $mtoAdmin->id)
+                ->where('type', NotificationType::Rejected)
+                ->exists(),
+        );
+
+        // §16: terminal, so it can now be filed away.
+        $this->actingAs($mtoAdmin)
+            ->post(route('documents.archive', $document), ['reason' => 'Refused.'])
+            ->assertRedirect();
+
+        $this->assertTrue($document->fresh()->isArchived());
+    }
+
+    /**
+     * Rejecting is a DECISION, so it carries the gate every decision carries:
+     * Admin-only, and not on your own document while §A6's switch is off.
+     *
+     * That gate is what made APPROVAL unusable, and it is harmless here for one
+     * reason -- nothing waits on a rejection. The clerk below cannot reject,
+     * and can still receive, so the folder keeps moving either way.
+     */
+    public function test_a_clerk_cannot_reject_but_can_still_move_the_folder(): void
+    {
+        $office = $this->office();
+        $clerk = $this->staff($office);
+        $document = $this->registerDocument($office, $this->staff($office));
+
+        $this->actingAs($clerk)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'received',
+                'expected_movement_id' => $document->openMovement->id,
+            ])
+            ->assertRedirect();
+
+        $document->refresh();
+
+        $offered = array_column(
+            $this->actingAs($clerk)
+                ->get(route('documents.show', $document))
+                ->assertOk()
+                ->viewData('page')['props']['document']['available_actions'],
+            'value',
+        );
+
+        $this->assertNotContains('rejected', $offered);
+        $this->assertContains('received', $offered, 'A clerk must still be able to receive.');
+
+        $this->actingAs($clerk)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'rejected',
+                'remarks' => 'Trying it anyway.',
+                'expected_movement_id' => $document->openMovement->id,
+            ])
+            ->assertForbidden();
+
+        $this->assertSame(DocumentStatus::UnderReview, $document->fresh()->status);
+    }
+
+    /**
+     * The removed actions are refused over HTTP, not merely hidden.
      *
      * The buttons are gone from the page because DocumentPresenter builds them
      * from the same map that guards the server -- but a hand-rolled POST, or a
      * tab left open across the deploy, still has to bounce.
+     *
+     * `rejected` is deliberately NOT in this list any more: it came back on
+     * 2026-09-13. test_a_rejection_refuses_the_document_and_tears_down_its_route
+     * covers it from the other side.
      */
     public function test_the_removed_decision_actions_are_refused_over_http(): void
     {
@@ -113,7 +293,7 @@ class EndToEndTest extends TestCase
             'expected_movement_id' => $document->openMovement->id,
         ]);
 
-        foreach (['approved', 'rejected', 'returned'] as $action) {
+        foreach (['approved', 'returned'] as $action) {
             $document->refresh();
 
             $this->actingAs($admin)
