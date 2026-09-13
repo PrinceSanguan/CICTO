@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\Role;
+use App\Models\Builders\DocumentBuilder;
 use App\Models\Document;
 use App\Support\Presenters\DocumentPresenter;
 use App\Support\Reporting\DocumentStats;
@@ -45,10 +45,25 @@ class DashboardController extends Controller
                 'lastMovement.toOffice:id,name',
             ]);
 
-        // "In my office right now" is the whole point of the system for an
-        // Admin. For a plain user it is "what I submitted".
-        $inbox = $user->office_id !== null && $user->atLeast(Role::Admin)
-            ? $base()->heldByOffice($user->office_id)
+        /*
+         * An office's clerk and its Admin see ONE queue.
+         *
+         * This used to split by role: an Admin saw only what sat on the desk
+         * right now, a clerk only what they had filed. So the moment a clerk's
+         * document left for the next office it vanished from the Admin's
+         * dashboard, while the clerk could still follow its status. The client
+         * asked for the office to share the view (2026-09-13): what it holds,
+         * everything it sent out that is still travelling, and anything this
+         * person filed against another office.
+         */
+        $officeId = $user->office_id;
+
+        $inbox = $officeId !== null
+            ? $base()->where(function (DocumentBuilder $query) use ($officeId, $user): void {
+                $query->heldByOffice($officeId)
+                    ->orWhere('documents.originating_office_id', $officeId)
+                    ->orWhere('documents.created_by_id', $user->id);
+            })
             : $base()->where('documents.created_by_id', $user->id);
 
         return Inertia::render('dashboard', [
@@ -57,10 +72,14 @@ class DashboardController extends Controller
                 'inbox' => (clone $inbox)->stillOpen()->count(),
                 'overdue' => (clone $inbox)->overdue()->count(),
                 'approaching' => (clone $inbox)->approachingDeadline()->count(),
-                // Archived submissions still count as things this person
+                // Archived submissions still count as things this office
                 // submitted, so this one is not scoped to the active list.
                 'submitted' => Document::query()
-                    ->where('created_by_id', $user->id)
+                    ->where(function (DocumentBuilder $query) use ($officeId, $user): void {
+                        $query->where('documents.created_by_id', $user->id)
+                            ->when($officeId !== null, fn (DocumentBuilder $sub) => $sub
+                                ->orWhere('documents.originating_office_id', $officeId));
+                    })
                     ->count(),
             ],
             'recent' => (clone $inbox)
@@ -70,7 +89,7 @@ class DashboardController extends Controller
                 ->get()
                 ->map(fn (Document $document) => $this->presenter->listItem($document))
                 ->all(),
-            'isAdmin' => $user->atLeast(Role::Admin),
+            'hasOffice' => $officeId !== null,
         ]);
     }
 }

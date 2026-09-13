@@ -29,11 +29,16 @@ type Props = {
         submitted: number;
     };
     recent: DocumentListItem[];
-    isAdmin: boolean;
+    hasOffice: boolean;
 };
 
 /** §18 Dashboard. */
-export default function Dashboard({ summary, stats, recent, isAdmin }: Props) {
+export default function Dashboard({
+    summary,
+    stats,
+    recent,
+    hasOffice,
+}: Props) {
     return (
         <>
             <Head title="Dashboard" />
@@ -104,15 +109,11 @@ export default function Dashboard({ summary, stats, recent, isAdmin }: Props) {
             {/* Operational counters: a different question from the figures above. */}
             <section className="mt-6 rounded-xl bg-white p-5 shadow-xl">
                 <h2 className="text-lg font-bold text-navy">
-                    {isAdmin ? 'In your office' : 'Your submissions'}
+                    {hasOffice ? 'Your office' : 'Your submissions'}
                 </h2>
 
                 <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                    <Counter
-                        icon={Inbox}
-                        label={isAdmin ? 'Open here' : 'Open'}
-                        value={stats.inbox}
-                    />
+                    <Counter icon={Inbox} label="Open" value={stats.inbox} />
                     <Counter
                         icon={AlertTriangle}
                         label="Overdue"
@@ -127,7 +128,11 @@ export default function Dashboard({ summary, stats, recent, isAdmin }: Props) {
                     />
                     <Counter
                         icon={FileCheck2}
-                        label="Submitted by me"
+                        label={
+                            hasOffice
+                                ? 'Submitted by your office'
+                                : 'Submitted by me'
+                        }
                         value={stats.submitted}
                     />
                 </div>
@@ -135,7 +140,9 @@ export default function Dashboard({ summary, stats, recent, isAdmin }: Props) {
 
             <section className="mt-6 overflow-hidden rounded-xl bg-white shadow-xl">
                 <h2 className="border-b border-[#EEF2F7] px-5 py-4 text-lg font-bold text-navy">
-                    {isAdmin ? 'Waiting in your office' : 'Your open documents'}
+                    {hasOffice
+                        ? 'Your office’s open documents'
+                        : 'Your open documents'}
                 </h2>
 
                 {/* Phone: cards, so the status and the link stay reachable. */}

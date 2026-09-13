@@ -768,28 +768,7 @@ export default function ShowDocument({
                                                                             )
                                                                         }
                                                                     />
-                                                                    {/*
-                                                                        The password prompt is
-                                                                        announced BEFORE the pad is
-                                                                        used, not sprung after it.
-                                                                        Signing here is gated the
-                                                                        same way signing on its own
-                                                                        is, and confirming sends you
-                                                                        back to this page with the
-                                                                        mark gone — so somebody
-                                                                        should know that before they
-                                                                        draw one.
-                                                                    */}
                                                                     <p className="text-xs text-muted-foreground">
-                                                                        You will
-                                                                        be asked
-                                                                        to
-                                                                        confirm
-                                                                        your
-                                                                        password
-                                                                        before
-                                                                        this is
-                                                                        sent.
                                                                         Your
                                                                         signature
                                                                         is
@@ -1223,10 +1202,9 @@ export default function ShowDocument({
                                         risk in this feature, not the code.
                                     */}
                                             <p className="text-xs text-muted-foreground">
-                                                You will be asked to confirm
-                                                your password. Your signature is
-                                                recorded against this exact file
-                                                version
+                                                Your signature is saved as soon
+                                                as you sign. It is recorded
+                                                against this exact file version
                                                 {document.can.sign
                                                     ? ''
                                                     : ' as your office’s release to the next office'}{' '}

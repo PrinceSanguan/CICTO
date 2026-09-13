@@ -107,7 +107,12 @@ class DocumentPolicy
             return false;
         }
 
+        // The office that sent it keeps the right to correct it after it has
+        // left, not only the one person who pressed Submit: an office's clerk
+        // and its Admin share one view of their documents (2026-09-13), so an
+        // Admin must not lose the upload form the clerk still sees.
         return $document->created_by_id === $user->id
+            || $user->actsForOffice($document->originating_office_id)
             || $this->holdsDocument($user, $document);
     }
 

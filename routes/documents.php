@@ -9,7 +9,6 @@ use App\Http\Controllers\DocumentSignatureController;
 use App\Http\Controllers\DocumentWorkflowController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ScanController;
-use App\Http\Middleware\ConfirmPasswordWhenSigning;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -35,13 +34,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('documents/{document}/qr.svg', [DocumentLabelController::class, 'svg'])->name('documents.qr');
 
     // §9 approve / reject / return / forward / complete
-    //
-    // ConfirmPasswordWhenSigning is a no-op for all of those. It only bites on
-    // a forward that carries a §15 handoff signature, so signing while sending
-    // is held to the same identity check as signing on its own -- see the
-    // signatures route below -- without demanding a password to press Received.
     Route::post('documents/{document}/transitions', [DocumentWorkflowController::class, 'store'])
-        ->middleware(ConfirmPasswordWhenSigning::class)
         ->name('documents.transitions.store');
 
     // scopeBindings() is load-bearing: without it {file} resolves globally and
@@ -62,11 +55,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // §15 digital signatures.
     //
-    // password.confirm is the cheapest thing that makes "the method identified
-    // the party" credible under RA 8792 s.8 -- a signature applied from an
-    // unattended logged-in browser identifies the browser, not the person.
+    // NO password.confirm, and that is the client's decision of 2026-09-13:
+    // each office signs and passes the folder on, and being sent to a separate
+    // Confirm Password screen before every signature -- which also threw the
+    // drawn mark away -- stalled that. The signed-in session is the identity
+    // check; SignDocument still snapshots signer, office and IP address.
     Route::post('documents/{document}/signatures', [DocumentSignatureController::class, 'store'])
-        ->middleware('password.confirm')
         ->name('documents.signatures.store');
 
     Route::get('documents/{document}/signatures/{signature}/certificate', [DocumentSignatureController::class, 'certificate'])

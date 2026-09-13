@@ -76,13 +76,9 @@ class ReleaseSignatureTest extends TestCase
         return [$document->refresh(), $admin, $next];
     }
 
-    /**
-     * password.confirm guards the signing paths. Every test here is about what
-     * the signature does, not about that gate -- which has its own test below.
-     */
     private function signedIn(User $user): self
     {
-        return $this->actingAs($user)->withSession(['auth.password_confirmed_at' => time()]);
+        return $this->actingAs($user);
     }
 
     /**
@@ -247,23 +243,42 @@ class ReleaseSignatureTest extends TestCase
     }
 
     /**
-     * Signing while forwarding is the same legal act as signing on its own, so
-     * it cannot be the cheaper one to make -- otherwise this is simply the way
-     * to sign without proving who you are.
+     * Client decision, 2026-09-13: signing saves straight away, with no
+     * Confirm Password screen in between -- neither on its own nor while
+     * forwarding. A session that has never confirmed a password signs.
      */
-    public function test_signing_while_forwarding_needs_a_confirmed_password(): void
+    public function test_signing_does_not_ask_for_a_password(): void
     {
         [$document, $admin, $next] = $this->onADesk();
 
         $this->actingAs($admin)
-            ->post(route('documents.transitions.store', $document), $this->forwardPayload($document, $next, sign: true))
-            ->assertRedirect(route('password.confirm'));
+            ->post(route('documents.signatures.store', $document), [
+                'method' => SignatureMethod::Drawn->value,
+                'image' => $this->drawnMark(),
+                'purpose' => DocumentSignature::PURPOSE_RELEASE,
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
 
-        $this->assertSame(0, DocumentSignature::query()->count());
-        $this->assertSame($admin->office_id, $document->refresh()->openMovement->to_office_id);
+        $this->assertSame(1, DocumentSignature::query()->count());
+
+        // A new version, so the release can be signed again while forwarding.
+        app(StoreDocumentFile::class)->handle(
+            document: $document->refresh(),
+            upload: UploadedFile::fake()->createWithContent('pr-v2.pdf', '%PDF-1.4 corrected'),
+            uploader: $admin,
+        );
+
+        $this->actingAs($admin)
+            ->post(route('documents.transitions.store', $document), $this->forwardPayload($document->refresh(), $next, sign: true))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(2, DocumentSignature::query()->count());
+        $this->assertSame($next->id, $document->refresh()->openMovement->to_office_id);
     }
 
-    /** ...and an ordinary forward must not be dragged through that gate. */
+    /** ...and an ordinary forward still goes straight through too. */
     public function test_forwarding_without_a_signature_does_not_ask_for_a_password(): void
     {
         [$document, $admin, $next] = $this->onADesk();

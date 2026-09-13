@@ -115,7 +115,7 @@ out-of-scope upgrade path.
 | Binding | FK to `document_file_id` — the *exact* version — plus a snapshot of its `checksum_sha256` |
 | Integrity | `signature_hash` is a plain SHA-256 over a versioned canonical payload string, **not** an HMAC keyed on `APP_KEY` — that would widen the `APP_KEY` blast radius already flagged in B2 |
 | Anti-double-sign | `unique(document_file_id, signer_id, purpose)`. "Superseded" is derived from version, never stored |
-| Identity assurance | Signing routes gated by `password.confirm` middleware — the cheapest thing that makes "identify the party" credible under **RA 8792 §8** |
+| Identity assurance | The signed-in session. Signing routes were gated by `password.confirm` until the client removed it on 2026-09-13 — the extra screen before every signature stalled the office-to-office handoff. Signer, office and IP are still snapshotted on every signature |
 | Image storage | PNG on the private `documents` disk with magic-byte validation, served only through a policy-gated controller with `nosniff` |
 
 **Tampering is detectable, not preventable.** A nightly `signatures:verify` sweep is
