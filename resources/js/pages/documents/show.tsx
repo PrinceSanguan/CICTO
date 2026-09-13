@@ -1147,10 +1147,30 @@ export default function ShowDocument({
                                         ))}
                                     </ul>
 
-                                    {document.can.sign && (
+                                    {/*
+                                        Offered to whoever holds the folder, not
+                                        only to those who may approve it. On a
+                                        routed document the office moves it on
+                                        by pressing Received, never Forward, so
+                                        the release pad inside the Forward panel
+                                        never opened -- the submitter at the
+                                        origin, and every clerk down the route,
+                                        had no way to sign at all. Approval wins
+                                        when both are allowed; the release
+                                        signature is still offered afterwards,
+                                        because they are different attestations.
+                                    */}
+                                    {(document.can.sign ||
+                                        document.can.signRelease) && (
                                         <form
                                             onSubmit={(event) => {
                                                 event.preventDefault();
+                                                signature.transform((data) => ({
+                                                    ...data,
+                                                    purpose: document.can.sign
+                                                        ? 'approval'
+                                                        : 'release',
+                                                }));
                                                 signature.post(
                                                     DocumentSignatureController.store.url(
                                                         {
@@ -1206,8 +1226,12 @@ export default function ShowDocument({
                                                 You will be asked to confirm
                                                 your password. Your signature is
                                                 recorded against this exact file
-                                                version — it is not printed onto
-                                                the document itself.
+                                                version
+                                                {document.can.sign
+                                                    ? ''
+                                                    : ' as your office’s release to the next office'}{' '}
+                                                — it is not printed onto the
+                                                document itself.
                                             </p>
                                             <Button
                                                 size="sm"
@@ -1219,7 +1243,9 @@ export default function ShowDocument({
                                             >
                                                 {signature.processing
                                                     ? 'Signing…'
-                                                    : 'Sign document'}
+                                                    : document.can.sign
+                                                      ? 'Sign document'
+                                                      : 'Sign for release'}
                                             </Button>
                                         </form>
                                     )}

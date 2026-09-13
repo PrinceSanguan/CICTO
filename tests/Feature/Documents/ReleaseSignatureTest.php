@@ -390,4 +390,70 @@ class ReleaseSignatureTest extends TestCase
 
         $this->assertFalse($clerk->can('signRelease', $document->refresh()));
     }
+
+    /**
+     * Client report, 2026-09-13: "dapat makaka perma ako then papunta sa next
+     * na office". On a routed document every office moves the folder on by
+     * pressing Received, so the pad inside the Forward panel never opens. The
+     * release has to be signable on its own, at the origin and at every stop.
+     */
+    public function test_each_office_on_a_route_can_sign_the_release_before_receiving_it_onward(): void
+    {
+        Storage::fake('documents');
+
+        $origin = $this->office('OCCR', 'Office of the City Civil Registrar');
+        $audit = $this->office('COA', 'Commission on Audit');
+        $pio = $this->office('PIO', 'Public Information Office');
+        $clerk = $this->staff($origin);
+
+        $document = app(RegisterDocument::class)->handle(
+            title: 'Birth certificate endorsement',
+            documentTypeId: $this->documentType()->id,
+            priority: DocumentPriority::Normal,
+            originatingOffice: $origin,
+            creator: $clerk,
+            upload: UploadedFile::fake()->createWithContent('endorsement.pdf', '%PDF-1.4 original'),
+            routeOfficeIds: [$audit->id, $pio->id],
+        );
+
+        $genesis = $document->openMovement;
+
+        $this->signedIn($clerk)
+            ->post(route('documents.signatures.store', $document), [
+                'method' => SignatureMethod::Drawn->value,
+                'image' => $this->drawnMark(),
+                'purpose' => DocumentSignature::PURPOSE_RELEASE,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $signature = DocumentSignature::query()->where('document_id', $document->id)->sole();
+        $this->assertSame(DocumentSignature::PURPOSE_RELEASE, $signature->purpose);
+        $this->assertSame($genesis->id, $signature->document_movement_id);
+
+        $this->actingAs($clerk)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => MovementAction::Received->value,
+                'expected_movement_id' => $genesis->id,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $document->refresh();
+        $this->assertSame($audit->id, $document->openMovement->to_office_id);
+
+        // The folder has left the origin, so the origin cannot sign for it any
+        // more -- and the office now holding it can.
+        $this->assertFalse($clerk->can('signRelease', $document));
+
+        $auditor = $this->staff($audit);
+
+        $this->signedIn($auditor)
+            ->post(route('documents.signatures.store', $document), [
+                'method' => SignatureMethod::Drawn->value,
+                'image' => $this->drawnMark(),
+                'purpose' => DocumentSignature::PURPOSE_RELEASE,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(2, DocumentSignature::query()->where('document_id', $document->id)->count());
+    }
 }
