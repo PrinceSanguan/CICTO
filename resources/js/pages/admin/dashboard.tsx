@@ -9,7 +9,7 @@ import {
     Files,
     MoreVertical,
     Search,
-    XCircle,
+    Undo2,
 } from 'lucide-react';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { PanelHeading } from '@/components/admin/panel-heading';
@@ -49,7 +49,7 @@ const AdminChartBundle = lazy(
 type AdminRow = DocumentListItem & {
     uploaded_by: string | null;
     updated_at: string | null;
-    bucket: 'pending' | 'approved' | 'rejected';
+    bucket: 'pending' | 'approved' | 'returned';
     current_file_id: number | null;
 };
 
@@ -60,7 +60,7 @@ type Props = {
         total: number;
         pending: number;
         approved: number;
-        rejected: number;
+        returned: number;
     };
     documents: {
         data: AdminRow[];
@@ -75,7 +75,7 @@ type Props = {
         label: string;
         approved: number;
         pending: number;
-        rejected: number;
+        returned: number;
     }[];
     pending: AdminRow[];
 };
@@ -156,11 +156,11 @@ function DocumentManagement({
             bucket: 'approved',
         },
         {
-            tone: 'rejected',
-            label: 'Rejected Documents',
-            value: stats.rejected,
-            icon: XCircle,
-            bucket: 'rejected',
+            tone: 'returned',
+            label: 'Returned Documents',
+            value: stats.returned,
+            icon: Undo2,
+            bucket: 'returned',
         },
     ];
 

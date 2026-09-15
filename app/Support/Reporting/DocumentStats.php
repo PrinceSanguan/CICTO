@@ -37,11 +37,13 @@ class DocumentStats
      */
     private const REPORT_BUCKETS = [
         'initiated' => 'pending',
-        'returned' => 'pending',
         'under_review' => 'in_process',
         'approved' => 'for_approval',
         'completed' => 'completed',
-        'rejected' => 'rejected',
+        // Returned, the client's word since 2026-09-16 -- see
+        // DocumentStatus::publicLabel(). Legacy rejections count with it.
+        'returned' => 'returned',
+        'rejected' => 'returned',
     ];
 
     /**
@@ -195,7 +197,7 @@ class DocumentStats
                 'in_process' => $buckets[$key]['in_process'] ?? 0,
                 'for_approval' => $buckets[$key]['for_approval'] ?? 0,
                 'completed' => $buckets[$key]['completed'] ?? 0,
-                'rejected' => $buckets[$key]['rejected'] ?? 0,
+                'returned' => $buckets[$key]['returned'] ?? 0,
             ];
         }
 

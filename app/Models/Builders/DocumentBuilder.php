@@ -55,12 +55,12 @@ class DocumentBuilder extends Builder
          * press Received. Identical symptom, one gate further down -- which is
          * why the same route kept dying at the same department.
          *
-         * ROLE STILL DECIDES WHAT YOU MAY DO. Complete and Sign remain
-         * Admin-only in DocumentPolicy::act() and ::sign(), and the
-         * separation-of-duties setting still applies to them. Receiving is a
-         * receipt, not a judgement, so it is open to the office holding the
-         * folder -- which is exactly what the client asked for: "dapat yung mga
-         * offices wala ng approval, only received na lang".
+         * ROLE STILL DECIDES WHAT YOU MAY DO. Receive, Forward, Complete and
+         * both kinds of signature are Admin-only in DocumentPolicy -- receiving
+         * and release signing only since 2026-09-15, when the client saw clerks
+         * doing both and asked for them to be the Admin's alone. Widening the
+         * row here let a clerk SEE the folder on their desk; it was never meant
+         * to let them take it in.
          *
          * WHAT IT COSTS, stated plainly: a clerk can now read every document
          * their own office has handled, not only the ones they filed. That is

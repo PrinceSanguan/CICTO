@@ -32,11 +32,12 @@ final class DocumentWorkflow
      * office whose admin filed the document, could not release the folder at
      * all, and the remaining stops sat on "Waiting" forever.
      *
-     * `received` is now what advances the route (see AdvanceRoute), and it is
-     * ungated on purpose: acknowledging a folder that is physically on your desk
-     * is a receipt, not a judgement, so MovementAction::isDecision() leaves it
-     * out and the Admin-only and self-approval rules in DocumentPolicy::act()
-     * never apply to it.
+     * `received` is now what advances the route (see AdvanceRoute). It is not a
+     * decision: acknowledging a folder that is physically on your desk is a
+     * receipt, not a judgement, so MovementAction::isDecision() leaves it out
+     * and the self-approval rule in DocumentPolicy::act() never applies to it.
+     * It IS Admin-only, since the client's decision of 2026-09-15 -- see
+     * DocumentPolicy::act() -- which is why every office needs an Admin.
      *
      * WHAT THIS REMOVED. `approved` and `returned` are gone from under_review,
      * which is the only status a travelling document is ever in, so neither can

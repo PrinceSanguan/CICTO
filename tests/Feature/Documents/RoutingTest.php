@@ -806,8 +806,8 @@ class RoutingTest extends TestCase
      *
      * §5's department list and §9's send-to list are every ACTIVE office,
      * staffed or not, so a document can always be sent somewhere nobody works.
-     * It arrives, becomes the open leg, and cannot be received: view() grants
-     * office-scoped read to Role::Admin only and act() calls view() first.
+     * It arrives, becomes the open leg, and cannot be received: only an Admin
+     * may press Received (client, 2026-09-15), and nobody there is one.
      *
      * This is the client's "hindi na-rereceive sa pangatlong office" -- the
      * office number is a coincidence, it is just the first stop on their route
@@ -919,29 +919,32 @@ class RoutingTest extends TestCase
      * THE CLIENT'S BUG, end to end: "hindi pa rin na-rereceive yung document
      * pag pangatlong office na tatanggap."
      *
-     * Three departments picked on the §5 Submit form, and every office staffed
-     * the way the client's really are -- by a CLERK, not a department head.
-     * Before row access followed office_id this died at the very first receipt
-     * with a 403, and in the client's own database it read as "the third office"
-     * because the two offices ahead of it happened to be the two with practice
-     * Admin accounts.
+     * Three departments picked on the §5 Submit form. In the client's own
+     * database this read as "the third office" because the two offices ahead
+     * of it were the two with practice Admin accounts.
+     *
+     * Received here by each office's Admin, because receiving is the Admin's
+     * since 2026-09-15 ("dapat po sa admin lang yon") -- and the clerk who filed
+     * it is refused at the first receipt, which is that decision.
      *
      * Walked through the HTTP layer rather than the actions, because the 403
      * came from the policy and the policy is only reached through a request.
      */
-    public function test_three_departments_are_received_in_turn_by_ordinary_clerks(): void
+    public function test_three_departments_are_received_in_turn_by_their_admins(): void
     {
         Storage::fake('documents');
 
         [$first, $second, $third] = $this->offices();
 
-        $clerks = [
-            $first->id => $this->staff($first),
-            $second->id => $this->staff($second),
-            $third->id => $this->staff($third),
+        $clerk = $this->staff($first);
+
+        $admins = [
+            $first->id => $this->admin($first),
+            $second->id => $this->admin($second),
+            $third->id => $this->admin($third),
         ];
 
-        $this->actingAs($clerks[$first->id])
+        $this->actingAs($clerk)
             ->post(route('documents.store'), [
                 'title' => 'Three department route',
                 'document_type_id' => $this->documentType()->id,
@@ -954,13 +957,23 @@ class RoutingTest extends TestCase
 
         $document = Document::query()->latest('id')->firstOrFail();
 
+        // The clerk filed it; the clerk does not take it in.
+        $this->actingAs($clerk)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => MovementAction::Received->value,
+                'expected_movement_id' => $this->openLegId($document),
+            ])
+            ->assertForbidden();
+
+        $this->assertSame($first->id, $document->refresh()->openMovement->to_office_id);
+
         // The originating office acknowledges, and the folder leaves for stop 1.
-        $this->act($clerks[$first->id], $document, MovementAction::Received);
+        $this->act($admins[$first->id], $document, MovementAction::Received);
         $this->assertSame($second->id, $document->refresh()->openMovement->to_office_id);
 
         // Stop 1 acknowledges, and the folder leaves for stop 2 -- the hop that
         // never used to happen.
-        $this->act($clerks[$second->id], $document->refresh(), MovementAction::Received);
+        $this->act($admins[$second->id], $document->refresh(), MovementAction::Received);
         $this->assertSame(
             $third->id,
             $document->refresh()->openMovement->to_office_id,
@@ -968,7 +981,7 @@ class RoutingTest extends TestCase
         );
 
         // The third office is the end of the line, so its receipt closes it.
-        $this->act($clerks[$third->id], $document->refresh(), MovementAction::Received);
+        $this->act($admins[$third->id], $document->refresh(), MovementAction::Received);
 
         $document->refresh();
 

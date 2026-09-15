@@ -361,11 +361,12 @@ class ReleaseSignatureTest extends TestCase
     }
 
     /**
-     * Client decision, 2026-09-10: the handoff signature is not gated on
-     * Role::Admin the way approval is. In practice DocumentPolicy::view still
-     * narrows it to the office's Admins plus the document's own submitter.
+     * Client decision, 2026-09-15, reversing 2026-09-10: "nakakapag esign po
+     * yung user ... dapat po sa admin lang yon". A clerk signs nothing, not even
+     * the release of a document they filed and their office is holding; that
+     * office's Admin signs it.
      */
-    public function test_a_plain_user_holding_their_own_document_may_sign_the_release(): void
+    public function test_a_plain_user_holding_their_own_document_cannot_sign_the_release(): void
     {
         Storage::fake('documents');
 
@@ -382,10 +383,21 @@ class ReleaseSignatureTest extends TestCase
         );
 
         // The folder is still parked at the submitter's own office.
-        $this->assertTrue($clerk->can('signRelease', $document->refresh()));
-
-        // Approval remains an Admin-only decision, and stays refused.
+        $this->assertFalse($clerk->can('signRelease', $document->refresh()));
         $this->assertFalse($clerk->can('sign', $document));
+
+        $this->signedIn($clerk)
+            ->post(route('documents.signatures.store', $document), [
+                'method' => SignatureMethod::Drawn->value,
+                'image' => $this->drawnMark(),
+                'purpose' => DocumentSignature::PURPOSE_RELEASE,
+            ])
+            ->assertForbidden();
+
+        $this->assertSame(0, DocumentSignature::query()->count());
+
+        // The office's Admin, holding the same folder, may.
+        $this->assertTrue($this->admin($office)->can('signRelease', $document));
     }
 
     /** Nobody signs for an office that is not holding the folder. */
@@ -400,17 +412,19 @@ class ReleaseSignatureTest extends TestCase
     public function test_a_document_with_no_file_cannot_be_released_with_a_signature(): void
     {
         $office = $this->office('MPDO');
-        $clerk = $this->staff($office);
-        $document = $this->registerDocument($office, $clerk);
+        $admin = $this->admin($office);
+        $document = $this->registerDocument($office, $this->staff($office));
 
-        $this->assertFalse($clerk->can('signRelease', $document->refresh()));
+        // An Admin, so the refusal is about the missing file and not the role.
+        $this->assertFalse($admin->can('signRelease', $document->refresh()));
     }
 
     /**
      * Client report, 2026-09-13: "dapat makaka perma ako then papunta sa next
      * na office". On a routed document every office moves the folder on by
      * pressing Received, so the pad inside the Forward panel never opens. The
-     * release has to be signable on its own, at the origin and at every stop.
+     * release has to be signable on its own, at the origin and at every stop --
+     * by each office's Admin, since the client's decision of 2026-09-15.
      */
     public function test_each_office_on_a_route_can_sign_the_release_before_receiving_it_onward(): void
     {
@@ -420,6 +434,7 @@ class ReleaseSignatureTest extends TestCase
         $audit = $this->office('COA', 'Commission on Audit');
         $pio = $this->office('PIO', 'Public Information Office');
         $clerk = $this->staff($origin);
+        $originAdmin = $this->admin($origin);
 
         $document = app(RegisterDocument::class)->handle(
             title: 'Birth certificate endorsement',
@@ -433,7 +448,7 @@ class ReleaseSignatureTest extends TestCase
 
         $genesis = $document->openMovement;
 
-        $this->signedIn($clerk)
+        $this->signedIn($originAdmin)
             ->post(route('documents.signatures.store', $document), [
                 'method' => SignatureMethod::Drawn->value,
                 'image' => $this->drawnMark(),
@@ -445,7 +460,7 @@ class ReleaseSignatureTest extends TestCase
         $this->assertSame(DocumentSignature::PURPOSE_RELEASE, $signature->purpose);
         $this->assertSame($genesis->id, $signature->document_movement_id);
 
-        $this->actingAs($clerk)
+        $this->actingAs($originAdmin)
             ->post(route('documents.transitions.store', $document), [
                 'action' => MovementAction::Received->value,
                 'expected_movement_id' => $genesis->id,
@@ -457,9 +472,9 @@ class ReleaseSignatureTest extends TestCase
 
         // The folder has left the origin, so the origin cannot sign for it any
         // more -- and the office now holding it can.
-        $this->assertFalse($clerk->can('signRelease', $document));
+        $this->assertFalse($originAdmin->can('signRelease', $document));
 
-        $auditor = $this->staff($audit);
+        $auditor = $this->admin($audit);
 
         $this->signedIn($auditor)
             ->post(route('documents.signatures.store', $document), [

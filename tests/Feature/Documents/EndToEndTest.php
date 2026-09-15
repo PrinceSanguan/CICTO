@@ -430,15 +430,16 @@ class EndToEndTest extends TestCase
      * Returning is a DECISION, so it carries the gate every decision carries:
      * Admin-only, and not on your own document while §A6's switch is off.
      *
-     * That gate is what made APPROVAL unusable, and it is harmless here for one
-     * reason -- nothing waits on a return. The clerk below cannot return, and
-     * can still receive, so the folder keeps moving either way.
+     * Receiving is not a decision, but it is Admin-only too since the client's
+     * report of 2026-09-15: "nakakapag esign po yung user tsaka nakakapag
+     * recieve ng documents, dapat po sa admin lang yon". So the clerk below can
+     * neither return nor receive, and the office's Admin receives instead.
      *
      * The document is held away from its originating office, because at the
      * originating office nobody can return it and the test would prove nothing
      * about the clerk.
      */
-    public function test_a_clerk_cannot_return_but_can_still_move_the_folder(): void
+    public function test_a_clerk_can_neither_return_nor_receive_but_their_admin_can_receive(): void
     {
         $origin = $this->office();
         $office = $this->office('MTO', 'Treasury');
@@ -453,16 +454,7 @@ class EndToEndTest extends TestCase
             ])
             ->assertSessionHasNoErrors();
 
-        $document->refresh();
-
-        $this->actingAs($clerk)
-            ->post(route('documents.transitions.store', $document), [
-                'action' => 'received',
-                'expected_movement_id' => $document->openMovement->id,
-            ])
-            ->assertRedirect();
-
-        $document->refresh();
+        $arrived = $document->refresh()->openMovement->id;
 
         $offered = array_column(
             $this->actingAs($clerk)
@@ -472,8 +464,25 @@ class EndToEndTest extends TestCase
             'value',
         );
 
-        $this->assertNotContains('returned', $offered);
-        $this->assertContains('received', $offered, 'A clerk must still be able to receive.');
+        $this->assertSame([], $offered, 'A clerk is offered no workflow action at all.');
+
+        $this->actingAs($clerk)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'received',
+                'expected_movement_id' => $arrived,
+            ])
+            ->assertForbidden();
+
+        $this->assertSame($arrived, $document->fresh()->openMovement->id, 'A refused receipt must not move the folder.');
+
+        $this->actingAs($this->admin($office))
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'received',
+                'expected_movement_id' => $arrived,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $document->refresh();
 
         $this->actingAs($clerk)
             ->post(route('documents.transitions.store', $document), [

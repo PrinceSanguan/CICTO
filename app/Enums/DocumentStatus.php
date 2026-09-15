@@ -6,7 +6,8 @@ namespace App\Enums;
  * The internal stage vocabulary, stored as documents.status string(32).
  *
  * Spec §8 names the four values the client filters by -- Pending, In Process,
- * Rejected, Completed -- and those are literal acceptance criteria. The internal
+ * Rejected, Completed -- and those are literal acceptance criteria, except that
+ * the client renamed Rejected to Returned on 2026-09-16. The internal
  * machine is richer, so publicLabel() is the single place the two vocabularies
  * meet. Do not scatter that mapping.
  */
@@ -37,13 +38,22 @@ enum DocumentStatus: string
      * Approved maps to "In Process", not "Completed": §9 says the "Send to
      * Another Office" button appears *after* approval, so an approved document
      * is still moving.
+     *
+     * RETURNED, NOT REJECTED, and that is the client's word of 2026-09-16: "i eto
+     * po sir yung word na 'reject' gagawing 'returned'", pointing at the Track
+     * Documents status filter. A returned document used to read Pending, which
+     * left a Returned filter with nothing to find, so it reads Returned now. A
+     * legacy rejected document reads Returned too: nothing new can be rejected
+     * since Return replaced it on 2026-09-15, and a list showing the one word the
+     * client asked to be rid of, for their own pilot documents, is the bug they
+     * reported. Its own history still says rejected, because that is what it was.
      */
     public function publicLabel(): string
     {
         return match ($this) {
-            self::Initiated, self::Returned => 'Pending',
+            self::Initiated => 'Pending',
             self::UnderReview, self::Approved => 'In Process',
-            self::Rejected => 'Rejected',
+            self::Returned, self::Rejected => 'Returned',
             self::Completed => 'Completed',
         };
     }
@@ -61,9 +71,9 @@ enum DocumentStatus: string
     public function publicTone(): string
     {
         return match ($this) {
-            self::Initiated, self::Returned => 'amber',
+            self::Initiated => 'amber',
             self::UnderReview, self::Approved => 'emerald',
-            self::Rejected => 'red',
+            self::Returned, self::Rejected => 'red',
             self::Completed => 'orange',
         };
     }

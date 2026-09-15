@@ -62,10 +62,10 @@ class AdminPanelTest extends TestCase
         $admin = $this->admin($office);
         $clerk = $this->staff($office);
 
-        // One left pending, one approved, one completed, one rejected. Two of
-        // those four stages are unreachable now, so they are written directly
-        // -- see park(): the tiles bucket stored statuses, and the client's
-        // database is full of rows in both.
+        // One left pending, one approved, one completed, one returned and one
+        // legacy rejected. Approved and rejected are unreachable now, so those
+        // are written directly -- see park(): the tiles bucket stored statuses,
+        // and the client's database is full of rows in both.
         $this->registerDocument($office, $clerk);
 
         $this->park($this->registerDocument($office, $clerk), DocumentStatus::Approved);
@@ -77,6 +77,7 @@ class AdminPanelTest extends TestCase
             MovementAction::Completed,
         );
 
+        $this->park($this->registerDocument($office, $clerk), DocumentStatus::Returned);
         $this->park($this->registerDocument($office, $clerk), DocumentStatus::Rejected);
 
         $stats = $this->actingAs($admin)
@@ -84,18 +85,21 @@ class AdminPanelTest extends TestCase
             ->assertOk()
             ->viewData('page')['props']['stats'];
 
-        $this->assertSame(4, $stats['total']);
+        $this->assertSame(5, $stats['total']);
         $this->assertSame(1, $stats['pending']);
 
         // approved AND completed. Splitting them would report fewer approvals
         // than the office actually made.
         $this->assertSame(2, $stats['approved']);
-        $this->assertSame(1, $stats['rejected']);
+
+        // Returned AND legacy rejected: the client's word since 2026-09-16.
+        $this->assertSame(2, $stats['returned']);
+        $this->assertArrayNotHasKey('rejected', $stats);
 
         // The four buckets must account for every document exactly once.
         $this->assertSame(
             $stats['total'],
-            $stats['pending'] + $stats['approved'] + $stats['rejected'],
+            $stats['pending'] + $stats['approved'] + $stats['returned'],
         );
     }
 
@@ -107,18 +111,19 @@ class AdminPanelTest extends TestCase
 
         $this->registerDocument($office, $clerk);
 
+        $returned = $this->park($this->registerDocument($office, $clerk), DocumentStatus::Returned);
         $rejected = $this->park($this->registerDocument($office, $clerk), DocumentStatus::Rejected);
 
         $props = $this->actingAs($admin)
-            ->get(route('admin.dashboard', ['status' => 'rejected']))
+            ->get(route('admin.dashboard', ['status' => 'returned']))
             ->assertOk()
             ->viewData('page')['props'];
 
-        $this->assertCount(1, $props['documents']['data']);
-        $this->assertSame(
-            $rejected->control_number,
-            $props['documents']['data'][0]['control_number'],
+        $this->assertEqualsCanonicalizing(
+            [$returned->control_number, $rejected->control_number],
+            array_column($props['documents']['data'], 'control_number'),
         );
+        $this->assertSame(['returned', 'returned'], array_column($props['documents']['data'], 'bucket'));
 
         // An unknown bucket must not silently filter to nothing.
         $props = $this->actingAs($admin)
@@ -127,7 +132,7 @@ class AdminPanelTest extends TestCase
             ->viewData('page')['props'];
 
         $this->assertNull($props['filters']['status']);
-        $this->assertCount(2, $props['documents']['data']);
+        $this->assertCount(3, $props['documents']['data']);
     }
 
     public function test_the_register_is_searchable_and_scoped_to_the_office(): void
@@ -211,7 +216,7 @@ class AdminPanelTest extends TestCase
 
         foreach ($trend as $point) {
             $this->assertSame(
-                ['month', 'label', 'approved', 'pending', 'rejected'],
+                ['month', 'label', 'approved', 'pending', 'returned'],
                 array_keys($point),
             );
         }

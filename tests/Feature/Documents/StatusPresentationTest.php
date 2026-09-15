@@ -3,6 +3,7 @@
 namespace Tests\Feature\Documents;
 
 use App\Enums\DocumentStatus;
+use App\Models\Document;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\BuildsDocuments;
 use Tests\TestCase;
@@ -48,51 +49,43 @@ class StatusPresentationTest extends TestCase
     /**
      * The public scan page is seen by couriers and citizens with no account.
      * It pairs publicLabel() with a tone, and those two must come from the same
-     * mapping -- an initiated and a returned document both read "Pending", so
-     * rendering them in different colours invents a distinction on the one
-     * screen where the reader has the least context to question it.
+     * mapping -- a returned document and a legacy rejected one both read
+     * "Returned", so rendering them in different colours invents a distinction
+     * on the one screen where the reader has the least context to question it.
      */
     public function test_the_public_scan_page_pairs_its_label_and_colour(): void
     {
         $office = $this->office();
         $clerk = $this->staff($office);
-        $admin = $this->admin($office);
 
-        // initiated -> "Pending"
-        $initiated = $this->registerDocument($office, $clerk);
-
-        /*
-         * returned -> also "Pending", via a different workflow state.
-         *
-         * Written straight to the column because returning was removed as an
-         * ACTION on 2026-09-03. It is still a stored STATUS -- documents the
-         * client returned before that date sit in it, and a courier scanning
-         * one of those labels is exactly the reader this pairing protects.
-         */
-        $returned = $this->registerDocument($office, $clerk);
-        $returned->forceFill(['status' => DocumentStatus::Returned->value])->save();
-
-        $this->assertSame('returned', $returned->fresh()->status->value);
+        $this->assertSame('Pending', $this->scanned($this->registerDocument($office, $clerk))['status_label']);
 
         $tones = [];
 
-        foreach ([$initiated, $returned->fresh()] as $document) {
-            $props = $this->get('/s/'.$document->qr_token)
-                ->assertOk()
-                ->viewData('page')['props']['document'];
+        foreach ([DocumentStatus::Returned, DocumentStatus::Rejected] as $status) {
+            // Written straight to the column: nothing can reach `rejected` any
+            // more, and the scan page does not care how a document got there.
+            $document = $this->registerDocument($office, $clerk);
+            $document->forceFill(['status' => $status->value])->save();
 
-            $this->assertSame('Pending', $props['status_label']);
+            $props = $this->scanned($document->fresh());
+
+            $this->assertSame('Returned', $props['status_label']);
             $tones[] = $props['status_tone'];
         }
 
         $this->assertCount(
             1,
             array_unique($tones),
-            'Two documents both reading "Pending" rendered in different colours: '
+            'Two documents both reading "Returned" rendered in different colours: '
             .implode(' vs ', $tones),
         );
     }
 
+    /**
+     * §8's four words, with the client's rename of 2026-09-16: "i eto po sir yung
+     * word na 'reject' gagawing 'returned'". Rejected must not come back.
+     */
     public function test_the_public_labels_are_the_four_the_contract_names(): void
     {
         $labels = array_values(array_unique(array_map(
@@ -103,8 +96,56 @@ class StatusPresentationTest extends TestCase
         sort($labels);
 
         $this->assertSame(
-            ['Completed', 'In Process', 'Pending', 'Rejected'],
+            ['Completed', 'In Process', 'Pending', 'Returned'],
             $labels,
         );
+    }
+
+    /** The Track Documents status filter, which is where the client saw "Rejected". */
+    public function test_the_track_documents_filter_offers_returned_and_finds_both_kinds(): void
+    {
+        $office = $this->office();
+        $admin = $this->admin($office);
+        $clerk = $this->staff($office);
+
+        $this->registerDocument($office, $clerk);
+
+        $returned = $this->registerDocument($office, $clerk);
+        $returned->forceFill(['status' => DocumentStatus::Returned->value])->save();
+
+        $rejected = $this->registerDocument($office, $clerk);
+        $rejected->forceFill(['status' => DocumentStatus::Rejected->value])->save();
+
+        $statuses = $this->actingAs($admin)
+            ->get(route('documents.index'))
+            ->assertOk()
+            ->viewData('page')['props']['statuses'];
+
+        $this->assertSame(
+            ['Pending', 'In Process', 'Returned', 'Completed'],
+            array_column($statuses, 'label'),
+        );
+
+        // A bookmarked ?status=rejected lands on the filter that replaced it.
+        foreach (['returned', 'rejected'] as $value) {
+            $props = $this->actingAs($admin)
+                ->get(route('documents.index', ['status' => $value]))
+                ->assertOk()
+                ->viewData('page')['props'];
+
+            $this->assertEqualsCanonicalizing(
+                [$returned->control_number, $rejected->control_number],
+                array_column($props['documents']['data'], 'control_number'),
+            );
+            $this->assertSame('returned', $props['filters']['status']);
+        }
+    }
+
+    /** @return array<string, mixed> */
+    private function scanned(Document $document): array
+    {
+        return $this->get('/s/'.$document->qr_token)
+            ->assertOk()
+            ->viewData('page')['props']['document'];
     }
 }

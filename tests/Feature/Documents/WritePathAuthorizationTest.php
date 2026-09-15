@@ -24,16 +24,14 @@ use Tests\TestCase;
  * or append to a document they could not open.
  *
  * THE GAP IS NOW CLOSED FROM THE OTHER SIDE. Row access follows office_id for
- * every role (DocumentBuilder::visibleTo), so a clerk at the holding office can
- * read the folder as well as receive it -- which is what the client asked for
- * and what stops a route dying at an office with no Admin on duty. The two
- * paths agree because the read path widened to meet the write path, not because
- * the write path was narrowed.
+ * every role (DocumentBuilder::visibleTo), so everyone at the holding office can
+ * read the folder. Taking it in is a separate, role-level question: since
+ * 2026-09-15 only the office's Admin may receive, forward or sign it.
  *
  * So these tests moved with it. The subject is no longer "a clerk in the
- * holding office" -- that person is now legitimately allowed -- but a clerk in
- * an office WITH NO CONNECTION TO THE DOCUMENT, which is the boundary that
- * still has to hold and the one an id-walking attacker would probe.
+ * holding office" but someone in an office WITH NO CONNECTION TO THE DOCUMENT,
+ * which is the boundary that still has to hold and the one an id-walking
+ * attacker would probe.
  */
 class WritePathAuthorizationTest extends TestCase
 {
@@ -65,6 +63,10 @@ class WritePathAuthorizationTest extends TestCase
             $bob->can('act', [$document, MovementAction::Forwarded]),
             'A user who cannot read the document must not be able to move it.',
         );
+        $this->assertFalse(
+            $this->admin($hrmo)->can('act', [$document, MovementAction::Forwarded]),
+            'Nor may an Admin of an office the document never touched.',
+        );
 
         $this->actingAs($bob)
             ->get(route('documents.show', $document))
@@ -82,8 +84,7 @@ class WritePathAuthorizationTest extends TestCase
         $this->assertSame($mto->id, $document->fresh()->openMovement->to_office_id);
 
         // And the counterpart, stated here so the boundary is unambiguous: the
-        // clerk at the office actually holding it may act, because that is the
-        // whole point of a queue of offices that receive.
+        // clerk at the office actually holding it may open it.
         $this->assertTrue($this->staff($mto)->can('view', $document));
     }
 
@@ -105,18 +106,21 @@ class WritePathAuthorizationTest extends TestCase
 
         $document->refresh();
 
-        // Received is not a "decision", so it never hit the Admin gate -- the
-        // only thing standing between an unrelated clerk and someone else's
-        // document is view(), which is exactly why act() calls it first.
-        $outsider = $this->staff($hrmo);
+        // An Admin passes the role gate on Received, so the only thing standing
+        // between an unrelated office's Admin and someone else's document is
+        // view(), which is exactly why act() calls it first.
+        $outsider = $this->admin($hrmo);
 
         $this->assertFalse($outsider->can('act', [$document, MovementAction::Received]));
 
-        // The clerk at the holding office is not an outsider. This assertion is
-        // the client's flow of 2026-09-03 in one line: an office receives, and
-        // the office is its staff, not only its department head. Without it a
-        // route stalls at the first office whose Admin is on leave.
+        // The office holding it receives through its Admin -- not its clerk,
+        // since the client's decision of 2026-09-15. The clerk can SEE the
+        // folder on their desk; they cannot take it in.
         $this->assertTrue(
+            $this->admin($mto)->can('act', [$document, MovementAction::Received]),
+        );
+        $this->assertTrue($this->staff($mto)->can('view', $document));
+        $this->assertFalse(
             $this->staff($mto)->can('act', [$document, MovementAction::Received]),
         );
 
@@ -124,7 +128,7 @@ class WritePathAuthorizationTest extends TestCase
         // the VERB: 00-architecture.md §7 keeps those two separate.
         $this->assertFalse(
             $this->staff($mto)->can('act', [$document, MovementAction::Completed]),
-            'Complete stays Admin-only; only reading and receiving widened.',
+            'Complete stays Admin-only; only reading widened.',
         );
     }
 

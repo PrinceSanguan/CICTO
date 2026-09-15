@@ -179,6 +179,37 @@ class DocumentPolicy
         }
 
         /*
+         * Receiving and forwarding are an Admin's job, and that is the client's
+         * decision of 2026-09-15: "nakakapag esign po yung user tsaka nakakapag
+         * recieve ng documents, dapat po sa admin lang yon". It is also what the
+         * role table in their testing guide has always said -- a User files,
+         * searches and tracks; receiving and sending to another office are
+         * listed under Admin. Clerks gained both as a side effect of row access
+         * following office_id (see DocumentBuilder::visibleTo), not because
+         * anybody asked for it.
+         *
+         * Forward goes with Received because either one moves the folder: a
+         * clerk who could not receive but could still send it on would move a
+         * document their office never took in.
+         *
+         * NOT subject to the §A6 switch below. Acknowledging a folder on your
+         * desk is a receipt, not a decision, so an Admin still receives and
+         * forwards a document they filed themselves.
+         *
+         * Resubmitted is deliberately not on this list: it is the originating
+         * office sending back the correction it was asked for, open to clerk
+         * and Admin alike (2026-09-15).
+         *
+         * What it costs: an office with no active Admin cannot take a folder
+         * in. Office::withReceiver counts only Admins, so the route picker
+         * already warns about exactly those offices before the send.
+         */
+        if (in_array($action, [MovementAction::Received, MovementAction::Forwarded], true)
+            && ! $user->atLeast(Role::Admin)) {
+            return false;
+        }
+
+        /*
          * Returning a document is a DECISION, so it is gated exactly as
          * approving was: Admin-only, and subject to the §A6 separation-of-duties
          * switch below. That is safe in a way approval never was -- a route
@@ -282,16 +313,15 @@ class DocumentPolicy
      * the §A6 separation-of-duties switch. A release signature is a statement of
      * CUSTODY -- "this is the version that left our desk" -- so:
      *
-     *  - No Role::Admin gate. Whoever actually releases the folder is the person
-     *    whose name belongs on it. In practice view() still narrows this to the
-     *    office's Admins plus the document's own submitter, because a plain user
-     *    cannot read a colleague's document in the first place; widening THAT is
-     *    a separate decision with a much larger blast radius.
+     *  - Role::Admin, since 2026-09-15. This started out open to whoever held
+     *    the folder, clerks included; the client asked for e-signing to be the
+     *    Admin's alone ("dapat po sa admin lang yon"), together with receiving
+     *    -- see act(). The office's Admin is the one releasing the folder, so
+     *    theirs is the name that belongs on it.
      *
-     *  - No self-approval gate. The submitter is the one role that can always
-     *    see their own document, so applying §A6 here would mean the most common
-     *    plain-user case could never sign the handoff at all -- it would refuse
-     *    exactly the people the rule above just admitted.
+     *  - No self-approval gate. Releasing a folder your office holds is custody,
+     *    not assent, so an Admin still signs the release of a document they
+     *    filed themselves.
      *
      * Nothing here blocks forwarding. Signing before a handoff is offered, not
      * required; DocumentWorkflowController forwards with or without it.
@@ -303,6 +333,11 @@ class DocumentPolicy
         }
 
         if (! $this->view($user, $document)) {
+            return false;
+        }
+
+        // Admin-only, the client's decision of 2026-09-15 -- see the docblock.
+        if (! $user->atLeast(Role::Admin)) {
             return false;
         }
 

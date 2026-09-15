@@ -21,7 +21,7 @@ type Props = {
         label: string;
         approved: number;
         pending: number;
-        rejected: number;
+        returned: number;
     }[];
     pending: PendingRow[];
 };

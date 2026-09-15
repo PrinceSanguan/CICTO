@@ -16,7 +16,8 @@ use Inertia\Response;
 /**
  * §4 Admin Panel. Scoped to the admin's own office by DocumentBuilder::visibleTo.
  *
- * The client's design names four tiles -- Total, Pending, Approved, Rejected --
+ * The client's design names four tiles -- Total, Pending, Approved, Rejected
+ * (Returned since 2026-09-16) --
  * over a workflow that has six states. The mapping is spelled out in
  * BUCKETS below rather than left implicit, because "Pending" is the one a
  * records officer will be asked to defend and it has to mean the same thing on
@@ -209,7 +210,7 @@ class AdminDashboardController extends Controller
             'total' => (int) $counts->sum(),
             'pending' => $sum('pending'),
             'approved' => $sum('approved'),
-            'rejected' => $sum('rejected'),
+            'returned' => $sum('returned'),
         ];
     }
 }

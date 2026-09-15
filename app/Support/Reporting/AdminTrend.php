@@ -8,7 +8,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * The Admin Panel's approved / pending / rejected trend.
+ * The Admin Panel's approved / pending / returned trend.
  *
  * Extracted from AdminDashboardController because §4 shows this same chart on
  * two screens -- the panel dashboard and the panel's Reports page. Two copies
@@ -25,12 +25,16 @@ class AdminTrend
      * approved first, and splitting them would make the Approved figure read
      * lower than the number of documents the office actually approved.
      *
+     * `returned` was `rejected` until 2026-09-16, when the client asked for the
+     * word to go. A returned document moved out of Pending into it, so the tile
+     * named Returned counts what it names, and legacy rejections count with it.
+     *
      * @var array<string, list<string>>
      */
     public const BUCKETS = [
-        'pending' => ['initiated', 'under_review', 'returned'],
+        'pending' => ['initiated', 'under_review'],
         'approved' => ['approved', 'completed'],
-        'rejected' => ['rejected'],
+        'returned' => ['returned', 'rejected'],
     ];
 
     /** @var list<string> */
@@ -95,7 +99,7 @@ class AdminTrend
                 'label' => $month->format('M'),
                 'approved' => $buckets[$key]['approved'] ?? 0,
                 'pending' => $buckets[$key]['pending'] ?? 0,
-                'rejected' => $buckets[$key]['rejected'] ?? 0,
+                'returned' => $buckets[$key]['returned'] ?? 0,
             ];
         }
 

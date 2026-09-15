@@ -28,7 +28,7 @@ class IndexDocumentRequest extends FormRequest
             'q' => ['nullable', 'string', 'max:100'],
 
             // The §8 filter uses the client-facing names (Pending, In Process,
-            // Rejected, Completed), which map to one or two internal statuses
+            // Returned, Completed), which map to one or two internal statuses
             // each. DocumentStatus::fromPublicValue expands them.
             'status' => ['nullable', 'string', Rule::in($publicStatuses)],
 
@@ -50,8 +50,14 @@ class IndexDocumentRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $status = $this->input('status');
+
         $this->merge([
             'q' => is_string($this->input('q')) ? trim($this->input('q')) : null,
+            // Rejected became Returned on 2026-09-16. A bookmarked or shared
+            // link still carrying the old value lands on the filter that
+            // replaced it rather than on a validation error.
+            'status' => $status === 'rejected' ? 'returned' : $status,
         ]);
     }
 

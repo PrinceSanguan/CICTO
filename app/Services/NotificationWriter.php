@@ -47,10 +47,9 @@ class NotificationWriter
         // they had not filed themselves, so a clerk's notification would have
         // been exactly that dead bell. Row access now follows office_id rather
         // than role (see DocumentBuilder::visibleTo), so the clerk can open the
-        // folder -- and since a clerk can now RECEIVE it, they are the person
-        // most likely to be waiting for this notification. Telling only the
-        // Admin would leave the counter staff who do the receiving unaware that
-        // anything arrived.
+        // folder. Receiving it is the Admin's job since 2026-09-15, but the
+        // office shares one view of its documents (2026-09-13), so its clerks
+        // are still told what has arrived.
         //
         // NotificationRecipientsTest asserts the invariant that actually
         // matters, and it is unchanged: every recipient is checked against

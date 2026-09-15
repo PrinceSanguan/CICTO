@@ -10,7 +10,7 @@ import {
 } from 'recharts';
 
 /**
- * The Admin Panel's Reports card: approved / pending / rejected per month.
+ * The Admin Panel's Reports card: approved / pending / returned per month.
  *
  * Imported through the lazy chart bundle, never directly — recharts is ~95 KB
  * gzipped and has no business in the main bundle on an LGU connection.
@@ -21,7 +21,7 @@ export type AdminTrendPoint = {
     label: string;
     approved: number;
     pending: number;
-    rejected: number;
+    returned: number;
 };
 
 const AXIS = { fontSize: 11, fill: 'currentColor' } as const;
@@ -38,7 +38,7 @@ const TOOLTIP_STYLE = {
 const SERIES = [
     { key: 'approved', name: 'Approved', colour: '#2F7BE0' },
     { key: 'pending', name: 'Pending', colour: '#EFC65B' },
-    { key: 'rejected', name: 'Rejected', colour: '#D5342A' },
+    { key: 'returned', name: 'Returned', colour: '#D5342A' },
 ] as const;
 
 export function AdminTrendChart({ data }: { data: AdminTrendPoint[] }) {

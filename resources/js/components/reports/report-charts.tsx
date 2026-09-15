@@ -32,7 +32,7 @@ export type MonthByStatus = {
     in_process: number;
     for_approval: number;
     completed: number;
-    rejected: number;
+    returned: number;
 };
 export type TrendPoint = { month: string; label: string; days: number | null };
 export type StatusSlice = { status: string; count: number };
@@ -193,7 +193,7 @@ export const REPORT_SERIES = [
     { key: 'in_process', name: 'In Process', colour: '#6FBF9A' },
     { key: 'for_approval', name: 'For Approval', colour: '#2F7BE0' },
     { key: 'completed', name: 'Completed', colour: '#DD7A4E' },
-    { key: 'rejected', name: 'Rejected', colour: '#E0473C' },
+    { key: 'returned', name: 'Returned', colour: '#E0473C' },
 ] as const;
 
 export function MonthlyByStatusChart({ data }: { data: MonthByStatus[] }) {
@@ -251,7 +251,7 @@ export function StatusPieChart({ data }: { data: StatusSlice[] }) {
         'In Process': '#6FBF9A',
         'For Approval': '#2F7BE0',
         Completed: '#DD7A4E',
-        Rejected: '#E0473C',
+        Returned: '#E0473C',
     };
 
     const total = data.reduce((sum, slice) => sum + slice.count, 0);

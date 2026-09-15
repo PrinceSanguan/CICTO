@@ -96,12 +96,11 @@ class Office extends Model
      *
      * WHY THIS EXISTS. §5's department list and §9's send-to list are
      * `Office::active()->ordered()` -- every active office, staffed or not. So
-     * forwarding is always possible and RECEIVING IS NOT: DocumentPolicy::view
-     * grants office-scoped read to Role::Admin only, and act() needs view()
-     * before it looks at anything else. Send a document to an office with no
-     * Admin account and it arrives, becomes the open leg, starts counting
-     * against its deadline -- and no one on earth can press Received except its
-     * own submitter and a Super Admin. The route behind it waits forever.
+     * forwarding is always possible and RECEIVING IS NOT: DocumentPolicy::act()
+     * lets only an Admin press Received (the client's decision of 2026-09-15).
+     * Send a document to an office with no active Admin and it arrives, becomes
+     * the open leg, starts counting against its deadline -- and nobody but a
+     * Super Admin can press Received. The route behind it waits forever.
      *
      * That is the client's "hindi na-rereceive sa pangatlong office", and the
      * office number is a coincidence: it is simply the first stop on their

@@ -79,7 +79,7 @@ class SuperAdminReportController extends Controller
     }
 
     /**
-     * New, approved and rejected documents per month.
+     * New, approved and returned documents per month.
      *
      * Distinct from the trend above: that one buckets a document by its
      * CURRENT status, so a document approved in March and completed in April
@@ -101,9 +101,11 @@ class SuperAdminReportController extends Controller
                     ->where('document_movements.to_status', 'approved'),
                 'document_movements.created_at',
             ),
-            'rejected' => $this->series->monthly(
+            // Returned since 2026-09-16, the client's word for it. Rejections
+            // made before Return replaced Reject still count here.
+            'returned' => $this->series->monthly(
                 DocumentMovement::query()
-                    ->where('document_movements.to_status', 'rejected'),
+                    ->whereIn('document_movements.to_status', ['returned', 'rejected']),
                 'document_movements.created_at',
             ),
         ]);

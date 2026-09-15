@@ -131,11 +131,9 @@ class NotificationRecipientsTest extends TestCase
          * It used to assert the clerk gets nothing, because row access followed
          * role and a clerk could not open a document they had not filed -- so a
          * notification would have been a bell that 403s. Row access now follows
-         * office_id, and a clerk can both open AND receive the folder that
-         * arrives for their office, so the clerk is precisely who needs telling.
-         * Notifying only the Admin left the counter staff doing the receiving
-         * with no idea anything had come in, which is how a route stalls at an
-         * office that is perfectly well staffed.
+         * office_id, and a clerk can open the folder that arrives for their
+         * office. Receiving it is the Admin's since 2026-09-15, but the office
+         * shares one view of its documents, so the clerk is still told.
          *
          * The invariant this file exists for is untouched: every recipient is
          * still someone who can open what they were told about, asserted

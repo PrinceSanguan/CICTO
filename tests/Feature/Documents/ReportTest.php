@@ -103,7 +103,7 @@ class ReportTest extends TestCase
 
         // §8's four words are acceptance criteria, not internal vocabulary.
         $this->assertEqualsCanonicalizing(
-            ['Pending', 'In Process', 'Rejected', 'Completed'],
+            ['Pending', 'In Process', 'Returned', 'Completed'],
             $rows->keys()->all(),
         );
         $this->assertSame(1, $rows['Pending']);

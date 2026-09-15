@@ -32,7 +32,7 @@ type MonthByStatus = {
     in_process: number;
     for_approval: number;
     completed: number;
-    rejected: number;
+    returned: number;
 };
 type TrendPoint = { month: string; label: string; days: number | null };
 type StatusSlice = { status: string; count: number };

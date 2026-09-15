@@ -14,7 +14,7 @@ import { SeriesChart } from '@/components/admin/series-chart';
 const WORKFLOW = [
     { key: 'approved', name: 'Approved', colour: '#2F7BE0' },
     { key: 'pending', name: 'Pending', colour: '#EFC65B' },
-    { key: 'rejected', name: 'Rejected', colour: '#D5342A' },
+    { key: 'returned', name: 'Returned', colour: '#D5342A' },
 ] as const;
 
 const ACTIVITY = [
@@ -26,7 +26,7 @@ const ACTIVITY = [
 const PROCESSING = [
     { key: 'new', name: 'New', colour: '#2F7BE0' },
     { key: 'approved', name: 'Approved', colour: '#2FA36B' },
-    { key: 'rejected', name: 'Rejected', colour: '#EFC65B' },
+    { key: 'returned', name: 'Returned', colour: '#EFC65B' },
 ] as const;
 
 export default function SuperAdminChartBundle({

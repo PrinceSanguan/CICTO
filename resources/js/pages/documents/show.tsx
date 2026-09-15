@@ -81,6 +81,17 @@ export default function ShowDocument({
     /** The version a signature made right now would bind to. files arrive newest-first. */
     const currentFile = files[0] ?? null;
 
+    /*
+     * A returned document has exactly one way on, and it carries the corrected
+     * file. So it starts SELECTED: the client, looking at a bare Resubmit button
+     * under a notice saying "attach the corrected document", reported that
+     * there was no way to upload one (2026-09-16). The upload field only renders
+     * once Resubmit is chosen, so choosing it for them is what puts it on screen.
+     */
+    const onlyResubmit =
+        document.available_actions.length === 1 &&
+        document.available_actions[0].value === 'resubmitted';
+
     const action = useForm<{
         action: string;
         to_office_ids: number[];
@@ -91,7 +102,7 @@ export default function ShowDocument({
         file: File | null;
         replace_reason: string;
     }>({
-        action: '',
+        action: onlyResubmit ? 'resubmitted' : '',
         to_office_ids: [],
         remarks: '',
         // Mirrors App\Enums\SignatureMethod. Only `drawn` is offered here; the
@@ -181,7 +192,11 @@ export default function ShowDocument({
                 forceFormData:
                     value === 'resubmitted' && action.data.file !== null,
                 onSuccess: () => {
+                    // reset() restores the defaults captured at first render,
+                    // which pre-select Resubmit on a returned document. Once
+                    // it has gone that is stale, so nothing stays selected.
                     action.reset();
+                    action.setData('action', '');
                     setSignOnSend(false);
                 },
             },
@@ -1270,15 +1285,14 @@ export default function ShowDocument({
                                     </ul>
 
                                     {/*
-                                        Offered to whoever holds the folder, not
-                                        only to those who may approve it. On a
-                                        routed document the office moves it on
-                                        by pressing Received, never Forward, so
-                                        the release pad inside the Forward panel
-                                        never opened -- the submitter at the
-                                        origin, and every clerk down the route,
-                                        had no way to sign at all. Approval wins
-                                        when both are allowed; the release
+                                        Offered on its own, not only inside the
+                                        Forward panel. On a routed document the
+                                        office moves it on by pressing Received,
+                                        never Forward, so the release pad there
+                                        never opened and no office down the
+                                        route could sign. Both flags are
+                                        Admin-only (client, 2026-09-15). Approval
+                                        wins when both are allowed; the release
                                         signature is still offered afterwards,
                                         because they are different attestations.
                                     */}

@@ -80,20 +80,19 @@ final class KnowledgeBase
                     ],
                     [
                         'title' => 'In Process',
-                        'body' => 'An office has received the document and is working on it. On the document page itself this stage is named **Under Review**. If the document was submitted to several offices, each one presses **Received** when it arrives and the document moves straight on to the next office on the list -- there is no approval step to wait for.',
+                        'body' => 'An office has received the document and is working on it. On the document page itself this stage is named **Under Review**. If the document was submitted to several offices, each one presses **Received** when it arrives and the document moves straight on to the next office on the list -- there is no approval step to wait for. Only an office Admin can press **Received**, send a document to another office, or sign it.',
                     ],
                     /*
-                     * Approved and Rejected are listed although nothing can
-                     * reach either, and deliberately: both are still STORED
-                     * statuses on documents processed before their buttons went
-                     * (approval on 2026-09-03; reject became Return on
-                     * 2026-09-15), and somebody looking at one of those and
-                     * reaching for this article has to find the word they are
-                     * looking at.
+                     * Approved is listed although nothing can reach it, and
+                     * deliberately: it is still a STORED status on documents
+                     * processed before approval went on 2026-09-03, and
+                     * somebody looking at one of those and reaching for this
+                     * article has to find the word they are looking at.
                      *
-                     * Returned is the opposite case and the entry says so --
-                     * it is what an office does today when a document needs
-                     * fixing.
+                     * Rejected has no entry of its own since 2026-09-16: the
+                     * client asked for the word to go, legacy rejected
+                     * documents read Returned in every list, and the Returned
+                     * entry says what is different about them.
                      */
                     [
                         'title' => 'Approved',
@@ -101,11 +100,7 @@ final class KnowledgeBase
                     ],
                     [
                         'title' => 'Returned',
-                        'body' => 'An office sent the document back to the office that filed it, to be corrected. The reason is required, so it is always in the document history, and the originating office and the person who submitted it are notified. In the document list it reads **Pending**, because it is waiting on the originating office. To fix it, open the document, attach the corrected file, and press **Resubmit**: it goes straight back to the office that returned it, and any offices still queued on its route carry on after that. It stays the same document throughout -- the same control number, the same QR label and one unbroken history. Only an office Admin can return a document, and only while it is with their office.',
-                    ],
-                    [
-                        'title' => 'Rejected',
-                        'body' => 'An older status. Documents refused before the Reject button was replaced by **Return** may still show it; it is a final state and the reason is recorded in the document history. Nothing new is marked Rejected -- a document that needs fixing is returned for correction instead.',
+                        'body' => 'An office sent the document back to the office that filed it, to be corrected. The reason is required, so it is always in the document history, and the originating office and the person who submitted it are notified. In the document list it reads **Returned**, and the Status filter on Track Documents finds it under that name. To fix it, open the document, attach the corrected file, and press **Resubmit**: it goes straight back to the office that returned it, and any offices still queued on its route carry on after that. It stays the same document throughout -- the same control number, the same QR label and one unbroken history. Only an office Admin can return a document, and only while it is with their office. Documents refused under the old Reject button also read **Returned** in the list, but that refusal was final: they cannot be resubmitted, so file the corrected document again.',
                     ],
                     [
                         // The design's fifth status is "Released". No screen in

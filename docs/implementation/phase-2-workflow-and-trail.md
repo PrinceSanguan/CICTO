@@ -161,6 +161,29 @@ safely inside the limit — and its unique index is what makes the sweep idempot
 > submitter; `NotificationType::Resubmitted` goes to the office it is sent back
 > to. `rejected` stays a terminal legacy status.
 >
+> **AMENDED 2026-09-15 — receiving and signing are the Admin's.** The client,
+> testing as a clerk: *"nakakapag esign po yung user tsaka nakakapag recieve ng
+> documents, dapat po sa admin lang yon"*. `DocumentPolicy::act()` now refuses
+> `received` and `forwarded` to anyone below Admin, and `signRelease()` does the
+> same (`sign()` always did). Forward goes with Received because either one
+> moves the folder. `resubmitted` stays open to the whole originating office.
+> Question A6 applies to neither: an Admin still receives, forwards and
+> release-signs a document they filed. The cost is that an office with no active
+> Admin cannot take a folder in; `Office::withReceiver` already counted only
+> Admins, so the route picker warns about exactly those offices. Clerks keep
+> office-wide read access and arrival notifications.
+>
+> **AMENDED 2026-09-16 — "Returned" is the public word too.** The Track
+> Documents status filter still offered *Rejected*, and the client asked for
+> that word to go as well. `DocumentStatus::publicLabel()` now gives §8's four
+> names as Pending, In Process, **Returned**, Completed. A `returned` document
+> reads Returned rather than Pending, so the filter finds what it names, and a
+> legacy `rejected` document reads Returned too — it stays terminal and cannot
+> be resubmitted, which the help article says. The admin tile, the report
+> charts and the Super Admin processing series count `returned` and legacy
+> `rejected` together under `returned`. A document's own history is unchanged:
+> a leg that was a rejection still says so.
+>
 > **Why it was breaking.** Approving is Admin-only and, with self-approval off,
 > forbidden to the document's own author (question A6 below). Any queued office
 > without a qualifying approver held the folder for good, and every stop behind

@@ -9,13 +9,13 @@ import type { LucideIcon } from 'lucide-react';
  * red-versus-green, the most common confusion.
  */
 
-export type TileTone = 'total' | 'pending' | 'approved' | 'rejected';
+export type TileTone = 'total' | 'pending' | 'approved' | 'returned';
 
 const TONES: Record<TileTone, { surface: string; text: string }> = {
     total: { surface: 'bg-[#7BAE9E]', text: 'text-white' },
     pending: { surface: 'bg-[#EFC65B]', text: 'text-[#4A3A0B]' },
     approved: { surface: 'bg-[#2F7BE0]', text: 'text-white' },
-    rejected: { surface: 'bg-[#D5342A]', text: 'text-white' },
+    returned: { surface: 'bg-[#D5342A]', text: 'text-white' },
 };
 
 export function StatTile({
