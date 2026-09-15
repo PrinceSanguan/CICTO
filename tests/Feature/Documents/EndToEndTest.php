@@ -316,10 +316,77 @@ class EndToEndTest extends TestCase
     }
 
     /**
-     * A corrected file is attached to a resubmit and to nothing else, and a
-     * resubmit that fails attaches nothing at all.
+     * Client request, 2026-09-16: "when returning make it the office also can
+     * able to upload corrected document". The returning office attaches the
+     * corrected copy in the same submit as the Return, and it lands as the next
+     * version of the SAME document, on the leg that carried it back.
      */
-    public function test_a_corrected_file_only_rides_along_with_a_resubmit(): void
+    public function test_the_returning_office_can_attach_the_corrected_file(): void
+    {
+        Storage::fake('documents');
+
+        $hrmo = $this->office('HRMO', 'Human Resource');
+        $pio = $this->office('PIO', 'Public Information Office');
+        $clerk = $this->staff($hrmo);
+        $pioAdmin = $this->admin($pio);
+        $document = $this->registerDocument($hrmo, $clerk);
+
+        $this->actingAs($clerk)
+            ->post(route('documents.files.store', $document), [
+                'file' => UploadedFile::fake()->createWithContent('memo.pdf', '%PDF-1.4 original'),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs($this->admin($hrmo))
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'forwarded',
+                'to_office_id' => $pio->id,
+                'expected_movement_id' => $document->fresh()->openMovement->id,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs($pioAdmin)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'returned',
+                'remarks' => 'Wrong signatory. Corrected copy attached.',
+                'file' => UploadedFile::fake()->createWithContent('memo-corrected.pdf', '%PDF-1.4 CORRECTED BY PIO'),
+                'replace_reason' => 'Signatory corrected.',
+                'expected_movement_id' => $document->fresh()->openMovement->id,
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        $document->refresh();
+
+        $this->assertSame(DocumentStatus::Returned, $document->status);
+        $this->assertSame($hrmo->id, $document->openMovement->to_office_id);
+
+        $corrected = $document->currentFile()->firstOrFail();
+        $this->assertSame(2, $corrected->version, 'The correction is the next version of the SAME document.');
+        $this->assertSame('memo-corrected.pdf', $corrected->original_name);
+        $this->assertSame($pioAdmin->id, $corrected->uploaded_by_id);
+        $this->assertSame($document->openMovement->id, $corrected->document_movement_id, 'Recorded against the return leg.');
+        Storage::disk('documents')->assertExists($corrected->path);
+
+        // The originating office resubmits it as it stands, without uploading again.
+        $this->actingAs($clerk)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'resubmitted',
+                'expected_movement_id' => $document->openMovement->id,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $document->refresh();
+        $this->assertSame($pio->id, $document->openMovement->to_office_id);
+        $this->assertSame(2, $document->currentFile()->firstOrFail()->version);
+        $this->assertSame(2, $document->files()->count());
+    }
+
+    /**
+     * A corrected file is attached to a return or a resubmit and to nothing
+     * else, and a resubmit that fails attaches nothing at all.
+     */
+    public function test_a_corrected_file_only_rides_along_with_a_return_or_resubmit(): void
     {
         Storage::fake('documents');
 

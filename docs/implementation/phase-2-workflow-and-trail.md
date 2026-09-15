@@ -184,6 +184,14 @@ safely inside the limit — and its unique index is what makes the sweep idempot
 > `rejected` together under `returned`. A document's own history is unchanged:
 > a leg that was a rejection still says so.
 >
+> **AMENDED 2026-09-16 — the returning office can attach the correction.** The
+> client asked that the office pressing Return also be able to upload the
+> corrected document. `returned` now accepts the same optional `file` and
+> `replace_reason` as `resubmitted`, stored by `StoreDocumentFile` in the same
+> transaction as the return and recorded against the returned leg. It still
+> needs `uploadVersion`, which the office holding the document always has. The
+> originating office can then resubmit without uploading again.
+>
 > **Why it was breaking.** Approving is Admin-only and, with self-approval off,
 > forbidden to the document's own author (question A6 below). Any queued office
 > without a qualifying approver held the folder for good, and every stop behind

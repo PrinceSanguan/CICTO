@@ -98,7 +98,7 @@ export default function ShowDocument({
         remarks: string;
         signature_method: string;
         signature_image: string | null;
-        // The corrected document, attached to a Resubmit.
+        // The corrected document, attached to a Return or a Resubmit.
         file: File | null;
         replace_reason: string;
     }>({
@@ -146,10 +146,12 @@ export default function ShowDocument({
         action.transform((data) => {
             const forwarding = value === 'forwarded';
 
-            // The corrected file rides along with a resubmit and nothing else;
-            // the server refuses a file on any other action rather than
-            // silently dropping it.
-            const correcting = value === 'resubmitted' && data.file !== null;
+            // The corrected file rides along with a return or a resubmit and
+            // nothing else; the server refuses a file on any other action
+            // rather than silently dropping it.
+            const correcting =
+                (value === 'resubmitted' || value === 'returned') &&
+                data.file !== null;
 
             // Only a forward that was actually signed carries the block. The
             // server reads a PRESENT signature_method as "this submit signs",
@@ -190,7 +192,8 @@ export default function ShowDocument({
             {
                 preserveScroll: true,
                 forceFormData:
-                    value === 'resubmitted' && action.data.file !== null,
+                    (value === 'resubmitted' || value === 'returned') &&
+                    action.data.file !== null,
                 onSuccess: () => {
                     // reset() restores the defaults captured at first render,
                     // which pre-select Resubmit on a returned document. Once
@@ -711,33 +714,59 @@ export default function ShowDocument({
 
                                         {/*
                                             The corrected file travels WITH the
-                                            resubmit, so fixing a returned
-                                            document is one step rather than an
-                                            upload in one panel and a send in
-                                            another. Optional: a correction can
-                                            be a signature on the paper folder.
+                                            return or the resubmit, so it is one
+                                            step rather than an upload in one
+                                            panel and a send in another. Offered
+                                            on Return since 2026-09-16: the
+                                            client asked for the returning office
+                                            to be able to attach the corrected
+                                            copy itself. Optional either way: a
+                                            correction can be a signature on the
+                                            paper folder.
                                         */}
-                                        {isResubmit && (
+                                        {(isResubmit || isReturn) && (
                                             <div className="grid gap-2 rounded-md border border-dashed p-3">
                                                 <p className="text-xs text-copy">
-                                                    Resubmitting sends this
-                                                    document back to{' '}
-                                                    <span className="font-medium text-navy">
-                                                        {returnNotice?.returned_by_office ??
-                                                            'the office that returned it'}
-                                                    </span>
-                                                    . It keeps its control
-                                                    number, QR code and history.
+                                                    {isResubmit ? (
+                                                        <>
+                                                            Resubmitting sends
+                                                            this document back
+                                                            to{' '}
+                                                            <span className="font-medium text-navy">
+                                                                {returnNotice?.returned_by_office ??
+                                                                    'the office that returned it'}
+                                                            </span>
+                                                            . It keeps its
+                                                            control number, QR
+                                                            code and history.
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            If your office
+                                                            already has the
+                                                            corrected copy,
+                                                            attach it here. It
+                                                            goes back to{' '}
+                                                            <span className="font-medium text-navy">
+                                                                {document.originating_office ??
+                                                                    'the office that filed it'}
+                                                            </span>{' '}
+                                                            as the current
+                                                            version, so they
+                                                            only need to check
+                                                            it and resubmit.
+                                                        </>
+                                                    )}
                                                 </p>
                                                 <label
-                                                    htmlFor="resubmit-file"
+                                                    htmlFor="corrected-file"
                                                     className="text-sm font-medium"
                                                 >
                                                     Corrected document
                                                     (optional)
                                                 </label>
                                                 <Input
-                                                    id="resubmit-file"
+                                                    id="corrected-file"
                                                     type="file"
                                                     disabled={action.processing}
                                                     onChange={(event) =>

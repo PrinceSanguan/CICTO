@@ -48,27 +48,33 @@ class DocumentWorkflowController extends Controller
         $action = $request->enum('action', MovementAction::class);
 
         /*
-         * Resubmitting a returned document, with the corrected file riding
-         * along when one was attached -- one submit, one transaction, both or
-         * neither. The client's point on 2026-09-15 was that the correction
-         * lands on the SAME document, so it is appended to this document's
-         * version history rather than filed as anything new.
+         * Returning or resubmitting, with the corrected file riding along when
+         * one was attached -- one submit, one transaction, both or neither. The
+         * client's point on 2026-09-15 was that the correction lands on the
+         * SAME document, so it is appended to this document's version history
+         * rather than filed as anything new. On 2026-09-16 they asked for the
+         * office pressing Return to be able to attach the corrected copy too.
          *
          * The file is stored AFTER the transition, so a stale tab that the
          * transition refuses never writes an upload at all, and the new version
-         * is recorded against the leg that carried it back.
+         * is recorded against the leg that carried it.
          */
-        if ($action === MovementAction::Resubmitted) {
-            [$moved, $file] = DB::transaction(function () use ($request, $document, $transition, $store): array {
+        if ($action === MovementAction::Resubmitted || $action === MovementAction::Returned) {
+            [$moved, $file] = DB::transaction(function () use ($request, $document, $action, $transition, $advance, $store): array {
                 $moved = $transition->handle(
                     document: $document,
-                    action: MovementAction::Resubmitted,
+                    action: $action,
                     actor: $request->user(),
                     remarks: $request->input('remarks'),
                     toOfficeId: null,
                     expectedMovementId: $request->integer('expected_movement_id') ?: null,
                     request: $request,
                 );
+
+                // A no-op for both actions today: neither advances nor tears
+                // down a route. Called anyway, so a route rule added for either
+                // one later is not silently skipped on this path.
+                $advance->handle($document, $action, $request->user(), $request);
 
                 $upload = $request->file('file');
 
@@ -78,7 +84,9 @@ class DocumentWorkflowController extends Controller
                         upload: $upload,
                         uploader: $request->user(),
                         movement: $moved,
-                        replaceReason: $request->input('replace_reason') ?: 'Corrected after being returned.',
+                        replaceReason: $request->input('replace_reason') ?: ($action === MovementAction::Returned
+                            ? 'Corrected by the office that returned it.'
+                            : 'Corrected after being returned.'),
                     )
                     : null;
 
@@ -86,7 +94,9 @@ class DocumentWorkflowController extends Controller
             });
 
             $office = $this->officeNames(array_filter([$moved->to_office_id]))[0] ?? 'the office that returned it';
-            $message = "{$document->control_number} resubmitted to {$office}.";
+            $message = $action === MovementAction::Returned
+                ? $this->confirmation($action, $document)
+                : "{$document->control_number} resubmitted to {$office}.";
 
             return back()->with('toast', [
                 'type' => 'success',

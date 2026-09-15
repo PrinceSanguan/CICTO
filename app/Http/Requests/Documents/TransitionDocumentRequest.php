@@ -64,9 +64,9 @@ class TransitionDocumentRequest extends FormRequest
             return false;
         }
 
-        // A corrected file riding along with a resubmit is an upload, so it
-        // asks the upload question too. The originating office always passes
-        // it; this only refuses a crafted request.
+        // A corrected file riding along with a return or a resubmit is an
+        // upload, so it asks the upload question too. The office holding the
+        // document always passes it; this only refuses a crafted request.
         if ($this->hasFile('file') && ! $this->user()->can('uploadVersion', $document)) {
             return false;
         }
@@ -167,8 +167,10 @@ class TransitionDocumentRequest extends FormRequest
             'remarks' => ['nullable', 'string', 'max:2000'],
 
             /*
-             * The corrected document, attached to a resubmit so the fix and the
-             * send are one click. Optional -- a correction can be a signature
+             * The corrected document, attached to a resubmit -- or, since
+             * 2026-09-16, to the return itself, by the office sending it back --
+             * so the fix and the send are one click. Optional -- a correction
+             * can be a signature
              * on the paper folder -- and the same rules as every other upload,
              * because it lands in the same version history through the same
              * StoreDocumentFile.
@@ -234,11 +236,12 @@ class TransitionDocumentRequest extends FormRequest
 
             $this->validateSignature($validator, $action);
 
-            // The corrected file belongs to a resubmit and nothing else: on any
-            // other action it would be silently dropped, which is worse than
-            // saying so.
-            if ($this->hasFile('file') && $action !== MovementAction::Resubmitted) {
-                $validator->errors()->add('file', 'A corrected file can only be attached when resubmitting a returned document.');
+            // The corrected file belongs to a return or a resubmit and nothing
+            // else: on any other action it would be silently dropped, which is
+            // worse than saying so.
+            if ($this->hasFile('file')
+                && ! in_array($action, [MovementAction::Returned, MovementAction::Resubmitted], true)) {
+                $validator->errors()->add('file', 'A corrected file can only be attached when returning or resubmitting a document.');
             }
 
             if ($action === MovementAction::Forwarded) {
