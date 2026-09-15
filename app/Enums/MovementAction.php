@@ -17,6 +17,13 @@ enum MovementAction: string
     case Approved = 'approved';
     case Rejected = 'rejected';
     case Returned = 'returned';
+
+    /**
+     * The originating office sending a returned document back, corrected, to
+     * the office that returned it. Same document, same control number, same
+     * QR label -- the trail carries straight on from the return.
+     */
+    case Resubmitted = 'resubmitted';
     case Completed = 'completed';
     case Archived = 'archived';
     case Restored = 'restored';
@@ -30,6 +37,7 @@ enum MovementAction: string
             self::Approved => 'Approved',
             self::Rejected => 'Rejected',
             self::Returned => 'Returned',
+            self::Resubmitted => 'Resubmitted',
             self::Completed => 'Completed',
             self::Archived => 'Archived',
             self::Restored => 'Restored',
@@ -46,6 +54,7 @@ enum MovementAction: string
             self::Approved => 'approved',
             self::Rejected => 'rejected',
             self::Returned => 'returned',
+            self::Resubmitted => 'resubmitted',
             self::Completed => 'completed',
             self::Archived => 'archived',
             self::Restored => 'restored',

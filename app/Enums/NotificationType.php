@@ -17,6 +17,7 @@ enum NotificationType: string
     case Forwarded = 'document_forwarded';
     case Returned = 'document_returned';
     case Rejected = 'document_rejected';
+    case Resubmitted = 'document_resubmitted';
     case Pending = 'document_pending';
     case Overdue = 'document_overdue';
 
@@ -27,6 +28,7 @@ enum NotificationType: string
             self::Forwarded => 'Document forwarded to your office',
             self::Returned => 'Document returned',
             self::Rejected => 'Document rejected',
+            self::Resubmitted => 'Corrected document resubmitted',
             self::Pending => 'Document due soon',
             self::Overdue => 'Document overdue',
         };
@@ -39,6 +41,7 @@ enum NotificationType: string
             self::Forwarded => 'send',
             self::Returned => 'undo-2',
             self::Rejected => 'circle-x',
+            self::Resubmitted => 'refresh-cw',
             self::Pending => 'clock',
             self::Overdue => 'triangle-alert',
         };

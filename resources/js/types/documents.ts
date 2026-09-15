@@ -66,6 +66,15 @@ export type RouteOrigin = {
     status_tone: Tone;
 };
 
+/** Mirrors DocumentPresenter::returnNotice. */
+export type ReturnNotice = {
+    returned_by: string | null;
+    /** The office that returned it, and where Resubmit sends it back to. */
+    returned_by_office: string | null;
+    returned_at: string | null;
+    remarks: string | null;
+};
+
 /** One of the other documents produced by a single simultaneous submit. */
 export type SubmissionSibling = {
     id: number;
@@ -95,6 +104,11 @@ export type DocumentDetail = DocumentListItem & {
      * step, so the panel names every department the submitter picked.
      */
     route_origin: RouteOrigin | null;
+    /**
+     * Why a returned document is back at its originating office. Null unless
+     * the document is `returned`. Resubmit sends it to `returned_by_office`.
+     */
+    return_notice: ReturnNotice | null;
     /**
      * The other documents the same submit produced, when it was sent to several
      * departments at the same time. Empty for every other document.

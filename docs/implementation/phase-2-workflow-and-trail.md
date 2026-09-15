@@ -137,6 +137,30 @@ safely inside the limit — and its unique index is what makes the sweep idempot
 > folder nowhere, so the usual "tell the office it arrived at" rule would have
 > told the rejecting office about their own click and nobody else at all.
 >
+> **AMENDED 2026-09-15 — reject became return.** After seeing the reject
+> button the client asked for it to be *"return"*, with the corrected document
+> uploadable afterwards, *"para po yung document history hindi maputol once na
+> na reject(returned) yung document para isang qr code na lang din po yung
+> magamit nung isang document"*. A rejection was terminal, so fixing a refused
+> document meant filing a new one under a new control number and QR label.
+>
+> `under_review → returned` replaces `under_review → rejected`, with the same
+> gate (Admin-only, mandatory remarks, question A6). A returned document goes to
+> its **originating** office — not the previous office, as the Phase 2 design
+> below had it — because that is the office that can supply the correction. The
+> route's pending stops are **kept**, not cancelled. From `returned` the only
+> action is the new `resubmitted`, open to any member of the originating office:
+> it can carry the corrected file in the same submit (appended as the next
+> version), and it sends the document back to the office that returned it, read
+> off the returned leg's `from_office_id`. That office's next receipt advances
+> the route as normal. `received` and `forwarded` are deliberately not offered
+> from `returned`: a receipt would advance the kept route past the office waiting
+> for the correction, and a hand-picked send would replace the route. The
+> Return button is not offered while the originating office itself holds the
+> document. `NotificationType::Returned` goes to the originating office and the
+> submitter; `NotificationType::Resubmitted` goes to the office it is sent back
+> to. `rejected` stays a terminal legacy status.
+>
 > **Why it was breaking.** Approving is Admin-only and, with self-approval off,
 > forbidden to the document's own author (question A6 below). Any queued office
 > without a qualifying approver held the folder for good, and every stop behind

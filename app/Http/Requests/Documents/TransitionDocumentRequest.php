@@ -8,6 +8,7 @@ use App\Exceptions\StaleWorkflowStateException;
 use App\Models\Document;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\File;
 use Illuminate\Validation\Validator;
 
 /**
@@ -60,6 +61,13 @@ class TransitionDocumentRequest extends FormRequest
          * one, and a bare refusal is the right answer.
          */
         if ($this->carriesSignature() && ! $this->user()->can('signRelease', $document)) {
+            return false;
+        }
+
+        // A corrected file riding along with a resubmit is an upload, so it
+        // asks the upload question too. The originating office always passes
+        // it; this only refuses a crafted request.
+        if ($this->hasFile('file') && ! $this->user()->can('uploadVersion', $document)) {
             return false;
         }
 
@@ -159,6 +167,21 @@ class TransitionDocumentRequest extends FormRequest
             'remarks' => ['nullable', 'string', 'max:2000'],
 
             /*
+             * The corrected document, attached to a resubmit so the fix and the
+             * send are one click. Optional -- a correction can be a signature
+             * on the paper folder -- and the same rules as every other upload,
+             * because it lands in the same version history through the same
+             * StoreDocumentFile.
+             */
+            'file' => [
+                'nullable',
+                File::types(config('cicto.uploads.mimes'))
+                    ->extensions(config('cicto.uploads.extensions'))
+                    ->max((int) config('cicto.uploads.max_size_kb')),
+            ],
+            'replace_reason' => ['nullable', 'string', 'max:500'],
+
+            /*
              * §15 "Sign & send". Optional, and absent from every submit that
              * does not use it -- signing before a handoff is offered, never
              * required, so these rules must stay silent when the block is not
@@ -210,6 +233,13 @@ class TransitionDocumentRequest extends FormRequest
             }
 
             $this->validateSignature($validator, $action);
+
+            // The corrected file belongs to a resubmit and nothing else: on any
+            // other action it would be silently dropped, which is worse than
+            // saying so.
+            if ($this->hasFile('file') && $action !== MovementAction::Resubmitted) {
+                $validator->errors()->add('file', 'A corrected file can only be attached when resubmitting a returned document.');
+            }
 
             if ($action === MovementAction::Forwarded) {
                 $document = $this->route('document');

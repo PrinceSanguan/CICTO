@@ -2,6 +2,8 @@
 
 namespace App\Support\Presenters;
 
+use App\Enums\DocumentStatus;
+use App\Enums\MovementAction;
 use App\Models\Document;
 use App\Models\DocumentComment;
 use App\Models\DocumentFile;
@@ -87,6 +89,34 @@ class DocumentPresenter
             // through; this row is where the document came into existence.
             'status_label' => 'Origin',
             'status_tone' => 'sky',
+        ];
+    }
+
+    /**
+     * The return a document is waiting on, while it is waiting on one.
+     *
+     * Read off the open leg, which for a returned document is always the
+     * `returned` leg itself: its actor and remarks say who sent it back and why,
+     * and its FROM office is the office that returned it -- which is exactly
+     * where TransitionDocument sends a resubmit. So the page can name the
+     * destination before the button is pressed, from the same column the
+     * action will read.
+     *
+     * @return array{returned_by: string|null, returned_by_office: string|null, returned_at: string|null, remarks: string|null}|null
+     */
+    private function returnNotice(Document $document, ?DocumentMovement $leg): ?array
+    {
+        if ($document->status !== DocumentStatus::Returned
+            || $leg === null
+            || $leg->action !== MovementAction::Returned) {
+            return null;
+        }
+
+        return [
+            'returned_by' => $leg->actor?->name,
+            'returned_by_office' => $leg->fromOffice?->name,
+            'returned_at' => $leg->arrived_at?->toIso8601String(),
+            'remarks' => $leg->remarks,
         ];
     }
 
@@ -244,6 +274,12 @@ class DocumentPresenter
              * card naming the office it has never left.
              */
             'route_origin' => $this->routeOrigin($document),
+
+            /*
+             * Why a returned document is back at its originating office, and
+             * where Resubmit will send it. Null for every other document.
+             */
+            'return_notice' => $this->returnNotice($document, $leg),
 
             /*
              * The rest of the same submit, when it went to several departments

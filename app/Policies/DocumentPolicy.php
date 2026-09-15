@@ -168,12 +168,27 @@ class DocumentPolicy
         }
 
         /*
-         * Refusing a document is a DECISION, so it is gated exactly as
+         * Return sends the document to its originating office. When that office
+         * is already holding it there is nowhere to send it -- they can upload a
+         * corrected version where it sits -- and a return-to-self would park it
+         * in `returned` with its resubmit pointing back at the same desk.
+         */
+        if ($action === MovementAction::Returned
+            && $document->openMovement?->to_office_id === $document->originating_office_id) {
+            return false;
+        }
+
+        /*
+         * Returning a document is a DECISION, so it is gated exactly as
          * approving was: Admin-only, and subject to the §A6 separation-of-duties
          * switch below. That is safe in a way approval never was -- a route
-         * advances on `received`, so an office that cannot reject simply does
-         * not reject, receives the folder, and the queue keeps moving. Nothing
+         * advances on `received`, so an office that cannot return simply does
+         * not return, receives the folder, and the queue keeps moving. Nothing
          * downstream waits on a decision that is never taken.
+         *
+         * Resubmitting is not a decision. It is the originating office sending
+         * back the correction it was asked for, so any member of that office
+         * may do it, clerk or Admin.
          */
         if ($action->isDecision() || $action === MovementAction::Completed) {
             if (! $user->atLeast(Role::Admin)) {

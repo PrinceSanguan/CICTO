@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\Documents\AdvanceRoute;
 use App\Actions\Documents\RouteDocument;
 use App\Actions\Documents\SignDocument;
+use App\Actions\Documents\StoreDocumentFile;
 use App\Actions\Documents\TransitionDocument;
 use App\Enums\MovementAction;
 use App\Enums\SignatureMethod;
@@ -14,6 +15,7 @@ use App\Models\DocumentMovement;
 use App\Models\DocumentSignature;
 use App\Models\Office;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -41,8 +43,56 @@ class DocumentWorkflowController extends Controller
         RouteDocument $route,
         AdvanceRoute $advance,
         SignDocument $sign,
+        StoreDocumentFile $store,
     ): RedirectResponse {
         $action = $request->enum('action', MovementAction::class);
+
+        /*
+         * Resubmitting a returned document, with the corrected file riding
+         * along when one was attached -- one submit, one transaction, both or
+         * neither. The client's point on 2026-09-15 was that the correction
+         * lands on the SAME document, so it is appended to this document's
+         * version history rather than filed as anything new.
+         *
+         * The file is stored AFTER the transition, so a stale tab that the
+         * transition refuses never writes an upload at all, and the new version
+         * is recorded against the leg that carried it back.
+         */
+        if ($action === MovementAction::Resubmitted) {
+            [$moved, $file] = DB::transaction(function () use ($request, $document, $transition, $store): array {
+                $moved = $transition->handle(
+                    document: $document,
+                    action: MovementAction::Resubmitted,
+                    actor: $request->user(),
+                    remarks: $request->input('remarks'),
+                    toOfficeId: null,
+                    expectedMovementId: $request->integer('expected_movement_id') ?: null,
+                    request: $request,
+                );
+
+                $upload = $request->file('file');
+
+                $file = $upload instanceof UploadedFile
+                    ? $store->handle(
+                        document: $document,
+                        upload: $upload,
+                        uploader: $request->user(),
+                        movement: $moved,
+                        replaceReason: $request->input('replace_reason') ?: 'Corrected after being returned.',
+                    )
+                    : null;
+
+                return [$moved, $file];
+            });
+
+            $office = $this->officeNames(array_filter([$moved->to_office_id]))[0] ?? 'the office that returned it';
+            $message = "{$document->control_number} resubmitted to {$office}.";
+
+            return back()->with('toast', [
+                'type' => 'success',
+                'message' => $file === null ? $message : $message." Corrected file saved as version {$file->version}.",
+            ]);
+        }
 
         /** @var list<int> $destinations */
         $destinations = array_map('intval', (array) $request->input('to_office_ids', []));
@@ -191,6 +241,11 @@ class DocumentWorkflowController extends Controller
         return implode(', ', $names).' and '.$last;
     }
 
+    private function originatingOfficeName(Document $document): string
+    {
+        return $this->officeNames([$document->originating_office_id])[0] ?? 'the originating office';
+    }
+
     private function confirmation(MovementAction $action, Document $document): string
     {
         return match ($action) {
@@ -199,7 +254,7 @@ class DocumentWorkflowController extends Controller
             MovementAction::Received => "{$document->control_number} received. It stays with your office until you send it on.",
             MovementAction::Approved => "{$document->control_number} approved. You can now send it to another office.",
             MovementAction::Rejected => "{$document->control_number} rejected.",
-            MovementAction::Returned => "{$document->control_number} returned for correction.",
+            MovementAction::Returned => "{$document->control_number} returned to {$this->originatingOfficeName($document)} for correction.",
             MovementAction::Forwarded => "{$document->control_number} forwarded.",
             MovementAction::Completed => "{$document->control_number} marked complete.",
             default => "{$document->control_number} updated.",

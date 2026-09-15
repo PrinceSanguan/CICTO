@@ -266,13 +266,14 @@ class RoutingTest extends TestCase
     /**
      * The Actions panel a queued office actually sees.
      *
-     * The client asked for no APPROVAL step while a document is travelling, and
-     * got one back on 2026-09-13: a reject button. This is that button set,
-     * asserted through the same `available_actions` payload the page renders
-     * from -- so it fails if approve or return creeps back into the workflow
-     * map, and it fails if Completed starts being offered halfway down a route.
+     * The client asked for no APPROVAL step while a document is travelling. On
+     * 2026-09-13 it got a reject button back, and on 2026-09-15 that became a
+     * Return button. This is that button set, asserted through the same
+     * `available_actions` payload the page renders from -- so it fails if
+     * approve or reject creeps back into the workflow map, and it fails if
+     * Completed starts being offered halfway down a route.
      */
-    public function test_a_queued_office_is_offered_receive_send_and_reject(): void
+    public function test_a_queued_office_is_offered_receive_send_and_return(): void
     {
         [$mpdo, $mto, $hrmo] = $this->offices();
         $document = $this->registerDocument($mpdo, $this->staff($mpdo));
@@ -285,15 +286,15 @@ class RoutingTest extends TestCase
             ->viewData('page')['props']['document']['available_actions'];
 
         $this->assertEqualsCanonicalizing(
-            ['forwarded', 'received', 'rejected'],
+            ['forwarded', 'received', 'returned'],
             array_column($actions, 'value'),
-            'A stop with an office still queued behind it may receive, send on, or refuse -- and nothing else.',
+            'A stop with an office still queued behind it may receive, send on, or return -- and nothing else.',
         );
 
-        // Exactly one of them nags for a reason, and it is the refusal.
+        // Exactly one of them nags for a reason, and it is the return.
         // Acknowledging a folder is not a decision to justify.
         $this->assertSame(
-            ['rejected' => true],
+            ['returned' => true],
             array_filter(array_column($actions, 'requires_remarks', 'value')),
         );
 
@@ -307,7 +308,7 @@ class RoutingTest extends TestCase
             ->viewData('page')['props']['document']['available_actions'];
 
         $this->assertEqualsCanonicalizing(
-            ['forwarded', 'received', 'rejected', 'completed'],
+            ['forwarded', 'received', 'returned', 'completed'],
             array_column($actions, 'value'),
         );
     }
@@ -577,8 +578,8 @@ class RoutingTest extends TestCase
      *
      * A hand-picked destination is the more important case of the two, and the
      * one this covers: a queue that survived the override would send the folder
-     * somewhere nobody asked for two hops later. (Rejection tears the plan down
-     * too -- EndToEndTest covers that side.)
+     * somewhere nobody asked for two hops later. (A RETURN deliberately does
+     * not tear it down -- EndToEndTest covers that side.)
      */
     public function test_sending_the_folder_off_the_plan_cancels_the_rest_of_the_route(): void
     {
@@ -755,7 +756,6 @@ class RoutingTest extends TestCase
     {
         return [
             'receive' => ['received', []],
-            'reject' => ['rejected', ['remarks' => 'Missing attachment.']],
             'complete' => ['completed', ['remarks' => 'Handled.']],
         ];
     }

@@ -87,6 +87,9 @@ export default function ShowDocument({
         remarks: string;
         signature_method: string;
         signature_image: string | null;
+        // The corrected document, attached to a Resubmit.
+        file: File | null;
+        replace_reason: string;
     }>({
         action: '',
         to_office_ids: [],
@@ -95,6 +98,8 @@ export default function ShowDocument({
         // pad captures a mark, and a typed name has no canvas to come from.
         signature_method: 'drawn',
         signature_image: null,
+        file: null,
+        replace_reason: '',
     });
 
     /*
@@ -130,6 +135,11 @@ export default function ShowDocument({
         action.transform((data) => {
             const forwarding = value === 'forwarded';
 
+            // The corrected file rides along with a resubmit and nothing else;
+            // the server refuses a file on any other action rather than
+            // silently dropping it.
+            const correcting = value === 'resubmitted' && data.file !== null;
+
             // Only a forward that was actually signed carries the block. The
             // server reads a PRESENT signature_method as "this submit signs",
             // and asks the policy about it — so posting an empty one would
@@ -155,6 +165,12 @@ export default function ShowDocument({
                           signature_image: data.signature_image,
                       }
                     : {}),
+                ...(correcting
+                    ? {
+                          file: data.file,
+                          replace_reason: data.replace_reason,
+                      }
+                    : {}),
             };
         });
 
@@ -162,6 +178,8 @@ export default function ShowDocument({
             DocumentWorkflowController.store.url({ document: document.id }),
             {
                 preserveScroll: true,
+                forceFormData:
+                    value === 'resubmitted' && action.data.file !== null,
                 onSuccess: () => {
                     action.reset();
                     setSignOnSend(false);
@@ -172,17 +190,36 @@ export default function ShowDocument({
 
     const isForward = action.data.action === 'forwarded';
 
-    // Terminal and irreversible, so it is the one action on this panel that
-    // gets a warning and a red confirm rather than the shared grey one.
-    const isReject = action.data.action === 'rejected';
+    // Sends the folder back to the office that filed it, so it is the one
+    // action on this panel that says what it will do before it is confirmed.
+    const isReturn = action.data.action === 'returned';
+
+    // A returned document's only way on, and the one that carries the fix.
+    const isResubmit = action.data.action === 'resubmitted';
+
+    const returnNotice = document.return_notice;
+
+    const canResubmit = document.available_actions.some(
+        (available) => available.value === 'resubmitted',
+    );
+
+    // A returned document is acted on from the Actions panel, which sits in
+    // the collapsed section below -- so for the office that has to fix it, the
+    // section starts open. Held in state rather than read from the prop, so
+    // the section does not snap shut the moment the resubmit succeeds.
+    const [detailsOpen] = useState(canResubmit);
 
     // One plain sentence for the Processing Summary panel, derived from the
     // ledger rather than stored, so it can never contradict the timeline.
-    const processingSummary = !document.tracking.resting_office
-        ? `The document is ${document.status_label.toLowerCase()}.`
-        : document.tracking.is_open
-          ? `The document is currently ${document.status_label.toLowerCase()} by ${document.tracking.resting_office}.`
-          : `The document was ${document.status_label.toLowerCase()} at ${document.tracking.resting_office}.`;
+    // A returned document reads "Pending" in lists, and "currently pending by"
+    // would hide the one thing a reader needs: that it is waiting on a fix.
+    const processingSummary = returnNotice
+        ? `The document was returned to ${document.originating_office ?? 'its originating office'} for correction, and is waiting to be resubmitted to ${returnNotice.returned_by_office ?? 'the office that returned it'}.`
+        : !document.tracking.resting_office
+          ? `The document is ${document.status_label.toLowerCase()}.`
+          : document.tracking.is_open
+            ? `The document is currently ${document.status_label.toLowerCase()} by ${document.tracking.resting_office}.`
+            : `The document was ${document.status_label.toLowerCase()} at ${document.tracking.resting_office}.`;
 
     return (
         <>
@@ -246,6 +283,41 @@ export default function ShowDocument({
                         that. The rule down the middle is drawn too, sitting
                         just clear of the metrics box's own border.
                     */}
+                    {/*
+                        Why a returned document is back where it started. On
+                        the sheet itself rather than in the Actions panel,
+                        because the reason is the first thing anybody opening
+                        it needs -- including the office that returned it.
+                    */}
+                    {returnNotice && (
+                        <div
+                            role="status"
+                            className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 sm:mx-6 lg:mx-8 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200"
+                        >
+                            <p className="font-bold">
+                                Returned for correction
+                                {returnNotice.returned_by_office &&
+                                    ` by ${returnNotice.returned_by_office}`}
+                            </p>
+                            {returnNotice.remarks && (
+                                <p className="mt-1 break-words whitespace-pre-line">
+                                    {returnNotice.remarks}
+                                </p>
+                            )}
+                            <p className="mt-1 text-xs">
+                                {returnNotice.returned_by &&
+                                    `${returnNotice.returned_by} · `}
+                                {formatDateTime(returnNotice.returned_at)}
+                            </p>
+                            <p className="mt-2 text-xs">
+                                {canResubmit
+                                    ? 'Under Actions below, attach the corrected document and press Resubmit.'
+                                    : `Waiting for ${document.originating_office ?? 'the originating office'} to correct and resubmit it.`}{' '}
+                                It keeps the same control number and QR code.
+                            </p>
+                        </div>
+                    )}
+
                     <div className="mt-8 grid gap-6 rounded-lg border border-[#E4EAF2] p-6 sm:mx-6 lg:mx-8 lg:grid-cols-[minmax(0,4fr)_minmax(0,5fr)]">
                         <DocumentFacts document={document} />
 
@@ -289,7 +361,7 @@ export default function ShowDocument({
                     the QR label, routing, archiving, versions, signatures
                     and comments are all one click inside this.
                 */}
-                <details className="group">
+                <details className="group" open={detailsOpen}>
                     <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-xl bg-white px-6 py-4 text-[15px] font-bold text-navy shadow-xl">
                         Actions, files, signatures and comments
                         <ChevronDown
@@ -587,10 +659,7 @@ export default function ShowDocument({
                                                     action.data.action !==
                                                     available.value
                                                         ? 'outline'
-                                                        : available.value ===
-                                                            'rejected'
-                                                          ? 'destructive'
-                                                          : 'default'
+                                                        : 'default'
                                                 }
                                                 onClick={() =>
                                                     action.setData(
@@ -607,18 +676,95 @@ export default function ShowDocument({
 
                                 {action.data.action && (
                                     <div className="space-y-3">
-                                        {isReject && (
-                                            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-300">
-                                                Rejecting is final. The document
-                                                stops here, any offices still
-                                                queued on its route are
-                                                cancelled, and nothing can move
-                                                it again — it can only be
-                                                archived. Say why below; the
-                                                reason is recorded on the
-                                                document and the originating
-                                                office is notified.
+                                        {isReturn && (
+                                            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200">
+                                                Returning sends this document
+                                                back to{' '}
+                                                {document.originating_office ??
+                                                    'the office that filed it'}{' '}
+                                                for correction. Say what needs
+                                                fixing below — the reason is
+                                                recorded on the document and the
+                                                submitter is notified. Offices
+                                                still queued on its route wait,
+                                                and it comes back to your office
+                                                once it is resubmitted, under
+                                                the same control number and QR
+                                                code.
                                             </p>
+                                        )}
+
+                                        {/*
+                                            The corrected file travels WITH the
+                                            resubmit, so fixing a returned
+                                            document is one step rather than an
+                                            upload in one panel and a send in
+                                            another. Optional: a correction can
+                                            be a signature on the paper folder.
+                                        */}
+                                        {isResubmit && (
+                                            <div className="grid gap-2 rounded-md border border-dashed p-3">
+                                                <p className="text-xs text-copy">
+                                                    Resubmitting sends this
+                                                    document back to{' '}
+                                                    <span className="font-medium text-navy">
+                                                        {returnNotice?.returned_by_office ??
+                                                            'the office that returned it'}
+                                                    </span>
+                                                    . It keeps its control
+                                                    number, QR code and history.
+                                                </p>
+                                                <label
+                                                    htmlFor="resubmit-file"
+                                                    className="text-sm font-medium"
+                                                >
+                                                    Corrected document
+                                                    (optional)
+                                                </label>
+                                                <Input
+                                                    id="resubmit-file"
+                                                    type="file"
+                                                    disabled={action.processing}
+                                                    onChange={(event) =>
+                                                        action.setData(
+                                                            'file',
+                                                            event.target
+                                                                .files?.[0] ??
+                                                                null,
+                                                        )
+                                                    }
+                                                />
+                                                <InputError
+                                                    message={action.errors.file}
+                                                />
+                                                <Input
+                                                    placeholder="What changed? (optional)"
+                                                    value={
+                                                        action.data
+                                                            .replace_reason
+                                                    }
+                                                    maxLength={500}
+                                                    disabled={action.processing}
+                                                    onChange={(event) =>
+                                                        action.setData(
+                                                            'replace_reason',
+                                                            event.target.value,
+                                                        )
+                                                    }
+                                                />
+                                                <InputError
+                                                    message={
+                                                        action.errors
+                                                            .replace_reason
+                                                    }
+                                                />
+                                                <p className="text-xs text-muted-foreground">
+                                                    Saved as the next version of
+                                                    this document. Earlier
+                                                    versions stay downloadable —
+                                                    nothing is overwritten.
+                                                </p>
+                                            </div>
                                         )}
 
                                         {isForward && (
@@ -846,11 +992,6 @@ export default function ShowDocument({
                                         </div>
 
                                         <Button
-                                            variant={
-                                                isReject
-                                                    ? 'destructive'
-                                                    : 'default'
-                                            }
                                             onClick={() =>
                                                 submitAction(action.data.action)
                                             }
@@ -858,14 +999,16 @@ export default function ShowDocument({
                                         >
                                             {action.processing
                                                 ? 'Working…'
-                                                : isReject
-                                                  ? 'Reject document'
-                                                  : isForward &&
-                                                      signOnSend &&
-                                                      action.data
-                                                          .signature_image
-                                                    ? 'Sign & send'
-                                                    : 'Confirm'}
+                                                : isReturn
+                                                  ? 'Return document'
+                                                  : isResubmit
+                                                    ? 'Resubmit document'
+                                                    : isForward &&
+                                                        signOnSend &&
+                                                        action.data
+                                                            .signature_image
+                                                      ? 'Sign & send'
+                                                      : 'Confirm'}
                                         </Button>
                                     </div>
                                 )}
@@ -1330,13 +1473,17 @@ export default function ShowDocument({
  * `available.label` comes from App\Enums\MovementAction, which names what a
  * movement row RECORDS -- "Rejected", "Forwarded". That reads correctly in the
  * timeline and wrongly on a button, which is an instruction rather than a
- * report. Overridden here for the two where the difference matters; the rest
+ * report. Overridden here for the ones where the difference matters; the rest
  * ("Received", "Completed") already read as either.
  */
 function actionLabel(action: DocumentAction): string {
     switch (action.value) {
         case 'forwarded':
             return 'Send to Another Office';
+        case 'returned':
+            return 'Return';
+        case 'resubmitted':
+            return 'Resubmit';
         case 'rejected':
             return 'Reject';
         default:

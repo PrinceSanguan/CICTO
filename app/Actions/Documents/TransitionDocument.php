@@ -5,6 +5,7 @@ namespace App\Actions\Documents;
 use App\Enums\DocumentStatus;
 use App\Enums\MovementAction;
 use App\Events\DocumentTransitioned;
+use App\Exceptions\IllegalTransitionException;
 use App\Exceptions\StaleWorkflowStateException;
 use App\Models\Document;
 use App\Models\DocumentComment;
@@ -67,6 +68,15 @@ final class TransitionDocument
                 throw new \InvalidArgumentException('Forwarding requires a destination office.');
             }
 
+            // A resubmit goes back to whoever returned it, and the returned leg
+            // is the only record of who that was. A `returned` document always
+            // sits on that leg -- nothing else leaves it in the stage -- so this
+            // only fires on a hand-edited status.
+            if ($action === MovementAction::Resubmitted
+                && ($leg?->action !== MovementAction::Returned || $leg->from_office_id === null)) {
+                throw new IllegalTransitionException($from, $action);
+            }
+
             // Close the open leg. is_open goes NULL in the same statement as
             // departed_at so the unique index and the semantic truth cannot
             // disagree even for an instant.
@@ -89,17 +99,19 @@ final class TransitionDocument
                 // Explicit destination chosen by the reviewer.
                 MovementAction::Forwarded => $toOfficeId,
 
-                // §9 "return a document with remarks" means send it BACK for
-                // correction. The open leg records where it came from, so that
-                // is where it goes. Leaving it at the returning office would
-                // make Return indistinguishable from Reject, and the document
-                // would sit on the reviewer's own desk waiting for a fix only
-                // the previous office can make.
-                //
-                // A document still on its genesis leg has no previous office,
-                // so it falls back to where it started.
-                MovementAction::Returned => $leg->from_office_id
-                    ?? $locked->originating_office_id,
+                // §9 "return a document with remarks" sends it BACK for
+                // correction -- to the ORIGINATING office, not merely the office
+                // before this one. That is the client's request of 2026-09-15,
+                // which replaced Reject with Return: the office that filed the
+                // document is the one that can upload the corrected version, and
+                // it must be able to do that on the same document, so the trail
+                // and the printed QR label carry on instead of starting over
+                // under a new control number.
+                MovementAction::Returned => $locked->originating_office_id,
+
+                // Back to the office that returned it, which is where the
+                // returned leg came FROM. Guarded non-null above.
+                MovementAction::Resubmitted => $leg->from_office_id,
 
                 // Decisions that keep custody where it already is.
                 default => $leg->to_office_id ?? $locked->originating_office_id,

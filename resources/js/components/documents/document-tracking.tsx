@@ -4,6 +4,7 @@ import {
     ChevronRight,
     Clock,
     Hourglass,
+    Undo2,
     X,
 } from 'lucide-react';
 import { StatusPill } from '@/components/documents/status-pill';
@@ -175,6 +176,14 @@ export function StageStepper({ status }: { status: string }) {
      */
     const stopped = status === 'rejected';
 
+    /*
+     * A returned document is not stopped -- it is waiting on a correction and
+     * will carry on once it is resubmitted, as the same document. Drawn as an
+     * amber pause rather than the red stop, and never as the blue "you are
+     * here" banner, which would say an office is still working on it.
+     */
+    const returned = status === 'returned';
+
     return (
         /*
          * gap-x below `sm` only.
@@ -191,7 +200,8 @@ export function StageStepper({ status }: { status: string }) {
             {STAGES.map((stage, index) => {
                 const done = index < current;
                 const halted = stopped && index === current;
-                const active = index === current && !halted;
+                const paused = returned && index === current;
+                const active = index === current && !halted && !paused;
 
                 /*
                     The disc caps the connector arriving from the stage before
@@ -237,9 +247,11 @@ export function StageStepper({ status }: { status: string }) {
                                             ? 'bg-[#2FA36B]'
                                             : halted
                                               ? 'bg-[#D5342A]'
-                                              : active
-                                                ? 'bg-[#3B72C4]'
-                                                : 'bg-[#C9CFD9]'
+                                              : paused
+                                                ? 'bg-[#D97706]'
+                                                : active
+                                                  ? 'bg-[#3B72C4]'
+                                                  : 'bg-[#C9CFD9]'
                                     }`}
                                 >
                                     {done ? (
@@ -249,6 +261,11 @@ export function StageStepper({ status }: { status: string }) {
                                         />
                                     ) : halted ? (
                                         <X className="size-4" strokeWidth={3} />
+                                    ) : paused ? (
+                                        <Undo2
+                                            className="size-4"
+                                            strokeWidth={3}
+                                        />
                                     ) : (
                                         <ChevronRight
                                             className="size-4"
@@ -292,7 +309,9 @@ export function StageStepper({ status }: { status: string }) {
                                             ? 'text-[#2FA36B]'
                                             : halted
                                               ? 'text-[#D5342A]'
-                                              : 'text-navy'
+                                              : paused
+                                                ? 'text-[#B45309]'
+                                                : 'text-navy'
                                     }`}
                                 >
                                     {/*
@@ -303,7 +322,11 @@ export function StageStepper({ status }: { status: string }) {
                                         still under review that something had
                                         gone wrong with.
                                     */}
-                                    {halted ? 'Rejected' : stage.label}
+                                    {halted
+                                        ? 'Rejected'
+                                        : paused
+                                          ? 'Returned'
+                                          : stage.label}
                                 </span>
                             )}
                         </span>

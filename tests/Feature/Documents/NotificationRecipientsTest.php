@@ -60,29 +60,37 @@ class NotificationRecipientsTest extends TestCase
         $this->artisan('cicto:notify-deadlines')->assertSuccessful();
 
         /*
-         * And a rejection, LAST, because it is terminal and the sweep would
-         * skip the document afterwards.
+         * And a return, then the resubmit that answers it, LAST.
          *
-         * It is the one trigger that notifies BACKWARDS -- a rejection moves
-         * the folder nowhere, so it tells the originating office and the
-         * submitter rather than whoever is holding it. That is a different
-         * recipient set reached by a different code path, which makes it
-         * exactly the kind of trigger this invariant exists to catch.
+         * A return notifies the submitter BY NAME as well as the originating
+         * office -- a different recipient set reached by a different code path,
+         * which makes it exactly the kind of trigger this invariant exists to
+         * catch. The resubmit then tells the office it goes back to.
          */
         app(TransitionDocument::class)->handle(
             document: $document->refresh(),
-            action: MovementAction::Rejected,
+            action: MovementAction::Returned,
             actor: $this->admin($mto),
             remarks: 'Unsigned quotation.',
             expectedMovementId: $document->refresh()->openMovement->id,
         );
 
+        app(TransitionDocument::class)->handle(
+            document: $document->refresh(),
+            action: MovementAction::Resubmitted,
+            actor: $clerk,
+            remarks: 'Signed now.',
+            expectedMovementId: $document->refresh()->openMovement->id,
+        );
+
         $notifications = Notification::query()->with(['user', 'document'])->get();
 
-        $this->assertTrue(
-            $notifications->contains(fn (Notification $row) => $row->type === NotificationType::Rejected),
-            'The rejection must have notified somebody.',
-        );
+        foreach ([NotificationType::Returned, NotificationType::Resubmitted] as $type) {
+            $this->assertTrue(
+                $notifications->contains(fn (Notification $row) => $row->type === $type),
+                "The {$type->value} trigger must have notified somebody.",
+            );
+        }
 
         $this->assertGreaterThan(0, $notifications->count(), 'Expected some notifications to exist.');
 

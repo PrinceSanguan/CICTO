@@ -99,15 +99,22 @@ class EndToEndTest extends TestCase
     }
 
     /**
-     * §9 reject, restored on 2026-09-13, driven exactly as the page drives it.
+     * §9 return, which replaced reject on 2026-09-15, driven exactly as the
+     * page drives it.
      *
-     * The whole behaviour in one pass, because every part of it is a claim the
-     * client will check: the button is offered, the reason is compulsory, the
-     * document goes terminal, the rest of the route is torn down, the remark is
-     * mirrored into the panel, the originating office is told, and §16 will
-     * then let it be archived.
+     * The client's words: make the button "return", let the correct document be
+     * uploaded, "para po yung document history hindi maputol ... para isang qr
+     * code na lang din po yung magamit nung isang document". So the whole
+     * behaviour in one pass, because every part of it is a claim the client
+     * will check: Return is offered and Reject is not, the reason is
+     * compulsory, the folder goes back to the office that filed it with the
+     * rest of the route still waiting, the submitter is told, the corrected
+     * file is uploaded as the next version in the same submit as Resubmit, the
+     * folder goes back to the office that returned it, the route then carries
+     * on to the end -- and it is ONE document throughout, with one control
+     * number, one QR token and one unbroken trail.
      */
-    public function test_a_rejection_refuses_the_document_and_tears_down_its_route(): void
+    public function test_a_returned_document_is_corrected_and_carries_on_as_the_same_document(): void
     {
         Storage::fake('documents');
 
@@ -117,6 +124,7 @@ class EndToEndTest extends TestCase
 
         $clerk = $this->staff($mpdo);
         $mtoAdmin = $this->admin($mto);
+        $hrmoAdmin = $this->admin($hrmo);
 
         // Filed at MPDO, routed onward through MTO and then HRMO.
         $this->actingAs($clerk)
@@ -142,22 +150,25 @@ class EndToEndTest extends TestCase
         $document->refresh();
         $this->assertSame($mto->id, $document->openMovement->to_office_id);
 
-        // The button is on the page for the office holding it.
-        $this->assertContains(
-            'rejected',
-            array_column(
-                $this->actingAs($mtoAdmin)
-                    ->get(route('documents.show', $document))
-                    ->assertOk()
-                    ->viewData('page')['props']['document']['available_actions'],
-                'value',
-            ),
+        $controlNumber = $document->control_number;
+        $qrToken = $document->qr_token;
+
+        // Return is on the page for the office holding it, and Reject is gone.
+        $offered = array_column(
+            $this->actingAs($mtoAdmin)
+                ->get(route('documents.show', $document))
+                ->assertOk()
+                ->viewData('page')['props']['document']['available_actions'],
+            'value',
         );
 
-        // §9: "reject ... with remarks". No reason, no rejection.
+        $this->assertContains('returned', $offered);
+        $this->assertNotContains('rejected', $offered);
+
+        // §9: "return ... with remarks". No reason, no return.
         $this->actingAs($mtoAdmin)
             ->post(route('documents.transitions.store', $document), [
-                'action' => 'rejected',
+                'action' => 'returned',
                 'expected_movement_id' => $document->openMovement->id,
             ])
             ->assertSessionHasErrors('remarks');
@@ -170,75 +181,279 @@ class EndToEndTest extends TestCase
 
         $this->actingAs($mtoAdmin)
             ->post(route('documents.transitions.store', $document), [
-                'action' => 'rejected',
+                'action' => 'returned',
                 'remarks' => 'The attached quotation is unsigned.',
+                // Exactly what the page posts for an empty array in form state.
+                'to_office_ids' => [''],
                 'expected_movement_id' => $document->fresh()->openMovement->id,
             ])
+            ->assertSessionHasNoErrors()
             ->assertRedirect();
 
         $document->refresh();
 
-        $this->assertSame(DocumentStatus::Rejected, $document->status);
-        $this->assertSame('Rejected', $document->status->publicLabel());
-        $this->assertNull($document->openMovement, 'A rejected document is held by nobody.');
+        $this->assertSame(DocumentStatus::Returned, $document->status);
+        $this->assertSame(
+            $mpdo->id,
+            $document->openMovement->to_office_id,
+            'A returned document goes back to the office that filed it.',
+        );
 
-        // The tail of the route is dropped rather than left travelling.
-        $this->assertSame(
-            0,
-            $document->routeStops()->where('status', RouteStopStatus::Pending)->count(),
-        );
-        $this->assertSame(
-            1,
-            $document->routeStops()->where('status', RouteStopStatus::Cancelled)->count(),
-            'HRMO was queued behind MTO and must now be cancelled, not deleted.',
-        );
+        // The route waits rather than dying: HRMO is still queued behind MTO.
+        $this->assertSame(1, $document->routeStops()->where('status', RouteStopStatus::Pending)->count());
+        $this->assertSame(0, $document->routeStops()->where('status', RouteStopStatus::Cancelled)->count());
 
         // The reason is in the trail AND mirrored into the panel, and the
-        // mirror is not editable -- CONTEXT_REJECTION, not CONTEXT_COMMENT.
+        // mirror is not editable -- CONTEXT_RETURN, not CONTEXT_COMMENT.
         $remark = DocumentComment::query()
-            ->where('context', DocumentComment::CONTEXT_REJECTION)
+            ->where('context', DocumentComment::CONTEXT_RETURN)
             ->firstOrFail();
 
         $this->assertSame('The attached quotation is unsigned.', $remark->body);
         $this->assertFalse($remark->isEditable());
 
-        // The people who were waiting on it are told. The office that pressed
-        // it is not -- they already know.
+        // The submitter is told. The office that pressed it is not.
         $this->assertTrue(
             Notification::query()
                 ->where('user_id', $clerk->id)
-                ->where('type', NotificationType::Rejected)
+                ->where('type', NotificationType::Returned)
                 ->exists(),
-            'The submitter must hear that their document was refused.',
+            'The submitter must hear that their document came back.',
         );
         $this->assertFalse(
             Notification::query()
                 ->where('user_id', $mtoAdmin->id)
-                ->where('type', NotificationType::Rejected)
+                ->where('type', NotificationType::Returned)
                 ->exists(),
         );
 
-        // §16: terminal, so it can now be filed away.
-        $this->actingAs($mtoAdmin)
-            ->post(route('documents.archive', $document), ['reason' => 'Refused.'])
+        // The originating office sees why, where it goes next, and exactly one
+        // way on.
+        $page = $this->actingAs($clerk)
+            ->get(route('documents.show', $document))
+            ->assertOk()
+            ->viewData('page')['props']['document'];
+
+        $this->assertSame(['resubmitted'], array_column($page['available_actions'], 'value'));
+        $this->assertSame('Treasury', $page['return_notice']['returned_by_office']);
+        $this->assertSame('The attached quotation is unsigned.', $page['return_notice']['remarks']);
+        $this->assertTrue($page['can']['uploadVersion']);
+
+        // Resubmit, with the corrected file in the same submit.
+        $this->actingAs($clerk)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'resubmitted',
+                'remarks' => 'The quotation is signed now.',
+                // Real bytes that differ from the original: fake()->create()
+                // writes none, and an identical re-upload is deduplicated rather
+                // than versioned.
+                'file' => UploadedFile::fake()->createWithContent('request-signed.pdf', '%PDF-1.4 CORRECTED'),
+                'replace_reason' => 'Signed quotation attached.',
+                'expected_movement_id' => $document->openMovement->id,
+            ])
+            ->assertSessionHasNoErrors()
             ->assertRedirect();
 
-        $this->assertTrue($document->fresh()->isArchived());
+        $document->refresh();
+
+        $this->assertSame(DocumentStatus::UnderReview, $document->status);
+        $this->assertSame(
+            $mto->id,
+            $document->openMovement->to_office_id,
+            'Resubmit goes back to the office that returned it.',
+        );
+
+        $corrected = $document->currentFile()->firstOrFail();
+        $this->assertSame(2, $corrected->version, 'The correction is the next version of the SAME document.');
+        $this->assertSame('request-signed.pdf', $corrected->original_name);
+        $this->assertSame($clerk->id, $corrected->uploaded_by_id);
+        $this->assertSame($document->openMovement->id, $corrected->document_movement_id);
+        Storage::disk('documents')->assertExists($corrected->path);
+
+        $this->assertTrue(
+            Notification::query()
+                ->where('user_id', $mtoAdmin->id)
+                ->where('type', NotificationType::Resubmitted)
+                ->exists(),
+            'The office that asked for the correction must hear it has come back.',
+        );
+
+        // MTO receives the correction, and the route carries on to HRMO...
+        $this->actingAs($mtoAdmin)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'received',
+                'expected_movement_id' => $document->openMovement->id,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $document->refresh();
+        $this->assertSame($hrmo->id, $document->openMovement->to_office_id);
+
+        // ...whose receipt, as the last office on the route, completes it.
+        $this->actingAs($hrmoAdmin)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'received',
+                'expected_movement_id' => $document->openMovement->id,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $document->refresh();
+        $this->assertSame(DocumentStatus::Completed, $document->status);
+
+        // ONE document the whole way: one control number, one QR label, and a
+        // trail that runs straight through the return.
+        $this->assertSame(1, Document::query()->count());
+        $this->assertSame($controlNumber, $document->control_number);
+        $this->assertSame($qrToken, $document->qr_token);
+        $this->assertSame(
+            [
+                'registered', 'received', 'forwarded',
+                'returned', 'resubmitted',
+                'received', 'forwarded', 'received', 'completed',
+            ],
+            $document->movements()->get()->map(fn ($leg) => $leg->action->value)->all(),
+        );
     }
 
     /**
-     * Rejecting is a DECISION, so it carries the gate every decision carries:
+     * A corrected file is attached to a resubmit and to nothing else, and a
+     * resubmit that fails attaches nothing at all.
+     */
+    public function test_a_corrected_file_only_rides_along_with_a_resubmit(): void
+    {
+        Storage::fake('documents');
+
+        $mpdo = $this->office('MPDO', 'Planning Office');
+        $mto = $this->office('MTO', 'Treasury');
+        $clerk = $this->staff($mpdo);
+        $mtoAdmin = $this->admin($mto);
+        $document = $this->registerDocument($mpdo, $clerk);
+
+        $this->actingAs($this->admin($mpdo))
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'forwarded',
+                'to_office_id' => $mto->id,
+                'expected_movement_id' => $document->openMovement->id,
+            ])
+            ->assertSessionHasNoErrors();
+
+        // On a receipt the file would be silently dropped, so it is refused.
+        $this->actingAs($mtoAdmin)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'received',
+                'file' => UploadedFile::fake()->create('stray.pdf', 10, 'application/pdf'),
+                'expected_movement_id' => $document->fresh()->openMovement->id,
+            ])
+            ->assertSessionHasErrors('file');
+
+        $this->actingAs($mtoAdmin)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'returned',
+                'remarks' => 'Wrong form.',
+                'expected_movement_id' => $document->fresh()->openMovement->id,
+            ])
+            ->assertSessionHasNoErrors();
+
+        // A stale tab: the resubmit is refused, and no version is written.
+        $stale = $document->fresh()->openMovement->id - 1;
+
+        $this->actingAs($clerk)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'resubmitted',
+                'file' => UploadedFile::fake()->create('fixed.pdf', 10, 'application/pdf'),
+                'expected_movement_id' => $stale,
+            ]);
+
+        $this->assertSame(DocumentStatus::Returned, $document->fresh()->status);
+        $this->assertSame(0, $document->files()->count());
+
+        // Receiving it back at the originating office is not a way round the
+        // resubmit -- it would advance a kept route past the office waiting.
+        $this->actingAs($clerk)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'received',
+                'expected_movement_id' => $document->fresh()->openMovement->id,
+            ])
+            ->assertForbidden();
+
+        // And nobody but the originating office holds it to resubmit.
+        $this->actingAs($mtoAdmin)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'resubmitted',
+                'expected_movement_id' => $document->fresh()->openMovement->id,
+            ])
+            ->assertForbidden();
+    }
+
+    /**
+     * Return has nowhere to go while the originating office holds the document
+     * itself -- they can upload a corrected version where it sits.
+     */
+    public function test_return_is_not_offered_at_the_originating_office(): void
+    {
+        $office = $this->office();
+        $admin = $this->admin($office);
+        $document = $this->registerDocument($office, $this->staff($office));
+
+        $this->actingAs($admin)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'received',
+                'expected_movement_id' => $document->openMovement->id,
+            ])
+            ->assertRedirect();
+
+        $document->refresh();
+
+        $this->assertNotContains(
+            'returned',
+            array_column(
+                $this->actingAs($admin)
+                    ->get(route('documents.show', $document))
+                    ->assertOk()
+                    ->viewData('page')['props']['document']['available_actions'],
+                'value',
+            ),
+        );
+
+        $this->actingAs($admin)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'returned',
+                'remarks' => 'Back to myself.',
+                'expected_movement_id' => $document->openMovement->id,
+            ])
+            ->assertForbidden();
+
+        $this->assertSame(DocumentStatus::UnderReview, $document->fresh()->status);
+    }
+
+    /**
+     * Returning is a DECISION, so it carries the gate every decision carries:
      * Admin-only, and not on your own document while §A6's switch is off.
      *
      * That gate is what made APPROVAL unusable, and it is harmless here for one
-     * reason -- nothing waits on a rejection. The clerk below cannot reject,
-     * and can still receive, so the folder keeps moving either way.
+     * reason -- nothing waits on a return. The clerk below cannot return, and
+     * can still receive, so the folder keeps moving either way.
+     *
+     * The document is held away from its originating office, because at the
+     * originating office nobody can return it and the test would prove nothing
+     * about the clerk.
      */
-    public function test_a_clerk_cannot_reject_but_can_still_move_the_folder(): void
+    public function test_a_clerk_cannot_return_but_can_still_move_the_folder(): void
     {
-        $office = $this->office();
+        $origin = $this->office();
+        $office = $this->office('MTO', 'Treasury');
         $clerk = $this->staff($office);
-        $document = $this->registerDocument($office, $this->staff($office));
+        $document = $this->registerDocument($origin, $this->staff($origin));
+
+        $this->actingAs($this->admin($origin))
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'forwarded',
+                'to_office_id' => $office->id,
+                'expected_movement_id' => $document->openMovement->id,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $document->refresh();
 
         $this->actingAs($clerk)
             ->post(route('documents.transitions.store', $document), [
@@ -257,12 +472,12 @@ class EndToEndTest extends TestCase
             'value',
         );
 
-        $this->assertNotContains('rejected', $offered);
+        $this->assertNotContains('returned', $offered);
         $this->assertContains('received', $offered, 'A clerk must still be able to receive.');
 
         $this->actingAs($clerk)
             ->post(route('documents.transitions.store', $document), [
-                'action' => 'rejected',
+                'action' => 'returned',
                 'remarks' => 'Trying it anyway.',
                 'expected_movement_id' => $document->openMovement->id,
             ])
@@ -278,8 +493,9 @@ class EndToEndTest extends TestCase
      * from the same map that guards the server -- but a hand-rolled POST, or a
      * tab left open across the deploy, still has to bounce.
      *
-     * `rejected` is deliberately NOT in this list any more: it came back on
-     * 2026-09-13. test_a_rejection_refuses_the_document_and_tears_down_its_route
+     * `rejected` is in this list again: on 2026-09-15 the client asked for the
+     * Reject button to become Return. `returned` is not, because it is
+     * reachable -- test_a_returned_document_is_corrected_and_carries_on_as_the_same_document
      * covers it from the other side.
      */
     public function test_the_removed_decision_actions_are_refused_over_http(): void
@@ -293,7 +509,7 @@ class EndToEndTest extends TestCase
             'expected_movement_id' => $document->openMovement->id,
         ]);
 
-        foreach (['approved', 'returned'] as $action) {
+        foreach (['approved', 'rejected'] as $action) {
             $document->refresh();
 
             $this->actingAs($admin)

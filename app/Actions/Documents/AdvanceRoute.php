@@ -40,9 +40,17 @@ use Illuminate\Support\Facades\DB;
  *    Leaving them pending would make "a completed document is held by nobody"
  *    a lie about a document still listed as travelling.
  *
- *  - RETURNED sends the folder BACKWARDS for correction. The rest of the route
- *    was planned from a document that no longer exists in that form, so it is
- *    cancelled; the correcting office picks a fresh route when it re-sends.
+ *  - RETURNED sends the folder back to its originating office for correction,
+ *    and does NOT touch the route. The client asked on 2026-09-15 for a
+ *    returned document to carry on as the same document once corrected, so the
+ *    offices still queued simply keep waiting. RESUBMITTED then sends it back
+ *    to the office that returned it -- also without touching the route -- and
+ *    that office's next receipt advances to the next pending stop as normal.
+ *
+ *    That only holds because nothing ELSE can move a returned document: see
+ *    DocumentWorkflow, which offers `resubmitted` and nothing more from
+ *    `returned`. A receipt at the originating office would have advanced the
+ *    route right past the office waiting for the correction.
  *
  *  - FORWARDED cancels the rest too. A human choosing a destination by hand has
  *    overridden the plan, and silently keeping a queue that no longer matches
@@ -180,7 +188,6 @@ final class AdvanceRoute
     {
         return in_array($action, [
             MovementAction::Rejected,
-            MovementAction::Returned,
             MovementAction::Completed,
             MovementAction::Forwarded,
         ], true);

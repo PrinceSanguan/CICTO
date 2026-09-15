@@ -83,24 +83,29 @@ final class KnowledgeBase
                         'body' => 'An office has received the document and is working on it. On the document page itself this stage is named **Under Review**. If the document was submitted to several offices, each one presses **Received** when it arrives and the document moves straight on to the next office on the list -- there is no approval step to wait for.',
                     ],
                     /*
-                     * Approved is listed although nothing can reach it, and
-                     * deliberately: it is still a STORED status on every
-                     * document processed before the approval step was removed
-                     * on 2026-09-03, and somebody looking at one of those and
+                     * Approved and Rejected are listed although nothing can
+                     * reach either, and deliberately: both are still STORED
+                     * statuses on documents processed before their buttons went
+                     * (approval on 2026-09-03; reject became Return on
+                     * 2026-09-15), and somebody looking at one of those and
                      * reaching for this article has to find the word they are
                      * looking at.
                      *
-                     * Rejected is the opposite case and the entry says so --
-                     * the button came back on 2026-09-13, so this one describes
-                     * something that happens today.
+                     * Returned is the opposite case and the entry says so --
+                     * it is what an office does today when a document needs
+                     * fixing.
                      */
                     [
                         'title' => 'Approved',
                         'body' => 'An older status. Documents processed before the approval step was removed may still show it; it means an office had signed off on the document. Nothing new is marked Approved -- offices now press **Received** instead.',
                     ],
                     [
+                        'title' => 'Returned',
+                        'body' => 'An office sent the document back to the office that filed it, to be corrected. The reason is required, so it is always in the document history, and the originating office and the person who submitted it are notified. In the document list it reads **Pending**, because it is waiting on the originating office. To fix it, open the document, attach the corrected file, and press **Resubmit**: it goes straight back to the office that returned it, and any offices still queued on its route carry on after that. It stays the same document throughout -- the same control number, the same QR label and one unbroken history. Only an office Admin can return a document, and only while it is with their office.',
+                    ],
+                    [
                         'title' => 'Rejected',
-                        'body' => 'The office holding the document refused it. The reason is required, so it is always recorded in the document history, and the originating office is notified. This is a final state: the document stops there, any offices still queued on its route are cancelled, and it can only be archived afterwards. Only an office Admin can reject, and only while the document is with their office.',
+                        'body' => 'An older status. Documents refused before the Reject button was replaced by **Return** may still show it; it is a final state and the reason is recorded in the document history. Nothing new is marked Rejected -- a document that needs fixing is returned for correction instead.',
                     ],
                     [
                         // The design's fifth status is "Released". No screen in

@@ -71,6 +71,20 @@ final class DocumentWorkflow
      * it: a document still sitting in `initiated` has not been picked up by
      * anybody, so there is no office in a position to refuse it yet.
      *
+     * RETURN REPLACED REJECT on 2026-09-15. The client saw the reject button
+     * and asked for it to be "return" instead, with the corrected document
+     * uploadable afterwards, "para yung document history hindi maputol ... para
+     * isang qr code na lang din po yung magamit nung isang document". A
+     * rejection was terminal, so fixing a refused document meant filing a new
+     * one: a new control number, a new QR label, and a trail that stopped dead.
+     *
+     * So `under_review` offers `returned` where it offered `rejected`, under
+     * the same gate (Admin-only, remarks required, §A6). The document goes back
+     * to its ORIGINATING office, the route's remaining stops wait rather than
+     * being cancelled, and `resubmitted` sends the corrected document back to
+     * the office that returned it -- whose receipt then carries on down the
+     * route exactly as before. Everything is one document the whole way.
+     *
      * @var array<string, array<string, string>>
      */
     public const TRANSITIONS = [
@@ -79,24 +93,38 @@ final class DocumentWorkflow
             'received' => 'under_review',
         ],
         'under_review' => [
-            // Key order is button order on the document page, so the one
-            // irreversible action on the panel sits last rather than between
-            // two routine ones.
+            // Key order is button order on the document page, so sending the
+            // folder back sits last rather than between two routine actions.
             'forwarded' => 'under_review',
             'received' => 'under_review',
             'completed' => 'completed',
-            'rejected' => 'rejected',
+            'returned' => 'returned',
         ],
-        // Legacy stages. Unreachable from today; kept so documents already in
-        // them at deploy time are not stranded.
+        // Legacy stage. Unreachable from today; kept so documents already in
+        // it at deploy time are not stranded.
         'approved' => [
             'forwarded' => 'under_review',
             'completed' => 'completed',
         ],
+        /*
+         * A returned document is waiting at its originating office for a
+         * correction, and the ONLY way on is to resubmit it to the office that
+         * returned it -- see TransitionDocument for where that is read from.
+         *
+         * `received` is deliberately gone from here. The route's remaining
+         * stops are kept while a document is returned, and AdvanceRoute moves
+         * the folder on to the next PENDING stop on any receipt -- so the
+         * originating office acknowledging the returned folder would have
+         * skipped straight past the office that asked for the correction.
+         * `forwarded` is gone for the same kind of reason: RouteDocument
+         * replaces the route, so a hand-picked send would silently discard
+         * the offices still waiting.
+         */
         'returned' => [
-            'forwarded' => 'under_review',
-            'received' => 'under_review',
+            'resubmitted' => 'under_review',
         ],
+        // Legacy, like `approved`: the button is Return now (2026-09-15), so
+        // nothing new is rejected. Documents already rejected stay terminal.
         'rejected' => [],
         'completed' => [],
     ];

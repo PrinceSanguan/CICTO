@@ -140,23 +140,36 @@ class SelfApprovalSettingTest extends TestCase
     }
 
     /**
-     * Rejecting is a decision too, so the same switch decides it -- and the
+     * Returning is a decision too, so the same switch decides it -- and the
      * important half is what happens while it is OFF.
      *
      * That gate is exactly what made APPROVAL unusable: the route waited on it,
      * so an Admin who could not approve their own document stalled the queue
-     * behind them forever. It is harmless on a rejection because nothing waits
-     * on one. The Admin below cannot refuse their own document, and can still
-     * receive it -- so the folder keeps moving either way.
+     * behind them forever. It is harmless on a return because nothing waits on
+     * one. The Admin below cannot return their own document, and can still
+     * move it on -- so the folder keeps moving either way.
+     *
+     * The Admin files against ANOTHER office and then holds the document at
+     * their own. That is the only shape in which the switch is what decides:
+     * a document held at its own originating office cannot be returned at all,
+     * because there is nowhere to return it to.
      */
-    public function test_the_stored_choice_also_decides_a_rejection_without_stalling_the_folder(): void
+    public function test_the_stored_choice_also_decides_a_return_without_stalling_the_folder(): void
     {
         config(['cicto.workflow.allow_self_approval' => false]);
 
         $office = $this->office();
-        $other = $this->office('MTO', 'Treasury');
+        $origin = $this->office('MTO', 'Treasury');
         $admin = $this->admin($office);
-        $document = $this->registerDocument($office, $admin);
+        $document = $this->registerDocument($origin, $admin);
+
+        $this->actingAs($this->admin($origin))->post(route('documents.transitions.store', $document), [
+            'action' => 'forwarded',
+            'to_office_id' => $office->id,
+            'expected_movement_id' => $document->openMovement->id,
+        ])->assertSessionHasNoErrors();
+
+        $document->refresh();
 
         $this->actingAs($admin)->post(route('documents.transitions.store', $document), [
             'action' => 'received',
@@ -167,45 +180,43 @@ class SelfApprovalSettingTest extends TestCase
 
         $this->actingAs($admin)
             ->post(route('documents.transitions.store', $document), [
-                'action' => 'rejected',
-                'remarks' => 'Refusing my own request',
+                'action' => 'returned',
+                'remarks' => 'Returning my own request',
                 'expected_movement_id' => $document->openMovement->id,
             ])
             ->assertForbidden();
 
-        // The folder is not stuck: what they cannot decide, they can still move.
-        $this->actingAs($admin)
-            ->post(route('documents.transitions.store', $document), [
-                'action' => 'forwarded',
-                'to_office_id' => $other->id,
-                'expected_movement_id' => $document->openMovement->id,
-            ])
-            ->assertSessionHasNoErrors();
-
         $this->assertSame(DocumentStatus::UnderReview, $document->fresh()->status);
 
-        // And with the switch on, the same person may refuse the same document.
+        // The folder is not stuck: what they cannot decide, they can still move.
+        $this->assertContains(
+            'forwarded',
+            array_column(
+                $this->actingAs($admin)
+                    ->get(route('documents.show', $document))
+                    ->assertOk()
+                    ->viewData('page')['props']['document']['available_actions'],
+                'value',
+            ),
+        );
+
+        // And with the switch on, the same person may return the same document.
         $this->actingAs($this->superAdmin())
             ->post(route('super-admin.settings.workflow'), ['allow_self_approval' => true])
             ->assertRedirect();
 
-        $this->actingAs($this->admin($other))
-            ->post(route('documents.transitions.store', $document), [
-                'action' => 'forwarded',
-                'to_office_id' => $office->id,
-                'expected_movement_id' => $document->fresh()->openMovement->id,
-            ])
-            ->assertSessionHasNoErrors();
-
         $this->actingAs($admin)
             ->post(route('documents.transitions.store', $document), [
-                'action' => 'rejected',
-                'remarks' => 'Refusing my own request',
+                'action' => 'returned',
+                'remarks' => 'Returning my own request',
                 'expected_movement_id' => $document->fresh()->openMovement->id,
             ])
             ->assertRedirect();
 
-        $this->assertSame(DocumentStatus::Rejected, $document->fresh()->status);
+        $document->refresh();
+
+        $this->assertSame(DocumentStatus::Returned, $document->status);
+        $this->assertSame($origin->id, $document->openMovement->to_office_id);
     }
 
     /**

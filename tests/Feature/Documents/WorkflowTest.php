@@ -143,25 +143,26 @@ class WorkflowTest extends TestCase
 
     /**
      * The client asked for "received lang" on 2026-09-03, which removed approve,
-     * reject and return. Reject came back on 2026-09-13 -- it was §9 scope from
-     * the start and its removal was collateral damage. Approve and return did
-     * not, and this is the test that keeps them out.
+     * reject and return. Reject came back on 2026-09-13, and on 2026-09-15 the
+     * client asked for that button to be Return instead, so a refused document
+     * could be corrected and carry on as the same document. Approve and reject
+     * stay out, and this is the test that keeps them out.
      *
      * Approving in particular is why the client's documents kept dying at the
      * third department: it was the only action that advanced a route, and
      * DocumentPolicy makes it Admin-only and forbids it to the document's own
      * author, so any queued office without a qualifying approver held the
-     * folder forever. Reject is safe to offer for the exact reason approve was
+     * folder forever. Return is safe to offer for the exact reason approve was
      * not -- nothing waits on it, because the route advances on `received`.
      */
-    public function test_no_reachable_stage_offers_approve_or_return(): void
+    public function test_no_reachable_stage_offers_approve_or_reject(): void
     {
         $removed = [
             MovementAction::Approved,
-            MovementAction::Returned,
+            MovementAction::Rejected,
         ];
 
-        foreach ([DocumentStatus::Initiated, DocumentStatus::UnderReview] as $status) {
+        foreach ([DocumentStatus::Initiated, DocumentStatus::UnderReview, DocumentStatus::Returned] as $status) {
             foreach ($removed as $action) {
                 $this->assertFalse(
                     DocumentWorkflow::allows($status, $action),
@@ -170,14 +171,14 @@ class WorkflowTest extends TestCase
             }
         }
 
-        // Reject is offered where a document can actually be refused, and only
-        // there: `initiated` means nobody has picked the folder up yet, so no
-        // office is in a position to refuse it.
+        // Return is offered where a document can actually be sent back, and
+        // only there: `initiated` means nobody has picked the folder up yet, so
+        // no office is in a position to ask for a correction.
         $this->assertTrue(
-            DocumentWorkflow::allows(DocumentStatus::UnderReview, MovementAction::Rejected),
+            DocumentWorkflow::allows(DocumentStatus::UnderReview, MovementAction::Returned),
         );
         $this->assertFalse(
-            DocumentWorkflow::allows(DocumentStatus::Initiated, MovementAction::Rejected),
+            DocumentWorkflow::allows(DocumentStatus::Initiated, MovementAction::Returned),
         );
 
         // What under_review DOES offer, in full. Asserted as a whole set rather
@@ -187,45 +188,96 @@ class WorkflowTest extends TestCase
             [
                 MovementAction::Forwarded,
                 MovementAction::Received,
-                MovementAction::Rejected,
+                MovementAction::Returned,
                 MovementAction::Completed,
             ],
             DocumentWorkflow::allowed(DocumentStatus::UnderReview),
         );
+
+        // And a returned document has exactly one way on. A receipt would
+        // advance its kept route past the office waiting for the correction,
+        // and a hand-picked send would replace that route.
+        $this->assertSame(
+            [MovementAction::Resubmitted],
+            DocumentWorkflow::allowed(DocumentStatus::Returned),
+        );
     }
 
     /**
-     * Rejecting is terminal, and terminal means terminal: no open leg, no way
-     * back, and DocumentStatus::isTerminal() is what §16 reads to decide the
-     * document may be archived.
+     * Return sends the document to its ORIGINATING office, and resubmit sends
+     * it back to the office that returned it.
+     *
+     * Deliberately three offices, so "the originating office" and "the office
+     * before this one" are different answers: the Phase 2 design returned to
+     * the previous office, and the client's request of 2026-09-15 is that the
+     * office which filed the document gets it back to correct.
      */
-    public function test_rejecting_stops_the_document_dead(): void
+    public function test_return_goes_to_the_originating_office_and_resubmit_comes_back(): void
     {
-        $office = $this->office();
-        $admin = $this->admin($office);
-        $document = $this->registerDocument($office, $this->staff($office));
+        $mpdo = $this->office('MPDO');
+        $mto = $this->office('MTO', 'Treasury');
+        $hrmo = $this->office('HRMO', 'Human Resource');
+        $clerk = $this->staff($mpdo);
+        $document = $this->registerDocument($mpdo, $clerk);
 
-        app(TransitionDocument::class)->handle(
-            document: $document,
-            action: MovementAction::Received,
-            actor: $admin,
-            expectedMovementId: $document->openMovement->id,
-        );
+        foreach ([[$mpdo, $mto], [$mto, $hrmo]] as [$from, $to]) {
+            app(TransitionDocument::class)->handle(
+                document: $document->refresh(),
+                action: MovementAction::Forwarded,
+                actor: $this->admin($from),
+                toOfficeId: $to->id,
+                expectedMovementId: $document->refresh()->openMovement->id,
+            );
+        }
+
+        $hrmoAdmin = $this->admin($hrmo);
 
         app(TransitionDocument::class)->handle(
             document: $document->refresh(),
-            action: MovementAction::Rejected,
-            actor: $admin,
+            action: MovementAction::Returned,
+            actor: $hrmoAdmin,
             remarks: 'Missing the signed attachment.',
             expectedMovementId: $document->refresh()->openMovement->id,
         );
 
         $document->refresh();
 
-        $this->assertSame(DocumentStatus::Rejected, $document->status);
-        $this->assertTrue($document->status->isTerminal());
-        $this->assertNull($document->openMovement, 'A rejected document is held by nobody.');
-        $this->assertSame([], DocumentWorkflow::allowed(DocumentStatus::Rejected));
+        $this->assertSame(DocumentStatus::Returned, $document->status);
+        $this->assertFalse($document->status->isTerminal(), 'A returned document is waiting, not finished.');
+        $this->assertSame($mpdo->id, $document->openMovement->to_office_id, 'Back to the office that filed it, not to MTO.');
+        $this->assertSame($hrmo->id, $document->openMovement->from_office_id);
+
+        app(TransitionDocument::class)->handle(
+            document: $document,
+            action: MovementAction::Resubmitted,
+            actor: $clerk,
+            expectedMovementId: $document->openMovement->id,
+        );
+
+        $document->refresh();
+
+        $this->assertSame(DocumentStatus::UnderReview, $document->status);
+        $this->assertSame($hrmo->id, $document->openMovement->to_office_id, 'Back to the office that returned it.');
+        $this->assertSame(MovementAction::Resubmitted, $document->openMovement->action);
+    }
+
+    /** Only a document sitting on its returned leg knows where a resubmit goes. */
+    public function test_a_resubmit_with_no_return_to_answer_is_refused(): void
+    {
+        $office = $this->office();
+        $document = $this->registerDocument($office, $this->staff($office));
+
+        // A status edited by hand, with no returned leg behind it.
+        $document->forceFill(['status' => DocumentStatus::Returned->value])->save();
+
+        $this->expectException(IllegalTransitionException::class);
+
+        app(TransitionDocument::class)->handle(
+            document: $document,
+            action: MovementAction::Resubmitted,
+            actor: $this->admin($office),
+            expectedMovementId: $document->openMovement->id,
+        );
     }
 
     /**
@@ -244,8 +296,11 @@ class WorkflowTest extends TestCase
                 DocumentWorkflow::allowed($status),
                 "A document stuck in {$status->value} must still have a way out.",
             );
-            $this->assertTrue(DocumentWorkflow::canForward($status));
         }
+
+        // A returned document's way out is Resubmit, not a hand-picked send --
+        // see test_no_reachable_stage_offers_approve_or_reject.
+        $this->assertTrue(DocumentWorkflow::canForward(DocumentStatus::Approved));
 
         $office = $this->office('MPDO');
         $mto = $this->office('MTO', 'Treasury');
@@ -384,19 +439,4 @@ class WorkflowTest extends TestCase
             DocumentMovement::query()->where('document_id', $document->id)->whereNull('departed_at')->count(),
         );
     }
-
-    /**
-     * WHAT USED TO BE HERE. Two tests pinned Return's destination -- back to
-     * the office that sent it, falling back to the originating office on the
-     * genesis leg. Returning was removed from the workflow on 2026-09-03 at the
-     * client's request, so there is no longer a stage it can be performed from
-     * and the tests had nothing left to drive.
-     *
-     * TransitionDocument still carries the `Returned` arm that works out that
-     * destination, and MovementAction still has the case. Both are kept
-     * deliberately: legs written before the change still say "returned" and
-     * §13's timeline has to render them, and if the client asks for the button
-     * back the subtle half of the feature is still there. Put a test back
-     * beside it if they do.
-     */
 }
