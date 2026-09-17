@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use Illuminate\Http\UploadedFile;
+
 /**
  * The one set of rules and messages for a document file upload.
  *
@@ -77,6 +79,25 @@ final class DocumentUpload
             'allowed' => self::allowed(),
             'messages' => self::clientMessages(),
         ];
+    }
+
+    /**
+     * The flash behind the "Upload successful" pop-up, sent instead of a toast
+     * whenever a request stored a file: `->with('upload', ...)`.
+     *
+     * A toast is gone in four seconds from a corner of the screen, which is not
+     * enough for the one step a clerk most needs to be sure of -- that the scan
+     * actually went in. The message is the sentence the toast would have said.
+     *
+     * @return array{fileName: string, message: string}
+     */
+    public static function confirmation(UploadedFile|string|null $file, string $message): array
+    {
+        $name = $file instanceof UploadedFile ? $file->getClientOriginalName() : (string) $file;
+
+        // Same cut StoreDocumentFile applies, so the pop-up and the version
+        // list show one name.
+        return ['fileName' => mb_substr($name, 0, 255), 'message' => $message];
     }
 
     /**

@@ -14,6 +14,7 @@ use App\Models\Document;
 use App\Models\DocumentMovement;
 use App\Models\DocumentSignature;
 use App\Models\Office;
+use App\Support\DocumentUpload;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -98,10 +99,14 @@ class DocumentWorkflowController extends Controller
                 ? $this->confirmation($action, $document)
                 : "{$document->control_number} resubmitted to {$office}.";
 
-            return back()->with('toast', [
-                'type' => 'success',
-                'message' => $file === null ? $message : $message." Corrected file saved as version {$file->version}.",
-            ]);
+            if ($file !== null) {
+                return back()->with('upload', DocumentUpload::confirmation(
+                    $file->original_name,
+                    $message." Corrected file saved as version {$file->version}.",
+                ));
+            }
+
+            return back()->with('toast', ['type' => 'success', 'message' => $message]);
         }
 
         /** @var list<int> $destinations */

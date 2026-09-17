@@ -19,3 +19,9 @@ export type AuthLayoutProps = {
     title?: string;
     description?: string;
 };
+
+/** App\Support\DocumentUpload::confirmation(), flashed as `upload`. */
+export type FlashUpload = {
+    fileName: string;
+    message: string;
+};

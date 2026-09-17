@@ -11,6 +11,7 @@ use App\Http\Requests\Documents\StoreDocumentRequest;
 use App\Models\Document;
 use App\Models\DocumentType;
 use App\Models\Office;
+use App\Support\DocumentUpload;
 use App\Support\Presenters\DocumentPresenter;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
@@ -174,10 +175,10 @@ class DocumentController extends Controller
             // where the whole batch is named, so the submitter can see every
             // control number their one submit produced.
             return to_route('documents.show', $documents[0])
-                ->with('toast', [
-                    'type' => 'success',
-                    'message' => $this->distributionConfirmation($documents),
-                ]);
+                ->with('upload', DocumentUpload::confirmation(
+                    $request->file('file'),
+                    $this->distributionConfirmation($documents),
+                ));
         }
 
         $office = Office::query()->findOrFail($officeIds[0] ?? 0);
@@ -197,10 +198,10 @@ class DocumentController extends Controller
         );
 
         return to_route('documents.show', $document)
-            ->with('toast', [
-                'type' => 'success',
-                'message' => $this->registrationConfirmation($document, $queued),
-            ]);
+            ->with('upload', DocumentUpload::confirmation(
+                $request->file('file'),
+                $this->registrationConfirmation($document, $queued),
+            ));
     }
 
     /**

@@ -60,10 +60,14 @@ class HandleInertiaRequests extends Middleware
     {
         // hasSession(), not a nullsafe call: the CSP report endpoint and any
         // future stateless route reach this middleware without one.
-        $toast = $request->hasSession() ? $request->session()->get('toast') : null;
+        // `upload` rides the same bridge: the "Upload successful" pop-up
+        // listens on the same flash event the toasts do.
+        foreach (['toast', 'upload'] as $key) {
+            $value = $request->hasSession() ? $request->session()->get($key) : null;
 
-        if ($toast !== null) {
-            Inertia::flash('toast', $toast);
+            if ($value !== null) {
+                Inertia::flash($key, $value);
+            }
         }
 
         return parent::handle($request, $next);

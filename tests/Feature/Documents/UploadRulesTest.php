@@ -6,6 +6,7 @@ use App\Actions\Documents\TransitionDocument;
 use App\Enums\MovementAction;
 use App\Models\Document;
 use App\Models\DocumentFile;
+use App\Models\User;
 use App\Support\DocumentUpload;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -153,6 +154,86 @@ class UploadRulesTest extends TestCase
     }
 
     /**
+     * Every request that stores a file answers with the "Upload successful"
+     * pop-up instead of a toast; a return with no file still gets the toast.
+     */
+    public function test_registering_confirms_with_the_success_pop_up(): void
+    {
+        Storage::fake('documents');
+
+        $office = $this->office();
+
+        $this->actingAs($this->staff($office))
+            ->post(route('documents.store'), $this->registration($office->id, UploadedFile::fake()->create('request.pdf', 40, 'application/pdf')))
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('upload.fileName', 'request.pdf')
+            ->assertSessionMissing('toast');
+
+        $this->assertSame(
+            'Document registered as '.Document::query()->firstOrFail()->control_number.'.',
+            session('upload.message'),
+        );
+    }
+
+    public function test_a_new_version_and_a_corrected_file_confirm_with_the_success_pop_up(): void
+    {
+        Storage::fake('documents');
+
+        [$document, $mtoAdmin] = $this->documentAtTreasury();
+
+        $this->actingAs($mtoAdmin)
+            ->post(route('documents.files.store', $document), [
+                'file' => UploadedFile::fake()->createWithContent('revised.pdf', '%PDF-1.4 REVISED'),
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('upload.fileName', 'revised.pdf')
+            ->assertSessionMissing('toast');
+
+        $version = DocumentFile::query()->max('version');
+        $this->assertSame("Uploaded as version {$version}.", session('upload.message'));
+
+        $this->actingAs($mtoAdmin)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'returned',
+                'remarks' => 'Wrong form.',
+                // Different bytes: re-sending the current file is a deliberate no-op.
+                'file' => UploadedFile::fake()->createWithContent('corrected.pdf', '%PDF-1.4 CORRECTED'),
+                'expected_movement_id' => $document->openMovement->id,
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('upload.fileName', 'corrected.pdf');
+
+        $this->assertStringEndsWith('Corrected file saved as version '.($version + 1).'.', (string) session('upload.message'));
+    }
+
+    public function test_a_return_without_a_file_keeps_the_toast(): void
+    {
+        [$document, $mtoAdmin] = $this->documentAtTreasury();
+
+        $this->actingAs($mtoAdmin)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'returned',
+                'remarks' => 'Wrong form.',
+                'expected_movement_id' => $document->openMovement->id,
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('toast.type', 'success')
+            ->assertSessionMissing('upload');
+    }
+
+    public function test_the_upload_confirmation_reaches_the_pages_flash_channel(): void
+    {
+        // The pop-up is mounted outside the page and listens on router.on('flash'),
+        // so the session key has to be bridged exactly as the toast is.
+        $page = $this->withSession(['upload' => ['fileName' => 'request.pdf', 'message' => 'Uploaded as version 2.']])
+            ->get(route('privacy'))
+            ->viewData('page');
+
+        $this->assertSame('request.pdf', $page['flash']['upload']['fileName'] ?? null);
+        $this->assertSame('Uploaded as version 2.', $page['flash']['upload']['message']);
+    }
+
+    /**
      * The pop-up refuses a wrong file before the form is sent, so the browser
      * needs the server's limits -- from config, because CICTO_UPLOAD_MAX_KB
      * differs per host.
@@ -172,6 +253,29 @@ class UploadRulesTest extends TestCase
                 ->where('uploads.messages.size', 'This file is too large. The limit is 2.5 MB.')
                 ->where('uploads.messages.type', DocumentUpload::messages()['file.extensions']),
             );
+    }
+
+    /**
+     * A document registered by one office and forwarded to Treasury, whose
+     * admin may upload a version or return it.
+     *
+     * @return array{Document, User}
+     */
+    private function documentAtTreasury(): array
+    {
+        $mpdo = $this->office('MPDO');
+        $mto = $this->office('MTO', 'Treasury');
+        $document = $this->registerDocument($mpdo, $this->staff($mpdo));
+
+        app(TransitionDocument::class)->handle(
+            document: $document,
+            action: MovementAction::Forwarded,
+            actor: $this->admin($mpdo),
+            toOfficeId: $mto->id,
+            expectedMovementId: $document->openMovement->id,
+        );
+
+        return [$document->refresh(), $this->admin($mto)];
     }
 
     /**

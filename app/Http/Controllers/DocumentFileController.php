@@ -40,7 +40,7 @@ class DocumentFileController extends Controller
             replaceReason: $validated['replace_reason'] ?? null,
         );
 
-        return back()->with('toast', ['type' => 'success', 'message' => "Uploaded as version {$file->version}."]);
+        return back()->with('upload', DocumentUpload::confirmation($file->original_name, "Uploaded as version {$file->version}."));
     }
 
     /**
