@@ -20,9 +20,11 @@ import {
 } from '@/components/documents/office-route-picker';
 import { SignaturePad } from '@/components/documents/signature-pad';
 import { ToneBadge } from '@/components/documents/status-badge';
+import { UploadErrorDialog } from '@/components/documents/upload-error-dialog';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useUploadGuard } from '@/hooks/use-upload-guard';
 import documents from '@/routes/documents';
 import type {
     DocumentAction,
@@ -129,6 +131,10 @@ export default function ShowDocument({
         replace_reason: '',
     });
 
+    // One guard per upload, so a refusal names the file from its own form.
+    const correctedUpload = useUploadGuard();
+    const versionUpload = useUploadGuard();
+
     // §15. `method` mirrors App\Enums\SignatureMethod.
     const signature = useForm<{ method: string; image: string | null }>({
         method: 'drawn',
@@ -194,6 +200,7 @@ export default function ShowDocument({
                 forceFormData:
                     (value === 'resubmitted' || value === 'returned') &&
                     action.data.file !== null,
+                onError: (errors) => correctedUpload.reject(errors.file),
                 onSuccess: () => {
                     // reset() restores the defaults captured at first render,
                     // which pre-select Resubmit on a returned document. Once
@@ -242,6 +249,9 @@ export default function ShowDocument({
     return (
         <>
             <Head title={document.control_number} />
+
+            <UploadErrorDialog {...correctedUpload.dialog} />
+            <UploadErrorDialog {...versionUpload.dialog} />
 
             <FilePreviewDialog
                 documentId={document.id}
@@ -769,14 +779,25 @@ export default function ShowDocument({
                                                     id="corrected-file"
                                                     type="file"
                                                     disabled={action.processing}
-                                                    onChange={(event) =>
+                                                    onChange={(event) => {
+                                                        const file =
+                                                            correctedUpload.check(
+                                                                event.target
+                                                                    .files?.[0],
+                                                            );
+
+                                                        // Refused: clear it so
+                                                        // Confirm cannot send it.
+                                                        if (file === null) {
+                                                            event.target.value =
+                                                                '';
+                                                        }
+
                                                         action.setData(
                                                             'file',
-                                                            event.target
-                                                                .files?.[0] ??
-                                                                null,
-                                                        )
-                                                    }
+                                                            file,
+                                                        );
+                                                    }}
                                                 />
                                                 <InputError
                                                     message={action.errors.file}
@@ -1181,6 +1202,10 @@ export default function ShowDocument({
                                                     forceFormData: true,
                                                     onSuccess: () =>
                                                         version.reset(),
+                                                    onError: (errors) =>
+                                                        versionUpload.reject(
+                                                            errors.file,
+                                                        ),
                                                 },
                                             );
                                         }}
@@ -1195,13 +1220,18 @@ export default function ShowDocument({
                                         <Input
                                             id="version-file"
                                             type="file"
-                                            onChange={(event) =>
-                                                version.setData(
-                                                    'file',
-                                                    event.target.files?.[0] ??
-                                                        null,
-                                                )
-                                            }
+                                            onChange={(event) => {
+                                                const file =
+                                                    versionUpload.check(
+                                                        event.target.files?.[0],
+                                                    );
+
+                                                if (file === null) {
+                                                    event.target.value = '';
+                                                }
+
+                                                version.setData('file', file);
+                                            }}
                                         />
                                         <InputError
                                             message={version.errors.file}

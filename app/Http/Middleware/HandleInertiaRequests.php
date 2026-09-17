@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\Notification;
 use App\Models\User;
+use App\Support\DocumentUpload;
 use Closure;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -99,6 +100,12 @@ class HandleInertiaRequests extends Middleware
                 : 0,
 
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+
+            // Upload limits and wording, so the upload pop-up refuses a wrong
+            // file when it is picked instead of after the whole form is sent.
+            // From config, not hard-coded in TypeScript: CICTO_UPLOAD_MAX_KB
+            // can differ per host.
+            'uploads' => DocumentUpload::forClient(),
         ];
     }
 }

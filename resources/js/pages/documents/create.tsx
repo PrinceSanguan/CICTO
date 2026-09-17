@@ -6,7 +6,9 @@ import {
     OfficeRoutePicker,
     routeError,
 } from '@/components/documents/office-route-picker';
+import { UploadErrorDialog } from '@/components/documents/upload-error-dialog';
 import InputError from '@/components/input-error';
+import { useUploadGuard } from '@/hooks/use-upload-guard';
 import documents from '@/routes/documents';
 import type { IdNameOption, SelectOption } from '@/types';
 
@@ -91,6 +93,8 @@ export default function CreateDocument({
 
     const simultaneous = delivery === 'all_at_once';
 
+    const upload = useUploadGuard();
+
     return (
         <>
             <Head title="Submit Document" />
@@ -115,6 +119,7 @@ export default function CreateDocument({
                 options={{ preserveScroll: true }}
                 className="mt-6 rounded-xl bg-white p-6 shadow-xl sm:p-8"
                 encType="multipart/form-data"
+                onError={(errors) => upload.reject(errors.file)}
             >
                 {({ processing, errors, clearErrors }) => (
                     <>
@@ -331,6 +336,8 @@ export default function CreateDocument({
 
                         <FileDropzone
                             error={errors.file}
+                            check={upload.check}
+                            accepted={`${upload.dialog.allowed}, up to ${upload.dialog.maxLabel}.`}
                             onFileChosen={() => clearErrors('file')}
                         />
 
@@ -353,6 +360,8 @@ export default function CreateDocument({
                     </>
                 )}
             </Form>
+
+            <UploadErrorDialog {...upload.dialog} />
         </>
     );
 }
@@ -452,9 +461,15 @@ function CountedTextarea({
  */
 function FileDropzone({
     error,
+    check,
+    accepted,
     onFileChosen,
 }: {
     error?: string;
+    /** useUploadGuard's check: a refused file opens the pop-up and is not kept. */
+    check: (file: File | null | undefined) => File | null;
+    /** "PDF, Word, Excel, PNG or JPG, up to 10 MB." */
+    accepted: string;
     /*
      * Clears the server-side error for this field.
      *
@@ -475,15 +490,28 @@ function FileDropzone({
             return;
         }
 
+        const file = check(files[0]);
         const input = inputRef.current;
+
+        // A refused file is cleared rather than left selected behind the
+        // pop-up, so the form cannot go on to send it anyway.
+        if (file === null) {
+            if (input) {
+                input.value = '';
+            }
+
+            setFileName(null);
+
+            return;
+        }
 
         if (input) {
             const transfer = new DataTransfer();
-            transfer.items.add(files[0]);
+            transfer.items.add(file);
             input.files = transfer.files;
         }
 
-        setFileName(files[0].name);
+        setFileName(file.name);
         onFileChosen();
     };
 
@@ -557,19 +585,21 @@ function FileDropzone({
                     name="file"
                     type="file"
                     onChange={(event) => {
-                        const chosen = event.target.files?.[0]?.name ?? null;
-                        setFileName(chosen);
+                        // Cancelling the picker empties the input.
+                        if (!event.target.files?.length) {
+                            setFileName(null);
 
-                        if (chosen !== null) {
-                            onFileChosen();
+                            return;
                         }
+
+                        accept(event.target.files);
                     }}
                     className="sr-only"
                 />
             </div>
 
             <p className="mt-2 text-xs text-copy">
-                PDF, Word, Excel or an image. SVG files are not accepted.
+                {accepted} SVG files are not accepted.
             </p>
 
             <InputError message={error} className="mt-1" />

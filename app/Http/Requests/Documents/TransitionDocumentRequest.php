@@ -6,9 +6,9 @@ use App\Enums\MovementAction;
 use App\Enums\SignatureMethod;
 use App\Exceptions\StaleWorkflowStateException;
 use App\Models\Document;
+use App\Support\DocumentUpload;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\File;
 use Illuminate\Validation\Validator;
 
 /**
@@ -177,9 +177,7 @@ class TransitionDocumentRequest extends FormRequest
              */
             'file' => [
                 'nullable',
-                File::types(config('cicto.uploads.mimes'))
-                    ->extensions(config('cicto.uploads.extensions'))
-                    ->max((int) config('cicto.uploads.max_size_kb')),
+                ...DocumentUpload::rules(),
             ],
             'replace_reason' => ['nullable', 'string', 'max:500'],
 
@@ -220,6 +218,14 @@ class TransitionDocumentRequest extends FormRequest
             'to_office_ids' => 'destination office',
             'to_office_ids.*' => 'destination office',
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return DocumentUpload::messages();
     }
 
     public function withValidator(Validator $validator): void

@@ -4,9 +4,9 @@ namespace App\Http\Requests\Documents;
 
 use App\Enums\DocumentPriority;
 use App\Models\Document;
+use App\Support\DocumentUpload;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\File;
 use Illuminate\Validation\Validator;
 
 /**
@@ -118,19 +118,14 @@ class StoreDocumentRequest extends FormRequest
 
             'priority' => ['required', Rule::enum(DocumentPriority::class)],
 
-            // Both types() and extensions(). mimes:/types() validates only the
-            // GUESSED MIME, so a .php file carrying a PDF magic header passes it;
-            // extensions() checks the actual filename extension. SVG is
-            // permanently excluded from the allow-list -- stored XSS.
+            // Extension and content both checked -- DocumentUpload says why.
             'file' => [
                 // Required, per the client's design. Kept in step with the
                 // asterisk on the Upload File label -- the two must change
                 // together or the form goes back to promising a check that
                 // does not happen.
                 'required',
-                File::types(config('cicto.uploads.mimes'))
-                    ->extensions(config('cicto.uploads.extensions'))
-                    ->max((int) config('cicto.uploads.max_size_kb')),
+                ...DocumentUpload::rules(),
             ],
         ];
     }
@@ -140,9 +135,7 @@ class StoreDocumentRequest extends FormRequest
      */
     public function messages(): array
     {
-        return [
-            'file.max' => 'The file may not be larger than :max KB. Note that a very large upload can also be cut off by the server before it reaches this check.',
-        ];
+        return DocumentUpload::messages();
     }
 
     /**

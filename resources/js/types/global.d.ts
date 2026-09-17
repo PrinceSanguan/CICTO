@@ -1,4 +1,5 @@
 import type { Auth } from '@/types/auth';
+import type { UploadRules } from '@/types/documents';
 
 declare module 'react' {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -13,6 +14,7 @@ declare module '@inertiajs/core' {
             name: string;
             auth: Auth;
             sidebarOpen: boolean;
+            uploads: UploadRules;
             [key: string]: unknown;
         };
     }

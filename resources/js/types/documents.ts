@@ -260,3 +260,17 @@ export type SignatureItem = {
     valid: boolean;
     superseded: boolean;
 };
+
+/** Shared on every page from App\Support\DocumentUpload::forClient(). */
+export type UploadRules = {
+    extensions: string[];
+    maxKb: number;
+    /** "PDF, Word, Excel, PNG or JPG" */
+    allowed: string;
+    messages: {
+        type: string;
+        size: string;
+        empty: string;
+        incomplete: string;
+    };
+};

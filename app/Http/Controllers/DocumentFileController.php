@@ -7,10 +7,10 @@ use App\Enums\SecurityEventType;
 use App\Models\Document;
 use App\Models\DocumentFile;
 use App\Models\SecurityEvent;
+use App\Support\DocumentUpload;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\Rules\File;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -28,14 +28,9 @@ class DocumentFileController extends Controller
         $this->authorize('uploadVersion', $document);
 
         $validated = $request->validate([
-            'file' => [
-                'required',
-                File::types(config('cicto.uploads.mimes'))
-                    ->extensions(config('cicto.uploads.extensions'))
-                    ->max((int) config('cicto.uploads.max_size_kb')),
-            ],
+            'file' => ['required', ...DocumentUpload::rules()],
             'replace_reason' => ['nullable', 'string', 'max:500'],
-        ]);
+        ], DocumentUpload::messages());
 
         $file = $store->handle(
             document: $document,
