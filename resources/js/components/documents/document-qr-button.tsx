@@ -25,8 +25,9 @@ import documents from '@/routes/documents';
  *
  * The <img> lives inside DialogContent on purpose. Radix mounts content only
  * while the dialog is open, so a page of twenty rows makes zero requests for
- * QR SVGs until somebody asks for one, and the one it then makes is cached for
- * the next open.
+ * QR SVGs until somebody asks for one. A repeat open revalidates against an
+ * ETag rather than reusing the image blind, because the scan domain it encodes
+ * can change.
  */
 export function DocumentQrButton({
     id,

@@ -57,15 +57,25 @@ class DocumentLabelController extends Controller
     }
 
     /** Single QR for the document detail screen. */
-    public function svg(Document $document): Response
+    public function svg(Request $request, Document $document): Response
     {
         $this->authorize('view', $document);
 
-        return response($this->qr->forDocument($document), 200, [
+        $svg = $this->qr->forDocument($document);
+
+        $response = response($svg, 200, [
             'Content-Type' => 'image/svg+xml',
-            // The token never changes, so this is safe to cache hard -- but
-            // privately: it identifies a specific document.
-            'Cache-Control' => 'private, max-age=31536000, immutable',
+            // Revalidated on every open, never cached hard. The token never
+            // changes but the scan base URL does: this shipped as a year-long
+            // `immutable`, and when production moved off cicto.psanguan.com
+            // every browser that had opened a QR kept showing the old domain.
+            // The ETag keeps a repeat open to a bodyless 304.
+            'Cache-Control' => 'private, no-cache',
         ]);
+
+        $response->setEtag(hash('xxh128', $svg));
+        $response->isNotModified($request);
+
+        return $response;
     }
 }

@@ -31,7 +31,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('documents', [DocumentController::class, 'store'])->name('documents.store');
     Route::get('documents/{document}', [DocumentController::class, 'show'])->name('documents.show');
 
-    Route::get('documents/{document}/qr.svg', [DocumentLabelController::class, 'svg'])->name('documents.qr');
+    // Renamed from qr.svg, which was served `immutable` for a year: browsers
+    // never re-request a URL cached that way, so only a new path evicts the
+    // copies still carrying the old domain.
+    Route::get('documents/{document}/qr-code.svg', [DocumentLabelController::class, 'svg'])->name('documents.qr');
 
     // §9 approve / reject / return / forward / complete
     Route::post('documents/{document}/transitions', [DocumentWorkflowController::class, 'store'])

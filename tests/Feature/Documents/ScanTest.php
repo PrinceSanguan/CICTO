@@ -174,6 +174,33 @@ class ScanTest extends TestCase
         $this->assertStringContainsString('<svg', $response->getContent());
     }
 
+    public function test_the_qr_image_revalidates_so_a_scan_domain_change_reaches_the_browser(): void
+    {
+        $office = $this->office();
+        $admin = $this->admin($office);
+        $document = $this->registerDocument($office, $this->staff($office));
+
+        config()->set('cicto.scan_base_url', 'https://old.example.test');
+
+        $first = $this->actingAs($admin)->get(route('documents.qr', $document));
+        $cacheControl = (string) $first->headers->get('Cache-Control');
+        $etag = (string) $first->headers->get('ETag');
+
+        $this->assertStringContainsString('no-cache', $cacheControl);
+        $this->assertStringNotContainsString('immutable', $cacheControl);
+        $this->assertNotSame('', $etag);
+
+        $this->actingAs($admin)
+            ->get(route('documents.qr', $document), ['If-None-Match' => $etag])
+            ->assertStatus(304);
+
+        config()->set('cicto.scan_base_url', 'https://new.example.test');
+
+        $this->actingAs($admin)
+            ->get(route('documents.qr', $document), ['If-None-Match' => $etag])
+            ->assertOk();
+    }
+
     public function test_the_printable_label_encodes_the_token_and_not_the_control_number(): void
     {
         $office = $this->office();
