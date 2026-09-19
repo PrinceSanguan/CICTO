@@ -123,6 +123,10 @@ class DocumentPresenter
     /**
      * The other documents one simultaneous submit produced.
      *
+     * Legacy since 2026-09-19, when the client removed "All at the same time":
+     * nothing new is ever grouped, but documents filed that way before then
+     * still carry their submission_group_id and still name their batch.
+     *
      * Never used to authorise anything: a viewer who cannot see a sibling still
      * cannot open it -- DocumentPolicy decides that when they click. This only
      * says the batch existed, which the person who submitted it already knows.
@@ -254,6 +258,11 @@ class DocumentPresenter
                     fn ($action) => $viewer->can('act', [$document, $action]),
                 ),
             )),
+
+            // True when pressing Received closes the document instead of moving
+            // it on: the route has run out. The page says so before the click,
+            // because at the last office Received is the Completed button now.
+            'receipt_completes' => $document->receiptCompletes(),
 
             /*
              * §9's routing plan: the offices this document is queued to visit.

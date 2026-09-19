@@ -67,7 +67,8 @@ final class SignDocument
 
             $imagePath = null;
 
-            if ($method === SignatureMethod::Drawn) {
+            // Drawn or uploaded: both arrive as a PNG the browser rendered.
+            if ($method->requiresImage()) {
                 $imagePath = $this->storeSignatureImage($locked, $serial, $drawnPng);
             }
 
@@ -131,7 +132,8 @@ final class SignDocument
     }
 
     /**
-     * Drawn marks arrive as a base64 data URL from a canvas.
+     * Drawn marks arrive as a base64 data URL from a canvas -- and so do
+     * uploaded ones, which the browser redraws onto a canvas before sending.
      *
      * Validated by magic bytes rather than by trusting the declared MIME: this
      * ends up on disk and is rendered back into a PDF, so "it said it was a
@@ -140,7 +142,7 @@ final class SignDocument
     private function storeSignatureImage(Document $document, string $serial, ?string $dataUrl): string
     {
         if ($dataUrl === null || $dataUrl === '') {
-            throw new RuntimeException('A drawn signature requires an image.');
+            throw new RuntimeException('A drawn or uploaded signature requires an image.');
         }
 
         $encoded = preg_replace('#^data:image/png;base64,#i', '', trim($dataUrl));

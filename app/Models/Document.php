@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\DocumentPriority;
 use App\Enums\DocumentStatus;
 use App\Enums\DueState;
+use App\Enums\RouteStopStatus;
 use App\Models\Builders\DocumentBuilder;
 use App\Policies\DocumentPolicy;
 use App\Support\Deadlines;
@@ -12,6 +13,7 @@ use Database\Factories\DocumentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\UseEloquentBuilder;
 use Illuminate\Database\Eloquent\Attributes\UsePolicy;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -251,5 +253,63 @@ class Document extends Model
     public function isOpen(): bool
     {
         return ! $this->status->isTerminal() && $this->completed_at === null;
+    }
+
+    /**
+     * Will the next receipt close this document?
+     *
+     * The same test AdvanceRoute::closeFinishedRoute() applies: the document
+     * was given a route (any stop, whatever its status) and nothing on it is
+     * still waiting. Received then completes it rather than moving it on.
+     */
+    public function receiptCompletes(): bool
+    {
+        $stops = $this->loadedRouteStops();
+
+        return $stops->isNotEmpty()
+            && ! $stops->contains(fn (DocumentRouteStop $stop) => $stop->status === RouteStopStatus::Pending);
+    }
+
+    /**
+     * Is the office holding this document the LAST office on its route?
+     *
+     * Stricter than receiptCompletes(), and on purpose. The route has run out
+     * AND the folder is sitting at the route's final visited stop -- the office
+     * the plan actually ended at. An office the folder was sent to by hand,
+     * off the plan, also completes it on receipt, but it is not on the route
+     * at all; the client's rule of 2026-09-19 ("applicable only on the last
+     * route office") does not reach it.
+     *
+     * Positions only ever grow (RouteDocument appends a re-route after the old
+     * stops), so the highest visited position is always where the latest plan
+     * ended, a round trip back to the originating office included.
+     */
+    public function isAtLastRouteStop(): bool
+    {
+        if (! $this->receiptCompletes()) {
+            return false;
+        }
+
+        $last = $this->loadedRouteStops()
+            ->filter(fn (DocumentRouteStop $stop) => $stop->status === RouteStopStatus::Visited)
+            ->sortBy('position')
+            ->last();
+
+        $holder = $this->openMovement?->to_office_id;
+
+        return $last !== null && $holder !== null && $holder === $last->office_id;
+    }
+
+    /**
+     * The route stops, from the eager load when there is one -- the document
+     * page asks the policy once per action, and each ask must not re-query.
+     *
+     * @return Collection<int, DocumentRouteStop>
+     */
+    private function loadedRouteStops(): Collection
+    {
+        return $this->relationLoaded('routeStops')
+            ? $this->routeStops
+            : $this->routeStops()->get();
     }
 }

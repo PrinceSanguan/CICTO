@@ -45,7 +45,8 @@ class StoreSignatureRequest extends FormRequest
             // handoff signature posts.
             'purpose' => ['nullable', Rule::in(DocumentSignature::purposes())],
 
-            // A base64 PNG data URL from the canvas. The bytes are validated
+            // A base64 PNG data URL from the canvas -- drawn on it, or an
+            // uploaded image redrawn onto it. The bytes are validated
             // by magic number in SignDocument, because a declared MIME is not
             // evidence of anything.
             //
@@ -67,8 +68,8 @@ class StoreSignatureRequest extends FormRequest
         $validator->after(function (Validator $validator): void {
             $method = $this->enum('method', SignatureMethod::class);
 
-            if ($method === SignatureMethod::Drawn && blank($this->input('image'))) {
-                $validator->errors()->add('image', 'Please draw your signature before signing.');
+            if ($method?->requiresImage() && blank($this->input('image'))) {
+                $validator->errors()->add('image', $method->missingImageMessage());
             }
 
             if ($method === SignatureMethod::Typed) {

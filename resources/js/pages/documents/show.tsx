@@ -107,8 +107,8 @@ export default function ShowDocument({
         action: onlyResubmit ? 'resubmitted' : '',
         to_office_ids: [],
         remarks: '',
-        // Mirrors App\Enums\SignatureMethod. Only `drawn` is offered here; the
-        // pad captures a mark, and a typed name has no canvas to come from.
+        // Mirrors App\Enums\SignatureMethod. The pad reports `drawn` or
+        // `uploaded` with every mark; a typed name has no canvas to come from.
         signature_method: 'drawn',
         signature_image: null,
         file: null,
@@ -140,6 +140,14 @@ export default function ShowDocument({
         method: 'drawn',
         image: null,
     });
+
+    /*
+     * Bumped after each successful signature, to remount the pad. reset()
+     * empties the form, but the pad keeps its own canvas -- so when the form
+     * stays on screen (an approval signed, a release still to sign) it showed
+     * a mark the form no longer held, beside a Sign button that would not press.
+     */
+    const [signaturePadKey, setSignaturePadKey] = useState(0);
 
     const submitAction = (value: string) => {
         // expected_movement_id is injected here rather than held in form state.
@@ -704,6 +712,23 @@ export default function ShowDocument({
 
                                 {action.data.action && (
                                     <div className="space-y-3">
+                                        {/*
+                                            Said before the click, not only in
+                                            the toast after it. At the last
+                                            office of a route Received is also
+                                            Completed (client, 2026-09-19), and
+                                            completing cannot be undone.
+                                        */}
+                                        {action.data.action === 'received' &&
+                                            document.receipt_completes && (
+                                                <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200">
+                                                    There are no more offices on
+                                                    this document&rsquo;s route,
+                                                    so receiving it also marks
+                                                    it Completed.
+                                                </p>
+                                            )}
+
                                         {isReturn && (
                                             <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200">
                                                 Returning sends this document
@@ -972,10 +997,18 @@ export default function ShowDocument({
                                                                         }
                                                                         onChange={(
                                                                             dataUrl,
+                                                                            method,
                                                                         ) =>
                                                                             action.setData(
-                                                                                'signature_image',
-                                                                                dataUrl,
+                                                                                (
+                                                                                    data,
+                                                                                ) => ({
+                                                                                    ...data,
+                                                                                    signature_image:
+                                                                                        dataUrl,
+                                                                                    signature_method:
+                                                                                        method,
+                                                                                }),
                                                                             )
                                                                         }
                                                                     />
@@ -1375,8 +1408,13 @@ export default function ShowDocument({
                                                     ),
                                                     {
                                                         preserveScroll: true,
-                                                        onSuccess: () =>
-                                                            signature.reset(),
+                                                        onSuccess: () => {
+                                                            signature.reset();
+                                                            setSignaturePadKey(
+                                                                (key) =>
+                                                                    key + 1,
+                                                            );
+                                                        },
                                                     },
                                                 );
                                             }}
@@ -1402,10 +1440,15 @@ export default function ShowDocument({
                                                 </Button>
                                             )}
                                             <SignaturePad
-                                                onChange={(dataUrl) =>
+                                                key={signaturePadKey}
+                                                disabled={signature.processing}
+                                                onChange={(dataUrl, method) =>
                                                     signature.setData(
-                                                        'image',
-                                                        dataUrl,
+                                                        (data) => ({
+                                                            ...data,
+                                                            image: dataUrl,
+                                                            method,
+                                                        }),
                                                     )
                                                 }
                                             />

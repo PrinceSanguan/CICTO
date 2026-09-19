@@ -71,7 +71,7 @@ class DemoDataCommand extends Command
         ['title' => 'Barangay drainage clearance', 'office' => 'OCM', 'by' => 'clerk@cicto.test', 'type' => 'MAYORS-CLEARANCE', 'priority' => DocumentPriority::Normal],
         ['title' => 'Purchase order for laptops', 'office' => 'OCM', 'by' => 'clerk@cicto.test', 'type' => 'PO', 'priority' => DocumentPriority::High],
         ['title' => 'Payroll adjustment request', 'office' => 'OCM', 'by' => 'clerk@cicto.test', 'type' => 'PAYROLL', 'priority' => DocumentPriority::Normal],
-        ['title' => 'Fire safety inspection', 'office' => 'OCM', 'by' => 'clerk@cicto.test', 'type' => 'REQUEST', 'priority' => DocumentPriority::Urgent],
+        ['title' => 'Fire safety inspection', 'office' => 'OCM', 'by' => 'clerk@cicto.test', 'type' => 'REQUEST', 'priority' => DocumentPriority::High],
         ['title' => 'Scholarship endorsement', 'office' => 'OCM', 'by' => 'clerk@cicto.test', 'type' => 'ENDORSEMENT', 'priority' => DocumentPriority::Normal],
         ['title' => 'Water line repair', 'office' => 'OCM', 'by' => 'clerk@cicto.test', 'type' => 'REQUEST', 'priority' => DocumentPriority::High],
         ['title' => 'Business permit renewal', 'office' => 'TREA', 'by' => 'mto@cicto.test', 'type' => 'BUSINESS-PERMIT', 'priority' => DocumentPriority::Normal],

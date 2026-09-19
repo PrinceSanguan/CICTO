@@ -138,8 +138,10 @@ export default function AllDocuments({ stats, documents: page }: Props) {
                             ['initiated', 'Initiated'],
                             ['under_review', 'Under Review'],
                             ['approved', 'Approved'],
+                            // No Rejected (client, 2026-09-19): Returned
+                            // also finds documents refused under the old
+                            // Reject button.
                             ['returned', 'Returned'],
-                            ['rejected', 'Rejected'],
                             ['completed', 'Completed'],
                         ].map(([value, label]) => (
                             <option key={value} value={value}>

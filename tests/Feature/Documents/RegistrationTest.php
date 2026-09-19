@@ -199,4 +199,192 @@ class RegistrationTest extends TestCase
 
         $this->assertSame("MPDO-{$year}-00001", $next->control_number);
     }
+
+    /**
+     * The client's report of 2026-09-19: raising another office above the
+     * submitter's own on the Department list registered the document under
+     * THAT office, so the uploader showed as one of its users. The form now
+     * locks row 1; this is the server refusing the same thing from a tab that
+     * predates the lock, or from a hand-built request.
+     */
+    public function test_the_first_department_must_be_the_submitters_own_office(): void
+    {
+        Storage::fake('documents');
+
+        $mine = $this->office('MPDO');
+        $theirs = $this->office('MTO', 'Treasury');
+
+        $this->actingAs($this->staff($mine))
+            ->post(route('documents.store'), [
+                'title' => 'Request for office supplies',
+                'document_type_id' => $this->documentType()->id,
+                'office_ids' => [$theirs->id, $mine->id],
+                'priority' => 'normal',
+                'file' => UploadedFile::fake()->create('request.pdf', 40, 'application/pdf'),
+            ])
+            ->assertSessionHasErrors([
+                'office_ids' => 'The first department must be your own office, because the document is registered under it.',
+            ]);
+
+        $this->assertSame(0, Document::query()->count());
+    }
+
+    /** An old single-department client hears about it under the key it posted. */
+    public function test_the_origin_rule_answers_the_single_department_alias_too(): void
+    {
+        Storage::fake('documents');
+
+        $mine = $this->office('MPDO');
+        $theirs = $this->office('MTO', 'Treasury');
+
+        $this->actingAs($this->staff($mine))
+            ->post(route('documents.store'), [
+                'title' => 'Request for office supplies',
+                'document_type_id' => $this->documentType()->id,
+                'originating_office_id' => $theirs->id,
+                'priority' => 'normal',
+                'file' => UploadedFile::fake()->create('request.pdf', 40, 'application/pdf'),
+            ])
+            ->assertSessionHasErrors(['originating_office_id', 'office_ids']);
+
+        $this->assertSame(0, Document::query()->count());
+    }
+
+    /**
+     * A Super Admin belongs to no office and acts for every one, so whichever
+     * office they put first is one they may file under -- the same rule
+     * actsForOffice() applies everywhere else.
+     */
+    public function test_a_super_admin_may_file_under_any_office(): void
+    {
+        Storage::fake('documents');
+
+        $office = $this->office('MTO', 'Treasury');
+
+        $this->actingAs($this->superAdmin())
+            ->post(route('documents.store'), [
+                'title' => 'Request for office supplies',
+                'document_type_id' => $this->documentType()->id,
+                'office_ids' => [$office->id],
+                'priority' => 'high',
+                'file' => UploadedFile::fake()->create('request.pdf', 40, 'application/pdf'),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame($office->id, Document::query()->sole()->originating_office_id);
+    }
+
+    /**
+     * The client's paper routing slip, word for word, most pressing first --
+     * and no pre-selected answer, because the field is required now.
+     */
+    public function test_the_submit_form_offers_the_clients_three_priorities_in_their_words(): void
+    {
+        $office = $this->office('MPDO');
+
+        $priorities = $this->actingAs($this->staff($office))
+            ->get(route('documents.create'))
+            ->assertOk()
+            ->viewData('page')['props']['priorities'];
+
+        $this->assertSame([
+            ['value' => 'high', 'label' => 'High - Must be done within 24 hours.'],
+            ['value' => 'normal', 'label' => 'Medium - Within the week.'],
+            ['value' => 'low', 'label' => 'Low - Whenever it is possible.'],
+        ], $priorities);
+    }
+
+    public function test_priority_is_required_and_urgent_is_no_longer_accepted(): void
+    {
+        Storage::fake('documents');
+
+        $office = $this->office('MPDO');
+        $payload = [
+            'title' => 'Request for office supplies',
+            'document_type_id' => $this->documentType()->id,
+            'office_ids' => [$office->id],
+            'file' => UploadedFile::fake()->create('request.pdf', 40, 'application/pdf'),
+        ];
+
+        $this->actingAs($this->staff($office))
+            ->post(route('documents.store'), $payload)
+            ->assertSessionHasErrors(['priority' => 'Please choose a priority.']);
+
+        $this->actingAs($this->staff($office))
+            ->post(route('documents.store'), [...$payload, 'priority' => 'urgent'])
+            ->assertSessionHasErrors(['priority' => 'Please choose High, Medium or Low.']);
+
+        $this->assertSame(0, Document::query()->count());
+    }
+
+    /**
+     * Stored values did not change -- `normal` is what the client now calls
+     * Medium -- and a document filed as urgent before 2026-09-19 reads High,
+     * in High's colour, so the retired word never reaches a screen.
+     */
+    public function test_priority_labels_use_the_clients_three_words(): void
+    {
+        $office = $this->office('MPDO');
+        $clerk = $this->staff($office);
+
+        $this->registerDocument($office, $clerk, priority: DocumentPriority::Normal);
+        $this->registerDocument($office, $clerk, priority: DocumentPriority::Urgent);
+
+        $rows = collect($this->actingAs($clerk)
+            ->get(route('documents.index'))
+            ->assertOk()
+            ->viewData('page')['props']['documents']['data'])
+            ->keyBy('priority');
+
+        $this->assertSame('Medium', $rows['normal']['priority_label']);
+        $this->assertSame('High', $rows['urgent']['priority_label']);
+        $this->assertSame(DocumentPriority::High->tone(), $rows['urgent']['priority_tone']);
+    }
+
+    /**
+     * A user whose own office was deactivated is offered no row to lock, so the
+     * refusal has to tell them what to do, not ask for an office they cannot
+     * pick.
+     */
+    public function test_a_user_whose_office_is_inactive_is_told_why(): void
+    {
+        Storage::fake('documents');
+
+        $retired = $this->office('MPDO');
+        $other = $this->office('MTO', 'Treasury');
+        $clerk = $this->staff($retired);
+        $retired->forceFill(['is_active' => false])->save();
+
+        $this->actingAs($clerk)
+            ->post(route('documents.store'), [
+                'title' => 'Request for office supplies',
+                'document_type_id' => $this->documentType()->id,
+                'office_ids' => [$other->id],
+                'priority' => 'normal',
+                'file' => UploadedFile::fake()->create('request.pdf', 40, 'application/pdf'),
+            ])
+            ->assertSessionHasErrors([
+                'office_ids' => 'Your office, Planning Office, is no longer active, so documents cannot be registered under it. Ask an administrator to move your account to your current office.',
+            ]);
+
+        $this->assertSame(0, Document::query()->count());
+    }
+
+    /** A legacy urgent document reads High, so filtering by High finds it. */
+    public function test_filtering_by_high_also_finds_legacy_urgent_documents(): void
+    {
+        $office = $this->office('MPDO');
+        $clerk = $this->staff($office);
+
+        $high = $this->registerDocument($office, $clerk, priority: DocumentPriority::High);
+        $urgent = $this->registerDocument($office, $clerk, priority: DocumentPriority::Urgent);
+        $this->registerDocument($office, $clerk, priority: DocumentPriority::Normal);
+
+        $ids = array_column($this->actingAs($clerk)
+            ->get(route('documents.index', ['priority' => 'high']))
+            ->assertOk()
+            ->viewData('page')['props']['documents']['data'], 'id');
+
+        $this->assertEqualsCanonicalizing([$high->id, $urgent->id], $ids);
+    }
 }

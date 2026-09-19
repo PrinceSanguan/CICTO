@@ -118,6 +118,8 @@ export type DocumentDetail = DocumentListItem & {
      */
     submitted_with: SubmissionSibling[];
     available_actions: DocumentAction[];
+    /** Pressing Received closes the document: its route has run out. */
+    receipt_completes: boolean;
     /** The open leg the page was rendered from -- posted back to defeat double-submits. */
     expected_movement_id: number | null;
     /**

@@ -20,14 +20,13 @@
         .label { width: 38mm; color: #6b7280; }
         .rule { border-top: 1px solid #d1d5db; margin: 5mm 0; }
         .verdict { padding: 3mm; border: 1px solid #d1d5db; }
-        .ok { background: #ecfdf5; border-color: #10b981; color: #065f46; }
         .bad { background: #fef2f2; border-color: #ef4444; color: #991b1b; }
         .warn { background: #fffbeb; border-color: #f59e0b; color: #92400e; }
         .mark { border: 1px solid #d1d5db; height: 26mm; width: 80mm; text-align: center; }
         .mark img { max-height: 24mm; max-width: 76mm; }
         .typed { font-size: 20pt; font-style: italic; padding-top: 5mm; }
         .qr { width: 34mm; }
-        .qr svg { width: 32mm; height: 32mm; }
+        .qr img { width: 32mm; height: 32mm; }
     </style>
 </head>
 <body>
@@ -43,7 +42,14 @@
     <tr>
         <td class="label">Document</td>
         <td><strong>{{ $document->control_number }}</strong><br>{{ $document->title }}</td>
-        <td class="qr" rowspan="5">{!! $qr !!}<div class="small muted" style="text-align:center">Scan to verify</div></td>
+        {{--
+            An <img>, not the SVG inline. dompdf silently drops inline <svg>, so
+            until 2026-09-19 this cell printed "Scan to verify" over an empty
+            space on every certificate. As a data-URI image it goes through
+            dompdf's SVG renderer and prints. It is our own QrCodeRenderer
+            output, never user input.
+        --}}
+        <td class="qr" rowspan="5"><img src="data:image/svg+xml;base64,{{ base64_encode((string) $qr) }}" alt="QR code to verify this signature"><div class="small muted" style="text-align:center">Scan to verify</div></td>
     </tr>
     <tr><td class="label">Signed by</td><td><strong>{{ $signature->signer_name }}</strong></td></tr>
     <tr><td class="label">Position</td><td>{{ $signature->signer_position ?? '—' }}</td></tr>
@@ -51,20 +57,15 @@
     <tr><td class="label">Date signed</td><td>{{ $signature->signed_at->format('d F Y, g:i A') }}</td></tr>
 </table>
 
+{{--
+    File version, file fingerprint and certificate serial used to be printed
+    here, and the client asked for all three to go on 2026-09-19. They are
+    machine identifiers, not something a person holding the paper reads. None
+    of them is lost: the fingerprint is still stored and still checked, and the
+    QR above leads to the verification page, which is looked up by the serial.
+--}}
 <table style="margin-top:3mm">
     <tr><td class="label">Purpose</td><td>{{ $signature->purposeLabel() }}</td></tr>
-    <tr>
-        <td class="label">File version</td>
-        <td>{{ $signature->file ? 'Version '.$signature->file->version : 'No file attached' }}</td>
-    </tr>
-    <tr>
-        <td class="label">File fingerprint</td>
-        <td class="small" style="word-break:break-all">{{ $signature->document_hash_sha256 ?? '—' }}</td>
-    </tr>
-    <tr>
-        <td class="label">Certificate serial</td>
-        <td class="small" style="word-break:break-all">{{ $signature->serial }}</td>
-    </tr>
 </table>
 
 <div class="rule"></div>
@@ -83,26 +84,33 @@
 
 <div class="rule"></div>
 
-@if ($valid && ! $superseded)
-    <div class="verdict ok">
-        <strong>Valid at time of printing.</strong>
-        The signed file still matches the fingerprint recorded above.
-    </div>
-@elseif ($valid && $superseded)
+{{--
+    NO "VALID AT TIME OF PRINTING" BOX, at the client's request of 2026-09-19.
+    It pointed at the fingerprint printed above, which has gone too, and on a
+    certificate for a signature that is fine it said nothing the reader needed.
+
+    The two warnings stay. They only ever print when something IS wrong -- a
+    newer version has replaced the signed one, or the signed file no longer
+    matches -- and a certificate that looked clean in either case would be a
+    certificate lying about the document it is attached to.
+--}}
+@if ($valid && $superseded)
     <div class="verdict warn">
         <strong>Valid, but superseded.</strong>
         A newer version of this document has been uploaded since it was signed.
         This certificate covers version {{ $signature->file?->version }} only.
     </div>
-@else
+
+    <div class="rule"></div>
+@elseif (! $valid)
     <div class="verdict bad">
         <strong>Does not match.</strong>
         The file recorded against this signature has been changed or removed.
         Verify online before relying on this certificate.
     </div>
-@endif
 
-<div class="rule"></div>
+    <div class="rule"></div>
+@endif
 
 {{--
     The honest-limits paragraph. It is on the certificate itself, not buried in
@@ -111,9 +119,9 @@
 --}}
 <p class="small muted" style="line-height:1.5">
     <strong>What this certificate is.</strong>
-    It records that the named person, signed in to CICTO, applied their signature to the
-    exact file version identified above on the date shown, and stores a fingerprint of that
-    file so a later substitution can be detected.
+    It records that the named person, signed in to CICTO, applied their signature to this
+    document on the date shown. The system keeps a fingerprint of the exact file that was
+    signed, so a later substitution can be detected.
     <br><br>
     <strong>What it is not.</strong>
     This is an electronic signature, not a digital certificate issued under the Philippine

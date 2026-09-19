@@ -9,6 +9,7 @@ use App\Enums\RouteStopStatus;
 use App\Models\Document;
 use App\Models\DocumentRouteStop;
 use App\Models\DocumentSignature;
+use App\Models\Office;
 use App\Models\User;
 use App\Support\DocumentWorkflow;
 use App\Support\SystemSettings;
@@ -164,6 +165,52 @@ class DocumentPolicy
          * is exactly the workflow the reject button exists to avoid.
          */
         if ($action === MovementAction::Completed && $this->hasPendingStops($document)) {
+            return false;
+        }
+
+        /*
+         * AT THE LAST OFFICE ON A ROUTE, RECEIVED AND RETURN ARE THE ONLY
+         * BUTTONS -- the client's decision of 2026-09-19. Looking at that
+         * office's Actions panel ("Send to Another Office", "Received",
+         * "Completed", "Return") they asked for Completed to go "kasi same
+         * function lang sila ng receive", and Send to Another Office with it:
+         * "ang matitira lang po na button is yung received and return". Only
+         * there: "applicable only on the last route office".
+         *
+         * "The last route office" is Document::isAtLastRouteStop(): nothing on
+         * the route is still waiting, AND the folder is at the stop the route
+         * ended at. There, AdvanceRoute COMPLETES the document on receipt, so
+         * Received is Completed and a hand-picked send would start a second
+         * journey after the first had ended.
+         *
+         * Everywhere else nothing changes:
+         *
+         *  - the originating office and the middle of a route keep Send to
+         *    Another Office, and with it the ability to re-route; Completed was
+         *    already hidden there by the pending-stops rule above;
+         *
+         *  - an office the folder was sent to BY HAND, off the plan, is not on
+         *    the route at all, so it keeps every button it had before;
+         *
+         *  - unrouted documents keep both, because Received completes nothing
+         *    for them; and legacy `approved` documents keep both, because they
+         *    cannot be received at all.
+         *
+         * ONE EXCEPTION, for recovery only: a last stop that nobody can
+         * receive at -- the office was deactivated, or has no active Admin
+         * (the same test as Office::withReceiver) -- may still be sent on.
+         * Without it a Super Admin could only close a document that office
+         * never took in, or return it to an originating office whose one way
+         * back is to that same dead desk. An office that can receive never sees
+         * it, so the client's panel is exactly the one they asked for.
+         *
+         * AdvanceRoute is untouched by this: it calls TransitionDocument
+         * directly, and never asks the policy.
+         */
+        if (in_array($action, [MovementAction::Forwarded, MovementAction::Completed], true)
+            && DocumentWorkflow::allows($document->status, MovementAction::Received)
+            && $document->isAtLastRouteStop()
+            && ! ($action === MovementAction::Forwarded && ! $this->holdingOfficeCanReceive($document))) {
             return false;
         }
 
@@ -393,6 +440,24 @@ class DocumentPolicy
     public function delete(User $user, Document $document): bool
     {
         return $user->is_active && $user->isSuperAdmin();
+    }
+
+    /**
+     * Could anybody at the office holding this document take it in? Active,
+     * with at least one active Admin -- Office::withReceiver's definition,
+     * because only an Admin may press Received.
+     */
+    private function holdingOfficeCanReceive(Document $document): bool
+    {
+        $officeId = $document->openMovement?->to_office_id;
+
+        return $officeId !== null && Office::query()
+            ->whereKey($officeId)
+            ->where('is_active', true)
+            ->whereHas('users', fn ($users) => $users
+                ->where('users.role', Role::Admin->value)
+                ->where('users.is_active', true))
+            ->exists();
     }
 
     /** Is there still an office queued after this one? */

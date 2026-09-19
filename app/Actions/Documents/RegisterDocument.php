@@ -39,8 +39,6 @@ final class RegisterDocument
      *
      * @param  list<int>  $routeOfficeIds  the departments to visit AFTER the
      *                                     originating one, in visiting order
-     * @param  string|null  $submissionGroupId  set only by DistributeDocument,
-     *                                          to link the copies one submit made
      */
     public function handle(
         string $title,
@@ -52,14 +50,13 @@ final class RegisterDocument
         ?string $remarks = null,
         ?UploadedFile $upload = null,
         array $routeOfficeIds = [],
-        ?string $submissionGroupId = null,
         ?Request $request = null,
     ): Document {
         $routeOfficeIds = array_values(array_unique(array_map('intval', $routeOfficeIds)));
 
         return DB::transaction(function () use (
             $title, $documentTypeId, $priority, $originatingOffice, $creator,
-            $description, $remarks, $upload, $routeOfficeIds, $submissionGroupId, $request
+            $description, $remarks, $upload, $routeOfficeIds, $request
         ): Document {
             $type = DocumentType::query()->findOrFail($documentTypeId);
             $now = Deadlines::now();
@@ -74,7 +71,6 @@ final class RegisterDocument
                 'document_type_id' => $type->id,
                 'originating_office_id' => $originatingOffice->id,
                 'created_by_id' => $creator->id,
-                'submission_group_id' => $submissionGroupId,
                 'status' => DocumentStatus::Initiated->value,
                 'priority' => $priority->value,
 

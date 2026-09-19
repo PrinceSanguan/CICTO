@@ -17,20 +17,39 @@ use Inertia\Response;
 class SuperAdminDashboardController extends Controller
 {
     /**
-     * Workflow states the Action column's filter offers.
+     * Workflow states the Action column's filter offers, and the stored
+     * statuses each one finds.
      *
      * The raw states, not the four public labels: this screen is for the role
      * that needs to tell Under Review from Approved.
      *
-     * @var list<string>
+     * NO REJECTED, and that is the client's request of 2026-09-19, pointing at
+     * this very dropdown. Return replaced Reject on 2026-09-15 and the word
+     * went from every other list on 2026-09-16; this filter was the one place
+     * still offering it. The documents refused under the old button still
+     * exist, so Returned finds them -- exactly as the Track Documents filter
+     * and DocumentStatus::publicLabel() already do. Nothing is hidden, one
+     * option is gone.
+     *
+     * @var array<string, list<string>>
      */
     private const STATUS_FILTERS = [
-        'initiated',
-        'under_review',
-        'approved',
-        'returned',
-        'rejected',
-        'completed',
+        'initiated' => ['initiated'],
+        'under_review' => ['under_review'],
+        'approved' => ['approved'],
+        'returned' => ['returned', 'rejected'],
+        'completed' => ['completed'],
+    ];
+
+    /**
+     * A link bookmarked before the option went still asks for `rejected`.
+     * It lands on Returned, which is where those documents are listed now,
+     * rather than silently showing every document under a blank filter.
+     *
+     * @var array<string, string>
+     */
+    private const RETIRED_FILTERS = [
+        'rejected' => 'returned',
     ];
 
     public function __construct(private readonly DocumentPresenter $presenter) {}
@@ -66,7 +85,11 @@ class SuperAdminDashboardController extends Controller
         $search = trim((string) $request->string('q'));
         $status = $request->string('status')->toString();
 
-        $status = in_array($status, self::STATUS_FILTERS, true) ? $status : null;
+        $status = self::RETIRED_FILTERS[$status] ?? $status;
+        $status = array_key_exists($status, self::STATUS_FILTERS) ? $status : null;
+
+        // The stored statuses the chosen option covers; null for "All statuses".
+        $statuses = $status === null ? null : self::STATUS_FILTERS[$status];
 
         $page = Document::query()
             ->active()
@@ -77,7 +100,7 @@ class SuperAdminDashboardController extends Controller
                 'lastMovement.toOffice:id,name',
             ])
             ->when($search !== '', fn ($query) => $query->search($search))
-            ->when($status !== null, fn ($query) => $query->where('documents.status', $status))
+            ->when($statuses, fn ($query, array $statuses) => $query->whereIn('documents.status', $statuses))
             ->orderByDesc('documents.created_at')
             ->paginate(perPage: 15)
             ->withQueryString();

@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Documents\DistributeDocument;
 use App\Actions\Documents\RegisterDocument;
 use App\Enums\DocumentPriority;
 use App\Enums\DocumentStatus;
@@ -50,7 +49,7 @@ class DocumentController extends Controller
                 'documents.status',
                 DocumentStatus::fromPublicValue((string) $request->input('status')),
             ))
-            ->when($request->filled('priority'), fn ($query) => $query->where('documents.priority', $request->input('priority')))
+            ->when($request->enum('priority', DocumentPriority::class), fn ($query, DocumentPriority $priority) => $query->whereIn('documents.priority', $priority->storedValues()))
             ->when($request->filled('document_type_id'), fn ($query) => $query->where('documents.document_type_id', $request->integer('document_type_id')))
             ->when($request->filled('office_id'), fn ($query) => $query->heldByOffice($request->integer('office_id')))
             ->when($request->date('from'), fn ($query, $date) => $query->where('documents.created_at', '>=', $date->startOfDay()))
@@ -139,47 +138,23 @@ class DocumentController extends Controller
     public function store(
         StoreDocumentRequest $request,
         RegisterDocument $register,
-        DistributeDocument $distribute,
     ): RedirectResponse {
         /*
          * Departments in the order the submitter picked them. The first one
          * registers the document -- it owns the control number prefix and the
-         * genesis leg -- and the rest are queued as the route it travels from
-         * there. StoreDocumentRequest guarantees at least one; the `?? 0` is
-         * only what makes that guarantee legible to static analysis.
+         * genesis leg, and StoreDocumentRequest has already checked it is an
+         * office the submitter works for -- and the rest are queued as the
+         * route it travels from there, one after another. StoreDocumentRequest
+         * guarantees at least one; the `?? 0` is only what makes that
+         * guarantee legible to static analysis.
+         *
+         * There is no second shape any more. "All at the same time" -- one
+         * copy per department -- was removed at the client's request on
+         * 2026-09-19, and the request refuses it before it gets here.
          *
          * @var list<int> $officeIds
          */
         $officeIds = array_values(array_map('intval', (array) $request->input('office_ids', [])));
-
-        /*
-         * "All at the same time" is a different shape, not a different order:
-         * one document per department, none of them queued behind another. It
-         * is only reachable with two departments or more -- one department is
-         * one document whichever box is ticked.
-         */
-        if ($request->wantsSimultaneousDelivery()) {
-            $documents = $distribute->handle(
-                title: $request->string('title')->value(),
-                documentTypeId: $request->integer('document_type_id'),
-                priority: $request->enum('priority', DocumentPriority::class) ?? DocumentPriority::Normal,
-                officeIds: $officeIds,
-                creator: $request->user(),
-                description: $request->input('description'),
-                remarks: $request->input('remarks'),
-                upload: $request->file('file'),
-                request: $request,
-            );
-
-            // Landing on the first copy rather than the list: the show page is
-            // where the whole batch is named, so the submitter can see every
-            // control number their one submit produced.
-            return to_route('documents.show', $documents[0])
-                ->with('upload', DocumentUpload::confirmation(
-                    $request->file('file'),
-                    $this->distributionConfirmation($documents),
-                ));
-        }
 
         $office = Office::query()->findOrFail($officeIds[0] ?? 0);
         $queued = array_slice($officeIds, 1);
@@ -233,30 +208,6 @@ class DocumentController extends Controller
         }
 
         return "Document registered as {$document->control_number}, then queued for {$this->list($ordered)}.";
-    }
-
-    /**
-     * The flat submit's receipt: how many departments, and the control numbers
-     * to prove each one really got its own document.
-     *
-     * Capped, because twenty control numbers is not a toast. The show page
-     * names the whole batch, which is where someone who wants all of them
-     * lands anyway.
-     *
-     * @param  non-empty-list<Document>  $documents
-     */
-    private function distributionConfirmation(array $documents): string
-    {
-        $numbers = array_map(static fn (Document $document) => $document->control_number, $documents);
-        $count = count($numbers);
-
-        if ($count > 4) {
-            $shown = $this->list(array_slice($numbers, 0, 3));
-
-            return "Submitted to {$count} departments at the same time: {$shown} and ".($count - 3).' more.';
-        }
-
-        return "Submitted to {$count} departments at the same time: {$this->list($numbers)}.";
     }
 
     /**
@@ -329,6 +280,9 @@ class DocumentController extends Controller
     }
 
     /**
+     * The client's three levels, in their own words and their own order. Not
+     * cases(): legacy `urgent` must not be offered.
+     *
      * @return array<int, array{value: string, label: string}>
      */
     private function priorityOptions(): array
@@ -336,9 +290,9 @@ class DocumentController extends Controller
         return array_map(
             static fn (DocumentPriority $priority) => [
                 'value' => $priority->value,
-                'label' => $priority->label(),
+                'label' => $priority->optionLabel(),
             ],
-            DocumentPriority::cases(),
+            DocumentPriority::selectable(),
         );
     }
 }

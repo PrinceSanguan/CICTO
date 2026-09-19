@@ -48,6 +48,7 @@ export function OfficeRoutePicker({
     selectClassName = SELECT,
     hint = defaultHint,
     ordered = true,
+    lockFirst = false,
 }: {
     offices: IdNameOption[];
     /** Office ids in visiting order. */
@@ -70,6 +71,17 @@ export function OfficeRoutePicker({
      * reorder them would be a lie about what the list does.
      */
     ordered?: boolean;
+    /**
+     * The first entry is fixed: it cannot be moved, removed, or overtaken.
+     *
+     * §5's Department field, where entry 1 is the ORIGINATING office. The
+     * client reported on 2026-09-19 that raising another office above it
+     * re-registered the document under that office, so the uploader showed up
+     * as one of ITS users -- "nagiging user ng ibang office yung nagiging
+     * uploader ng document". StoreDocumentRequest refuses the same thing on
+     * the server; this only stops the form offering it.
+     */
+    lockFirst?: boolean;
 }) {
     const chosen = value
         .map((id) => offices.find((office) => office.id === id))
@@ -119,8 +131,15 @@ export function OfficeRoutePicker({
 
     const ListTag = ordered ? 'ol' : 'ul';
 
+    // Only while the first entry is actually on the list: with nothing picked
+    // yet there is nothing to hold in place.
+    const firstIsLocked = lockFirst && chosen.length > 0;
+
+    // The lowest index a row may move up to.
+    const top = firstIsLocked ? 1 : 0;
+
     const move = (from: number, to: number) => {
-        if (to < 0 || to >= chosen.length) {
+        if (to < top || from < top || to >= chosen.length) {
             return;
         }
 
@@ -249,54 +268,77 @@ export function OfficeRoutePicker({
                                 </span>
                             )}
 
-                            {ordered && (
+                            {/*
+                                The locked first row carries no controls at
+                                all, rather than three disabled ones: nothing
+                                about it can change, and a greyed-out X reads
+                                as "not yet" instead of "never".
+                            */}
+                            {firstIsLocked && index === 0 ? (
+                                <span className="shrink-0 rounded-full bg-[#E8F0FB] px-2 py-0.5 text-[11px] font-bold text-navy">
+                                    Your office
+                                </span>
+                            ) : (
                                 <>
-                                    <Button
-                                        type="button"
-                                        size="icon"
-                                        variant="ghost"
-                                        className="size-7 shrink-0"
-                                        disabled={disabled || index === 0}
-                                        aria-label={`Move ${office.name} earlier`}
-                                        onClick={() => move(index, index - 1)}
-                                    >
-                                        <ArrowUp className="size-4" />
-                                    </Button>
+                                    {ordered && (
+                                        <>
+                                            <Button
+                                                type="button"
+                                                size="icon"
+                                                variant="ghost"
+                                                className="size-7 shrink-0"
+                                                // Row 2 cannot climb over a
+                                                // locked row 1 either.
+                                                disabled={
+                                                    disabled || index <= top
+                                                }
+                                                aria-label={`Move ${office.name} earlier`}
+                                                onClick={() =>
+                                                    move(index, index - 1)
+                                                }
+                                            >
+                                                <ArrowUp className="size-4" />
+                                            </Button>
+
+                                            <Button
+                                                type="button"
+                                                size="icon"
+                                                variant="ghost"
+                                                className="size-7 shrink-0"
+                                                disabled={
+                                                    disabled ||
+                                                    index === chosen.length - 1
+                                                }
+                                                aria-label={`Move ${office.name} later`}
+                                                onClick={() =>
+                                                    move(index, index + 1)
+                                                }
+                                            >
+                                                <ArrowDown className="size-4" />
+                                            </Button>
+                                        </>
+                                    )}
 
                                     <Button
                                         type="button"
                                         size="icon"
                                         variant="ghost"
                                         className="size-7 shrink-0"
-                                        disabled={
-                                            disabled ||
-                                            index === chosen.length - 1
+                                        disabled={disabled}
+                                        aria-label={`Remove ${office.name}`}
+                                        onClick={() =>
+                                            commit(
+                                                chosen.filter(
+                                                    (row) =>
+                                                        row.id !== office.id,
+                                                ),
+                                            )
                                         }
-                                        aria-label={`Move ${office.name} later`}
-                                        onClick={() => move(index, index + 1)}
                                     >
-                                        <ArrowDown className="size-4" />
+                                        <X className="size-4" />
                                     </Button>
                                 </>
                             )}
-
-                            <Button
-                                type="button"
-                                size="icon"
-                                variant="ghost"
-                                className="size-7 shrink-0"
-                                disabled={disabled}
-                                aria-label={`Remove ${office.name}`}
-                                onClick={() =>
-                                    commit(
-                                        chosen.filter(
-                                            (row) => row.id !== office.id,
-                                        ),
-                                    )
-                                }
-                            >
-                                <X className="size-4" />
-                            </Button>
                         </li>
                     ))}
                 </ListTag>
@@ -356,7 +398,7 @@ export function OfficeRoutePicker({
 const defaultHint = (first: IdNameOption): ReactNode => (
     <>
         The document goes to {first.name} now, then moves to the next office
-        automatically each time it is approved.
+        automatically each time it is received.
     </>
 );
 

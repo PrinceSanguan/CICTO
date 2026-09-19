@@ -35,75 +35,15 @@ class RoutingTest extends TestCase
     use BuildsDocuments, RefreshDatabase;
 
     /**
-     * §5's OTHER shape: several departments, no hierarchy.
+     * "All at the same time" is gone -- the client's decision of 2026-09-19,
+     * "mag stick na po sa one after another".
      *
-     * The flat counterpart to the routing list. Nothing is queued behind
-     * anything, so this cannot be one document -- the ledger allows one open
-     * leg and `documents.status` is one column. It is one document per
-     * department instead, each an ordinary registration, linked only so the
-     * page can name the batch.
+     * A tab opened before the change still posts `all_at_once`. It is refused
+     * with a sentence, not quietly filed as a routed document: the submitter
+     * asked for one copy per department, and handing them one travelling
+     * document instead would be something they did not choose.
      */
-    public function test_submitting_to_several_departments_at_once_gives_each_its_own_document(): void
-    {
-        Storage::fake('documents');
-
-        [$mpdo, $mto, $hrmo] = $this->offices();
-        $clerk = $this->staff($mpdo);
-
-        $this->actingAs($clerk)
-            ->post(route('documents.store'), [
-                'title' => 'Memorandum for all departments',
-                'document_type_id' => $this->documentType()->id,
-                'office_ids' => [$mpdo->id, $mto->id, $hrmo->id],
-                'distribution' => 'all_at_once',
-                'priority' => 'normal',
-                'file' => UploadedFile::fake()->create('memo.pdf', 40, 'application/pdf'),
-            ])
-            ->assertSessionHasNoErrors()
-            ->assertRedirect();
-
-        $documents = Document::query()->orderBy('id')->get();
-
-        $this->assertCount(3, $documents, 'One department, one document.');
-
-        // Each is registered under its OWN department: its own prefix, its own
-        // sequence, its own genesis leg. None of them is anybody's second stop.
-        $this->assertSame(
-            [$mpdo->id, $mto->id, $hrmo->id],
-            $documents->pluck('originating_office_id')->all(),
-        );
-
-        foreach ($documents as $document) {
-            $this->assertSame(
-                $document->originating_office_id,
-                $document->openMovement->to_office_id,
-                'Every copy starts at its own department, immediately.',
-            );
-            $this->assertSame(0, $document->routeStops()->count(), 'Nothing is queued in a flat submit.');
-            $this->assertNotNull($document->currentFile()->first(), 'Every department gets the attachment.');
-        }
-
-        // Three control numbers, three prefixes, no sharing.
-        $this->assertCount(3, $documents->pluck('control_number')->unique());
-        $this->assertStringStartsWith('MPDO-', $documents[0]->control_number);
-        $this->assertStringStartsWith('MTO-', $documents[1]->control_number);
-        $this->assertStringStartsWith('HRMO-', $documents[2]->control_number);
-
-        // One submit, so they are linked -- and linked to nothing else.
-        $group = $documents[0]->submission_group_id;
-        $this->assertNotNull($group);
-        $this->assertSame([$group, $group, $group], $documents->pluck('submission_group_id')->all());
-    }
-
-    /**
-     * The flat submit's whole point: no department can hold up another. One
-     * finishing with its copy leaves the other two exactly where they were.
-     *
-     * Asserted by closing one copy outright rather than by rejecting it: both
-     * are terminal, and completing is the one that cannot be waved away as
-     * "well, it failed anyway".
-     */
-    public function test_one_department_finishing_does_not_touch_the_others(): void
+    public function test_submitting_to_several_departments_at_once_is_refused(): void
     {
         Storage::fake('documents');
 
@@ -117,25 +57,13 @@ class RoutingTest extends TestCase
                 'distribution' => 'all_at_once',
                 'priority' => 'normal',
                 'file' => UploadedFile::fake()->create('memo.pdf', 40, 'application/pdf'),
-            ])->assertSessionHasNoErrors();
+            ])
+            ->assertSessionHasErrors([
+                'distribution' => 'Sending to every department at the same time is no longer available. Departments now receive the document one after another, in the order listed.',
+            ]);
 
-        $mine = Document::query()->where('originating_office_id', $mto->id)->firstOrFail();
-        $admin = $this->admin($mto);
-
-        $this->act($admin, $mine, MovementAction::Received);
-        $this->act($admin, $mine->refresh(), MovementAction::Completed, 'Handled.');
-
-        $this->assertSame(DocumentStatus::Completed, $mine->refresh()->status);
-
-        foreach ([$mpdo, $hrmo] as $untouched) {
-            $other = Document::query()->where('originating_office_id', $untouched->id)->firstOrFail();
-
-            $this->assertSame(
-                DocumentStatus::Initiated,
-                $other->status,
-                'One department finishing must not reach into another.',
-            );
-        }
+        $this->assertSame(0, Document::query()->count(), 'Nothing is registered, not even one copy.');
+        $this->assertSame(0, DocumentRouteStop::query()->count());
     }
 
     /**
@@ -271,7 +199,9 @@ class RoutingTest extends TestCase
      * Return button. This is that button set, asserted through the same
      * `available_actions` payload the page renders from -- so it fails if
      * approve or reject creeps back into the workflow map, and it fails if
-     * Completed starts being offered halfway down a route.
+     * Completed starts being offered halfway down a route. Send to Another
+     * Office stays in the middle of a route: the 2026-09-19 removal applies
+     * "only on the last route office".
      */
     public function test_a_queued_office_is_offered_receive_send_and_return(): void
     {
@@ -285,10 +215,10 @@ class RoutingTest extends TestCase
             ->assertOk()
             ->viewData('page')['props']['document']['available_actions'];
 
-        $this->assertEqualsCanonicalizing(
+        $this->assertSame(
             ['forwarded', 'received', 'returned'],
             array_column($actions, 'value'),
-            'A stop with an office still queued behind it may receive, send on, or return -- and nothing else.',
+            'A stop with an office still queued behind it may send on, receive, or return -- and nothing else.',
         );
 
         // Exactly one of them nags for a reason, and it is the return.
@@ -298,8 +228,9 @@ class RoutingTest extends TestCase
             array_filter(array_column($actions, 'requires_remarks', 'value')),
         );
 
-        // At the LAST stop the queue is empty, so closing the document by hand
-        // becomes available beside the receipt that would close it anyway.
+        // At the LAST stop the queue is empty. That used to add Completed beside
+        // the receipt that would close it anyway; since 2026-09-19 the last
+        // office gets Received and Return only -- the next test covers it.
         $this->act($this->admin($mto), $document, MovementAction::Received);
 
         $actions = $this->actingAs($this->admin($hrmo))
@@ -307,10 +238,119 @@ class RoutingTest extends TestCase
             ->assertOk()
             ->viewData('page')['props']['document']['available_actions'];
 
-        $this->assertEqualsCanonicalizing(
-            ['forwarded', 'received', 'returned', 'completed'],
+        $this->assertSame(['received', 'returned'], array_column($actions, 'value'));
+    }
+
+    /**
+     * The client's screenshot of 2026-09-19, as a test.
+     *
+     * The last office on a route was offered Send to Another Office, Received,
+     * Completed and Return. They asked for Completed to go -- "same function
+     * lang sila ng receive" -- and Send to Another Office with it, leaving
+     * Received and Return. Received there is what completes the document.
+     */
+    public function test_the_last_office_on_a_route_is_offered_receive_and_return_only(): void
+    {
+        [$mpdo, $mto, $hrmo] = $this->offices();
+        $document = $this->registerDocument($mpdo, $this->staff($mpdo));
+
+        $this->send($this->admin($mpdo), $document, [$mto, $hrmo]);
+        $this->act($this->admin($mto), $document, MovementAction::Received);
+
+        $this->assertSame($hrmo->id, $document->refresh()->openMovement->to_office_id);
+
+        $actions = $this->actingAs($this->admin($hrmo))
+            ->get(route('documents.show', $document))
+            ->assertOk()
+            ->viewData('page')['props']['document']['available_actions'];
+
+        $this->assertSame(['received', 'returned'], array_column($actions, 'value'));
+
+        // The buttons are gone from the server too, not only from the page.
+        foreach ([MovementAction::Completed, MovementAction::Forwarded] as $action) {
+            $this->actingAs($this->admin($hrmo))
+                ->post(route('documents.transitions.store', $document), [
+                    'action' => $action->value,
+                    'to_office_ids' => $action === MovementAction::Forwarded ? [$mpdo->id] : [],
+                    'expected_movement_id' => $this->openLegId($document),
+                ])
+                ->assertForbidden();
+        }
+
+        // And the one that is left does what Completed did.
+        $this->act($this->admin($hrmo), $document, MovementAction::Received);
+        $this->assertSame(DocumentStatus::Completed, $document->refresh()->status);
+    }
+
+    /**
+     * The originating office is not the last route office, so it keeps Send to
+     * Another Office beside Received: the 2026-09-19 removal applies only where
+     * Received would complete the document.
+     */
+    public function test_the_originating_office_of_a_routed_document_keeps_send_and_receive(): void
+    {
+        Storage::fake('documents');
+
+        [$mpdo, $mto, $hrmo] = $this->offices();
+
+        $this->actingAs($this->staff($mpdo))
+            ->post(route('documents.store'), [
+                'title' => 'Request for office supplies',
+                'document_type_id' => $this->documentType()->id,
+                'office_ids' => [$mpdo->id, $mto->id, $hrmo->id],
+                'priority' => 'normal',
+                'file' => UploadedFile::fake()->create('request.pdf', 40, 'application/pdf'),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $document = Document::query()->firstOrFail();
+
+        $actions = $this->actingAs($this->admin($mpdo))
+            ->get(route('documents.show', $document))
+            ->assertOk()
+            ->viewData('page')['props']['document']['available_actions'];
+
+        $this->assertSame(['forwarded', 'received'], array_column($actions, 'value'));
+    }
+
+    /**
+     * Where Received has no route to advance, it cannot stand in for Send to
+     * Another Office or Completed -- so those stay, or the document could
+     * never leave the desk or close.
+     *
+     * Two such documents: one filed under its own office with nothing after
+     * it, and a legacy `approved` one, which cannot be received at all.
+     */
+    public function test_documents_without_a_route_keep_send_and_complete(): void
+    {
+        [$mpdo, $mto, $hrmo] = $this->offices();
+
+        $unrouted = $this->registerDocument($mpdo, $this->staff($mpdo));
+        $this->act($this->admin($mpdo), $unrouted, MovementAction::Received);
+
+        $actions = $this->actingAs($this->admin($mpdo))
+            ->get(route('documents.show', $unrouted))
+            ->assertOk()
+            ->viewData('page')['props']['document']['available_actions'];
+
+        $this->assertSame(
+            ['forwarded', 'received', 'completed'],
             array_column($actions, 'value'),
+            'Return is absent only because the originating office already holds it.',
         );
+
+        // A routed document left in the legacy `approved` stage by the old
+        // workflow: forwarding and completing are its only exits.
+        $legacy = $this->registerDocument($mpdo, $this->staff($mpdo));
+        $this->send($this->admin($mpdo), $legacy, [$mto, $hrmo]);
+        $legacy->refresh()->forceFill(['status' => DocumentStatus::Approved->value])->save();
+
+        $actions = $this->actingAs($this->admin($mto))
+            ->get(route('documents.show', $legacy))
+            ->assertOk()
+            ->viewData('page')['props']['document']['available_actions'];
+
+        $this->assertSame(['forwarded'], array_column($actions, 'value'), 'Completed waits on the queued stop, as before.');
     }
 
     /**
@@ -994,6 +1034,172 @@ class RoutingTest extends TestCase
     }
 
     // ---------------------------------------------------------------- helpers
+
+    /**
+     * The Super Admin sees what the office holding the folder sees: Send to
+     * Another Office in the middle of a route (so a wrong route can still be
+     * corrected), and only Received and Return at the last route office.
+     */
+    public function test_a_super_admin_loses_send_and_complete_only_at_the_last_route_office(): void
+    {
+        [$mpdo, $mto, $hrmo, $mayor] = $this->offices();
+        $document = $this->registerDocument($mpdo, $this->staff($mpdo));
+
+        // A staffed last office. One with nobody to receive is the recovery
+        // case, covered by test_a_last_stop_nobody_can_receive_at_can_still_be_sent_on.
+        $this->admin($hrmo);
+
+        $this->send($this->admin($mpdo), $document, [$mto, $hrmo]);
+
+        $super = $this->superAdmin();
+        $actions = fn () => array_column($this->actingAs($super)
+            ->get(route('documents.show', $document->refresh()))
+            ->assertOk()
+            ->viewData('page')['props']['document']['available_actions'], 'value');
+
+        $this->assertSame(['forwarded', 'received', 'returned'], $actions());
+
+        // On to HRMO, the last stop.
+        $this->act($super, $document, MovementAction::Received);
+        $this->assertSame($hrmo->id, $document->refresh()->openMovement->to_office_id);
+
+        $this->assertSame(['received', 'returned'], $actions());
+
+        $this->actingAs($super)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'forwarded',
+                'to_office_ids' => [$mayor->id],
+                'expected_movement_id' => $this->openLegId($document->refresh()),
+            ])
+            ->assertForbidden();
+    }
+
+    /**
+     * An office the folder was sent to BY HAND, off the plan, is not "the last
+     * route office" -- it is not on the route at all -- so it keeps every
+     * button it had before 2026-09-19. (Receiving there still completes the
+     * document, as it always did, and the page says so.)
+     */
+    public function test_an_office_reached_off_the_plan_keeps_all_its_buttons(): void
+    {
+        [$mpdo, $mto, $hrmo, $mayor] = $this->offices();
+        $document = $this->registerDocument($mpdo, $this->staff($mpdo));
+
+        $this->send($this->admin($mpdo), $document, [$mto, $hrmo]);
+        // MTO detours it to the Mayor by hand, which cancels HRMO.
+        $this->send($this->admin($mto), $document->refresh(), [$mayor]);
+
+        $props = $this->actingAs($this->admin($mayor))
+            ->get(route('documents.show', $document->refresh()))
+            ->assertOk()
+            ->viewData('page')['props']['document'];
+
+        $this->assertSame(
+            ['forwarded', 'received', 'completed', 'returned'],
+            array_column($props['available_actions'], 'value'),
+        );
+        $this->assertTrue($props['receipt_completes'], 'Nothing is left on the route, so Received closes it.');
+    }
+
+    /**
+     * The one exception to the last-office rule: a last stop nobody can receive
+     * at. Without it a wrong or dead final office could only be "received" by a
+     * Super Admin on its behalf, closing a document it never took in.
+     */
+    public function test_a_last_stop_nobody_can_receive_at_can_still_be_sent_on(): void
+    {
+        [$mpdo, $mto, $hrmo, $mayor] = $this->offices();
+        $document = $this->registerDocument($mpdo, $this->staff($mpdo));
+
+        // HRMO, the last stop, has no Admin account at all.
+        $this->send($this->admin($mpdo), $document, [$mto, $hrmo]);
+        $this->act($this->admin($mto), $document, MovementAction::Received);
+        $this->assertSame($hrmo->id, $document->refresh()->openMovement->to_office_id);
+
+        $super = $this->superAdmin();
+        $actions = fn () => array_column($this->actingAs($super)
+            ->get(route('documents.show', $document->refresh()))
+            ->assertOk()
+            ->viewData('page')['props']['document']['available_actions'], 'value');
+
+        $this->assertSame(['forwarded', 'received', 'returned'], $actions(), 'Send comes back; Completed does not.');
+
+        // An Admin appears: HRMO can receive now, so the client's panel is back.
+        $hrmoAdmin = $this->admin($hrmo);
+        $this->assertSame(['received', 'returned'], $actions());
+
+        // The office is deactivated with the folder on its desk: redirectable again.
+        $hrmo->forceFill(['is_active' => false])->save();
+        $this->assertSame(['forwarded', 'received', 'returned'], $actions());
+
+        $this->send($super, $document->refresh(), [$mayor]);
+        $this->assertSame($mayor->id, $document->refresh()->openMovement->to_office_id);
+        $this->assertNotNull($hrmoAdmin);
+    }
+
+    /**
+     * A legacy `approved` document cannot be received at all, so even at its
+     * last stop forwarding and completing are its only exits and must stay.
+     * (Removing the "Received is on offer" guard from the rule would strand it.)
+     */
+    public function test_a_legacy_approved_document_at_its_last_stop_keeps_its_exits(): void
+    {
+        [$mpdo, $mto, $hrmo] = $this->offices();
+        $document = $this->registerDocument($mpdo, $this->staff($mpdo));
+
+        $this->send($this->admin($mpdo), $document, [$mto, $hrmo]);
+        $this->act($this->admin($mto), $document, MovementAction::Received);
+        $document->refresh()->forceFill(['status' => DocumentStatus::Approved->value])->save();
+
+        $actions = $this->actingAs($this->admin($hrmo))
+            ->get(route('documents.show', $document))
+            ->assertOk()
+            ->viewData('page')['props']['document']['available_actions'];
+
+        $this->assertSame(['forwarded', 'completed'], array_column($actions, 'value'));
+    }
+
+    /** The page warns before Received closes a document -- and only then. */
+    public function test_the_page_knows_when_received_will_complete_the_document(): void
+    {
+        [$mpdo, $mto, $hrmo] = $this->offices();
+        $document = $this->registerDocument($mpdo, $this->staff($mpdo));
+
+        $this->send($this->admin($mpdo), $document, [$mto, $hrmo]);
+
+        $flag = fn ($admin) => $this->actingAs($admin)
+            ->get(route('documents.show', $document->refresh()))
+            ->viewData('page')['props']['document']['receipt_completes'];
+
+        $this->assertFalse($flag($this->admin($mto)), 'HRMO is still waiting: Received moves it on.');
+
+        $this->act($this->admin($mto), $document, MovementAction::Received);
+
+        $this->assertTrue($flag($this->admin($hrmo)), 'Last stop: Received completes it.');
+    }
+
+    /**
+     * Documents filed "all at the same time" before 2026-09-19 still carry their
+     * batch link, and their page still names the other copies.
+     */
+    public function test_a_legacy_simultaneous_batch_still_names_its_siblings(): void
+    {
+        [$mpdo, $mto] = $this->offices();
+
+        $first = $this->registerDocument($mpdo, $this->staff($mpdo));
+        $second = $this->registerDocument($mto, $this->staff($mto));
+
+        $group = '0b9e4a4e-6a53-4a57-9e0f-7d1b0c7c2a11';
+        $first->forceFill(['submission_group_id' => $group])->save();
+        $second->forceFill(['submission_group_id' => $group])->save();
+
+        $siblings = $this->actingAs($this->admin($mpdo))
+            ->get(route('documents.show', $first))
+            ->assertOk()
+            ->viewData('page')['props']['document']['submitted_with'];
+
+        $this->assertSame([$second->control_number], array_column($siblings, 'control_number'));
+    }
 
     /** @return list<Office> */
     private function offices(): array

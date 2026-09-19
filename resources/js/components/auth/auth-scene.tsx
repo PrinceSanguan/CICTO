@@ -178,7 +178,7 @@ export function AuthScene() {
 export function AuthWelcome() {
     return (
         <div
-            className="relative hidden min-h-[520px] flex-1 lg:block"
+            className="relative hidden min-h-[520px] flex-1 flex-col lg:flex"
             data-testid="auth-welcome"
         >
             <CloudBank />
@@ -194,7 +194,13 @@ export function AuthWelcome() {
                 longest line, so the centring is measured off the title mass
                 rather than off the panel.
             */}
-            <div className="relative z-10 mx-auto w-fit px-4 pt-28">
+            {/*
+                `pt-16` below 860px of viewport height, `pt-28` above it. On a
+                768px laptop -- the client's screen -- the extra 48px was
+                taken straight out of the room the figure has below the
+                tagline; see the figure's comment for why that room matters.
+            */}
+            <div className="relative z-10 mx-auto w-fit px-4 pt-16 [@media(min-height:860px)]:pt-28">
                 {/*
                     "Welcome to" is deliberately smaller than the three lines
                     under it -- roughly three quarters -- and the whole block is
@@ -235,50 +241,45 @@ export function AuthWelcome() {
             </div>
 
             {/*
-                Anchored to the panel's bottom-LEFT corner, mirrored, with a
-                CAPPED height. Sizing purely in percent made the same figure a
-                different size on every screen, because the panel's height is
-                driven by whichever form sits beside it.
-            */}
-            {/*
-                `-scale-x-100` and the move from `right-0` to `left-0` are one
-                change, not two. The artwork has her turned to the viewer's
-                right with the laptop out on that side, so at the panel's right
-                edge she faced the empty margin and read as walking off the
-                page -- "nakaharap rin dapat 'to sa may verification" on the
-                client's markup. Mirrored at the left edge she stands beside
-                the card and looks into it.
+                THE FIGURE GETS THE SPACE BELOW THE TEXT, AND NO MORE.
 
-                The flip is applied here rather than to the file because
-                hero-scene.tsx uses the same asset on the landing page, where
-                she faces the document art on her right and is already correct.
-            */}
-            {/*
-                Sizing has to account for the ASSET, not just the box: the PNG
-                is 360x640 with the figure occupying only rows 85-574, so she
-                fills 76.4% of whatever height is set here and the rest is
-                transparent. That is why `max-h-[460px]` drew a 351px woman
-                rather than a 460px one. 72% of the panel the taller card now
-                drives to ~700px is ~503px of box and ~384px of figure, which
-                is what the comp measures; the cap is 520 so the longer forms
-                (register, reset) grow her rather than clipping.
+                She used to be sized as a percentage of the whole panel
+                (`h-[72%]`, `min-h-[300px]`), which knows nothing about where
+                the tagline ends -- so on any screen where the panel is short,
+                her head rose into "Track, Manage and Monitor Documents
+                Efficiently." The client sent exactly that on 2026-09-19:
+                "natatakpan po yung word sa likod". Measured before this change
+                at 1366x768, their screen, 4.6% of the tagline was under her;
+                at 1280x720, 10.7%; at 1024x768, 37%.
 
-                `-bottom-14` cancels that same transparency at the foot -- the
-                asset leaves ~10% of its height empty below her shoes, so
-                without it she floats above the ground band instead of standing
-                on it.
+                So this flex-1 region starts where the text block ends, and she
+                is sized to IT: `h-[calc(100%+3.5rem)]` is the region plus the
+                `-bottom-14` she bleeds below it, so the top of her image box
+                is the top of the region and can never sit higher than the
+                tagline. The asset's own transparent headroom (rows 0-84 of
+                640) then leaves a clear gap above her head. The 520px cap is
+                unchanged, so on a tall screen she is the size she always was;
+                `min-h` on the REGION rather than on her keeps her from
+                shrinking to nothing -- it grows the panel instead of pushing
+                her up into the words.
 
-                `-left-8` is the comp's overlap: the row already puts a 24px
-                gap between the card and this panel, so -32px leaves her
-                standing 8px in FRONT of the card's right edge -- well inside
-                the card's own 48px gutter, so she can never cover a field.
+                Unchanged from before: anchored bottom-LEFT and mirrored
+                (`-scale-x-100`), so she stands beside the card and looks into
+                it -- "nakaharap rin dapat 'to sa may verification" on the
+                client's markup; hero-scene.tsx uses the same asset unflipped.
+                `-bottom-14` cancels the ~10% of empty canvas below her shoes so
+                she stands on the ground band, and `-left-8` leaves her 8px in
+                front of the card's edge, inside its 48px gutter, so she can
+                never cover a field.
             */}
-            <img
-                src={womanSrc}
-                alt=""
-                aria-hidden="true"
-                className="pointer-events-none absolute -bottom-14 -left-8 z-10 h-[72%] max-h-[520px] min-h-[300px] w-auto -scale-x-100 object-contain object-bottom"
-            />
+            <div className="relative min-h-[260px] flex-1">
+                <img
+                    src={womanSrc}
+                    alt=""
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -bottom-14 -left-8 z-10 h-[calc(100%+3.5rem)] max-h-[520px] w-auto -scale-x-100 object-contain object-bottom"
+                />
+            </div>
         </div>
     );
 }

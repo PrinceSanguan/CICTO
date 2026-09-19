@@ -14,10 +14,12 @@ use App\Exceptions\AlreadySignedException;
 use App\Models\Document;
 use App\Models\DocumentFile;
 use App\Models\DocumentSignature;
+use App\Services\QrCodeRenderer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\HtmlString;
 use Tests\Concerns\BuildsDocuments;
 use Tests\TestCase;
 
@@ -348,5 +350,120 @@ class SignatureTest extends TestCase
         $this->assertDatabaseHas('security_events', [
             'type' => SecurityEventType::SignatureTampered->value,
         ]);
+    }
+
+    /**
+     * The client asked on 2026-09-19 to drag a signature file onto the pad
+     * instead of drawing it. The browser redraws the picture and sends a PNG,
+     * so it goes through the same PNG-only store as a drawn mark -- and is
+     * recorded as `uploaded`, because the record says how the mark was made.
+     */
+    public function test_an_uploaded_signature_image_is_stored_and_recorded_as_uploaded(): void
+    {
+        $document = $this->reviewable();
+        $admin = $this->admin($document->originatingOffice);
+
+        $this->actingAs($admin)
+            ->post(route('documents.signatures.store', $document), [
+                'method' => SignatureMethod::Uploaded->value,
+                'image' => 'data:image/png;base64,'.base64_encode($this->pngBytes()),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $signature = DocumentSignature::query()->sole();
+
+        $this->assertSame(SignatureMethod::Uploaded, $signature->method);
+        $this->assertNotNull($signature->image_path);
+        $this->assertSame($this->pngBytes(), Storage::disk('documents')->get($signature->image_path));
+        $this->assertTrue($signature->isValid(), 'The method is part of the hash, and the hash still verifies.');
+    }
+
+    public function test_an_uploaded_signature_needs_its_image(): void
+    {
+        $document = $this->reviewable();
+        $admin = $this->admin($document->originatingOffice);
+
+        $this->actingAs($admin)
+            ->post(route('documents.signatures.store', $document), [
+                'method' => SignatureMethod::Uploaded->value,
+            ])
+            ->assertSessionHasErrors(['image' => 'Please add an image of your signature before signing.']);
+
+        $this->assertSame(0, DocumentSignature::query()->count());
+    }
+
+    /** The server's PNG check applies to an upload exactly as to a drawing. */
+    public function test_an_uploaded_signature_must_be_a_real_png(): void
+    {
+        $document = $this->reviewable();
+        $admin = $this->admin($document->originatingOffice);
+
+        $this->expectException(\RuntimeException::class);
+
+        app(SignDocument::class)->handle(
+            $document,
+            $admin,
+            SignatureMethod::Uploaded,
+            'data:image/png;base64,'.base64_encode('<svg onload=alert(1)></svg>'),
+        );
+    }
+
+    /**
+     * The client asked on 2026-09-19 for the file version, file fingerprint,
+     * certificate serial and the green "Valid at time of printing" box to come
+     * off the printed certificate. The warnings that print only when something
+     * IS wrong stay.
+     */
+    public function test_the_certificate_no_longer_prints_machine_identifiers(): void
+    {
+        $document = $this->reviewable();
+        $admin = $this->admin($document->originatingOffice);
+
+        $signature = app(SignDocument::class)->handle(
+            $document,
+            $admin,
+            SignatureMethod::Uploaded,
+            'data:image/png;base64,'.base64_encode($this->pngBytes()),
+        );
+
+        // The real verification address, which ends in the serial: the page
+        // prints it once, as the way to check the paper, and nowhere else.
+        $verifyUrl = route('signatures.verify', $signature->serial);
+
+        $render = fn (bool $valid, bool $superseded): string => view('documents.signature-certificate', [
+            'signature' => $signature->load(['document', 'file', 'signer']),
+            'document' => $document,
+            'valid' => $valid,
+            'superseded' => $superseded,
+            'verifyUrl' => $verifyUrl,
+            'qr' => new HtmlString(app(QrCodeRenderer::class)->svg($verifyUrl, 220)),
+        ])->render();
+
+        $html = $render(true, false);
+        // The serial is still the PDF's <title> metadata; what matters is the page.
+        $body = substr($html, (int) strpos($html, '<body>'));
+
+        foreach (['File version', 'File fingerprint', 'Certificate serial', 'Valid at time of printing'] as $gone) {
+            $this->assertStringNotContainsString($gone, $body);
+        }
+
+        // No "Certificate serial" row: the serial appears exactly once, inside
+        // the verification address.
+        $this->assertSame(1, substr_count($body, $signature->serial));
+        $this->assertStringContainsString($verifyUrl, $body);
+        $this->assertStringNotContainsString((string) $signature->document_hash_sha256, $body);
+
+        // Still there: who signed, and the uploaded mark itself.
+        $this->assertStringContainsString($admin->name, $body);
+        $this->assertStringContainsString('data:image/png;base64,', $body);
+
+        // The QR as an image: dompdf silently drops inline <svg>, which is why
+        // "Scan to verify" used to print over an empty space.
+        $this->assertStringContainsString('<img src="data:image/svg+xml;base64,', $body);
+        $this->assertStringNotContainsString('<svg', $body);
+
+        $this->assertStringContainsString('Valid, but superseded.', $render(true, true));
+        $this->assertStringContainsString('Does not match.', $render(false, false));
     }
 }

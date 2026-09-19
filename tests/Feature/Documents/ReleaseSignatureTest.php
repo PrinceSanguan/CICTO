@@ -486,4 +486,39 @@ class ReleaseSignatureTest extends TestCase
 
         $this->assertSame(2, DocumentSignature::query()->where('document_id', $document->id)->count());
     }
+
+    /** An uploaded image signs a release while forwarding, too -- not only on its own. */
+    public function test_an_uploaded_signature_can_ride_along_with_a_forward(): void
+    {
+        [$document, $admin, $next] = $this->onADesk();
+
+        $this->signedIn($admin)
+            ->post(route('documents.transitions.store', $document), [
+                ...$this->forwardPayload($document, $next, sign: true),
+                'signature_method' => SignatureMethod::Uploaded->value,
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $signature = DocumentSignature::query()->where('document_id', $document->id)->sole();
+
+        $this->assertSame(SignatureMethod::Uploaded, $signature->method);
+        $this->assertSame(DocumentSignature::PURPOSE_RELEASE, $signature->purpose);
+        $this->assertSame($next->id, $document->refresh()->openMovement->to_office_id);
+    }
+
+    public function test_an_uploaded_signature_riding_along_with_a_forward_needs_its_image(): void
+    {
+        [$document, $admin, $next] = $this->onADesk();
+
+        $this->signedIn($admin)
+            ->post(route('documents.transitions.store', $document), [
+                ...$this->forwardPayload($document, $next, sign: false),
+                'signature_method' => SignatureMethod::Uploaded->value,
+            ])
+            ->assertSessionHasErrors(['signature_image' => 'Please add an image of your signature before signing.']);
+
+        $this->assertSame(0, DocumentSignature::query()->count());
+        $this->assertNotSame($next->id, $document->refresh()->openMovement->to_office_id, 'Nothing was sent.');
+    }
 }

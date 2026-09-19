@@ -220,7 +220,7 @@ function DocumentManagement({
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="priority">
-                                Priority (urgent first)
+                                Priority (high first)
                             </SelectItem>
                             <SelectItem value="updated">
                                 Date Updated

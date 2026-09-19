@@ -304,8 +304,8 @@ class TransitionDocumentRequest extends FormRequest
 
         $method = $this->enum('signature_method', SignatureMethod::class);
 
-        if ($method === SignatureMethod::Drawn && blank($this->input('signature_image'))) {
-            $validator->errors()->add('signature_image', 'Please draw your signature before signing.');
+        if ($method?->requiresImage() && blank($this->input('signature_image'))) {
+            $validator->errors()->add('signature_image', $method->missingImageMessage());
         }
 
         if ($method === SignatureMethod::Typed) {

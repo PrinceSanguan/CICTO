@@ -80,7 +80,7 @@ final class KnowledgeBase
                     ],
                     [
                         'title' => 'In Process',
-                        'body' => 'An office has received the document and is working on it. On the document page itself this stage is named **Under Review**. If the document was submitted to several offices, each one presses **Received** when it arrives and the document moves straight on to the next office on the list -- there is no approval step to wait for. Only an office Admin can press **Received**, send a document to another office, or sign it.',
+                        'body' => 'An office has received the document and is working on it. On the document page itself this stage is named **Under Review**. If the document was submitted to several offices, each one presses **Received** when it arrives and the document moves straight on to the next office on the list, in the order they were listed -- there is no approval step to wait for, and no need to send it on by hand. Only an office Admin can press **Received**, return a document, send it to another office, or sign it.',
                     ],
                     /*
                      * Approved is listed although nothing can reach it, and
@@ -108,7 +108,7 @@ final class KnowledgeBase
                         // Completed -- so the entry keeps its place and its
                         // meaning under the name that is actually displayed.
                         'title' => 'Completed',
-                        'body' => 'The work is finished and the document is ready for pickup or download. This is a final state.',
+                        'body' => 'The work is finished and the document is ready for pickup or download. This is a final state. A document that was submitted to several offices becomes Completed by itself when the last office on its list presses **Received** -- there is no separate button for it.',
                     ],
                 ],
                 'closing' => [
