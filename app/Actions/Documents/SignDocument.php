@@ -90,24 +90,46 @@ final class SignDocument
             $serial = mb_strtolower((string) Str::ulid());
             $signedAt = Deadlines::now();
 
-            // Checked BEFORE the image is written, so a duplicate never leaves
-            // an orphaned PNG behind and never surfaces as a raw 500.
-            //
-            // Not simply (current file, user, purpose) any more. Stamping makes
-            // a new version out of the act of signing, so a second attempt
-            // would find itself looking at a version nobody had signed yet and
-            // wave the signer straight through -- one person, two marks, same
-            // purpose. The question is really "have you signed this document
-            // since the last version somebody UPLOADED", so that is what is
-            // asked: signing again is refused, while a genuinely corrected
-            // upload moves the baseline and correctly reopens signing.
+            /*
+             * ONE SIGNATURE PER OFFICE -- the client's rule of 2026-09-20.
+             *
+             * Checked BEFORE the image is written, so a duplicate never leaves
+             * an orphaned PNG behind and never surfaces as a raw 500.
+             *
+             * Three things this question is NOT, each of which it used to be:
+             *
+             *  - not "per person". An office speaks with one voice on a
+             *    document; its head signing after its clerk already did is two
+             *    marks for one decision. Whoever signs first signs FOR the
+             *    office, and the others are refused.
+             *
+             *  - not "against the current file". Stamping makes a new version
+             *    out of the act of signing, so a second attempt would find
+             *    itself looking at a version nobody had signed yet and be
+             *    waved straight through. The baseline is the last version
+             *    somebody UPLOADED, which a stamp never moves and a genuine
+             *    correction does -- so a corrected file correctly reopens
+             *    signing for an office that had already signed the old one.
+             *
+             *  - not matched on the office NAME. `signer_office` is a snapshot
+             *    kept for the printed certificate; renaming an office would
+             *    otherwise hand it a second signature.
+             *
+             * A signer with no office -- a Super Admin -- is asked about as
+             * themselves instead, because "their office has signed" is not a
+             * question that means anything for them.
+             */
+            $baseline = $this->lastUploadedVersion($locked);
+
             $already = DocumentSignature::query()
                 ->where('document_id', $locked->id)
-                ->where('user_id', $signer->id)
                 ->where('purpose', $purpose)
-                ->where(function (Builder $query) use ($locked): void {
-                    $baseline = $this->lastUploadedVersion($locked);
-
+                ->when(
+                    $signer->office_id !== null,
+                    fn (Builder $query) => $query->where('office_id', $signer->office_id),
+                    fn (Builder $query) => $query->where('user_id', $signer->id),
+                )
+                ->where(function (Builder $query) use ($baseline): void {
                     $query
                         ->whereNull('document_file_id')
                         ->orWhereHas(
@@ -166,6 +188,11 @@ final class SignDocument
                 'signer_position' => $signerPosition,
                 'signer_office' => $signerOffice,
 
+                // The office as an ID as well as a name. The name is the
+                // snapshot a certificate prints; this is what "one signature
+                // per office" is actually asked about. See the migration.
+                'office_id' => $signer->office_id,
+
                 'purpose' => $purpose,
                 'method' => $method->value,
                 'image_disk' => $imagePath === null ? null : 'documents',
@@ -210,7 +237,30 @@ final class SignDocument
                     ),
                 );
 
-                $signature->forceFill(['stamped_file_id' => $stamped->id])->save();
+                /*
+                 * ONLY IF IT REALLY IS A NEW VERSION.
+                 *
+                 * StoreDocumentFile dedupes byte-identical bytes back onto the
+                 * current row instead of manufacturing a version -- right on
+                 * its own, and what stops a double-submitted form growing the
+                 * version list. But a "stamped" PDF equal to what was signed
+                 * comes back as THE SAME ROW, and recording it here would make
+                 * the signature claim the file it was signed against as its
+                 * own output. UndoSignature would then delete the document's
+                 * only file, bytes and all, when the mark was withdrawn.
+                 *
+                 * Found in QA on 2026-09-20. A browser that decoded the PDF
+                 * but failed to draw the mark produces exactly these bytes, so
+                 * this is a real path and not a theoretical one.
+                 *
+                 * Left null rather than refused: the signature itself is
+                 * sound -- the signer read that version and attested to it --
+                 * and it is recorded as an ordinary unstamped one, which is
+                 * what actually happened.
+                 */
+                if ($stamped->id !== $signature->document_file_id) {
+                    $signature->forceFill(['stamped_file_id' => $stamped->id])->save();
+                }
             }
 
             SecurityEvent::log(
@@ -231,13 +281,14 @@ final class SignDocument
     }
 
     /**
-     * The newest version somebody actually UPLOADED, ignoring the ones
-     * stamping produced.
+     * The baseline the already-signed guard counts from: the newest version
+     * somebody actually UPLOADED, ignoring the ones stamping produced.
      *
-     * This is the baseline the already-signed guard counts from. Versions born
-     * of a signature are not new content -- they are the same document with
-     * one more mark on it -- so they must not reopen signing for someone who
-     * has already signed. A real upload (a corrected document) must.
+     * Versions born of a signature are not new content -- they are the same
+     * document with one more mark on it -- so they must not reopen signing for
+     * someone who has already signed. A real upload (a corrected document)
+     * must. DocumentSignature::isSuperseded() draws the same line, which is
+     * why both ask DocumentFile the one question.
      *
      * Returns 0 when nothing is attached, which makes the guard's `version >=
      * 0` match every signature the signer has on this document. That is the
@@ -245,15 +296,7 @@ final class SignDocument
      */
     private function lastUploadedVersion(Document $document): int
     {
-        return (int) DocumentFile::query()
-            ->where('document_id', $document->id)
-            ->whereNotIn(
-                'id',
-                DocumentSignature::query()
-                    ->whereNotNull('stamped_file_id')
-                    ->select('stamped_file_id'),
-            )
-            ->max('version');
+        return DocumentFile::lastUploadedVersion($document->id);
     }
 
     /**

@@ -7,9 +7,11 @@ use App\Enums\SecurityEventType;
 use App\Models\Document;
 use App\Models\DocumentFile;
 use App\Models\SecurityEvent;
+use App\Services\OfficeDocumentPreview;
 use App\Support\DocumentUpload;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -79,13 +81,31 @@ class DocumentFileController extends Controller
      * Content-Type cannot be. The sandbox would be depth on top of a shut door,
      * bought at the price of a feature that silently does not work.
      */
-    public function preview(Request $request, Document $document, DocumentFile $file): StreamedResponse
-    {
+    public function preview(
+        Request $request,
+        Document $document,
+        DocumentFile $file,
+        OfficeDocumentPreview $preview,
+    ): StreamedResponse|Response {
         $this->authorize('preview', $file);
 
         // 410 not 403: a version purged under the retention policy is GONE, not
         // forbidden, and the person asking may well have every right to it.
         abort_unless($file->exists(), 410, 'This version is no longer stored.');
+
+        /*
+         * WORD AND EXCEL TAKE THE OTHER PATH, added 2026-09-20 because the
+         * client found a .docx arriving at the signing panel as a grey box.
+         *
+         * Their bytes are never sent: no browser renders them, and serving
+         * them inline is exactly the hazard DocumentFile::PREVIEWABLE exists
+         * to close. What is sent is HTML the server produced from them, under
+         * the same deny-all policy below -- which is what makes converted
+         * markup from a file somebody else uploaded safe to render at all.
+         */
+        if ($preview->supports($file->mime_type)) {
+            return $this->convertedResponse($request, $document, $file, $preview);
+        }
 
         $contentType = $file->previewContentType();
 
@@ -147,6 +167,56 @@ class DocumentFileController extends Controller
                 'Cache-Control' => 'private, no-store, max-age=0',
             ],
         );
+    }
+
+    /**
+     * A Word or Excel version, converted to HTML and served as inertly as its
+     * own bytes would have been.
+     *
+     * The §21 audit line is written here too, and says the same thing: a
+     * preview is a read, and this one put the document's contents on somebody's
+     * screen just as surely as streaming the PDF would have.
+     *
+     * `no-store` and `private` for the same reason as the byte path -- the
+     * HTML is the document's contents, and a shared proxy keeping a copy is
+     * the same leak whichever form it is in.
+     */
+    private function convertedResponse(
+        Request $request,
+        Document $document,
+        DocumentFile $file,
+        OfficeDocumentPreview $preview,
+    ): Response {
+        SecurityEvent::log(
+            SecurityEventType::FilePreviewed,
+            sprintf(
+                '%s previewed %s v%d (converted for reading).',
+                $request->user()->email ?? 'A user',
+                $document->control_number,
+                $file->version,
+            ),
+            $request->user(),
+            $document->control_number,
+        );
+
+        return response($preview->render($file), 200, [
+            'Content-Type' => 'text/html; charset=UTF-8',
+            'X-Content-Type-Options' => 'nosniff',
+
+            // Identical to the byte path's policy, and load-bearing for the
+            // same reason: this markup was produced from a file somebody else
+            // uploaded, so nothing in it may run, load or fetch anything.
+            'Content-Security-Policy' => implode('; ', [
+                "default-src 'none'",
+                "script-src 'none'",
+                "object-src 'none'",
+                "style-src 'unsafe-inline'",
+                'img-src data:',
+                "frame-ancestors 'self'",
+            ]),
+
+            'Cache-Control' => 'private, no-store, max-age=0',
+        ]);
     }
 
     /**

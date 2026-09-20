@@ -3,8 +3,11 @@
 namespace App\Models;
 
 use App\Policies\DocumentFilePolicy;
+use App\Services\OfficeDocumentPreview;
 use Database\Factories\DocumentFileFactory;
+use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Attributes\UsePolicy;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -73,6 +76,44 @@ class DocumentFile extends Model
     }
 
     /**
+     * Versions somebody actually UPLOADED, excluding the ones stamping
+     * produced.
+     *
+     * Signing appends the stamped PDF as the next version, so raw version
+     * order cannot answer "has this document been changed since?" -- the
+     * signature's own output always sits above it and every signature reads as
+     * out of date. A version born of a signature is not new content; it is the
+     * same content with one more mark on it. A real upload (a corrected
+     * document) is.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function uploaded(Builder $query): void
+    {
+        $query->whereNotIn(
+            'document_files.id',
+            DocumentSignature::query()
+                ->whereNotNull('stamped_file_id')
+                ->select('stamped_file_id'),
+        );
+    }
+
+    /**
+     * The newest uploaded version number, or 0 when nothing is attached.
+     *
+     * 0 rather than null so callers can compare without a null branch: with no
+     * file there is no content to have been corrected.
+     */
+    public static function lastUploadedVersion(int $documentId): int
+    {
+        return (int) self::query()
+            ->where('document_id', $documentId)
+            ->uploaded()
+            ->max('version');
+    }
+
+    /**
      * Signatures bound to this exact version.
      *
      * Consulted by the retention pruner: a signed version's bytes are never
@@ -97,9 +138,16 @@ class DocumentFile extends Model
      * always been forced to download, and why previewing has to be a CLOSED
      * allowlist rather than "inline unless it looks dangerous".
      *
-     * Three types, all inert renderers. Deliberately NARROWER than
-     * cicto.uploads.mimes, which also accepts Word and Excel -- no browser
-     * renders those anyway, so nothing is lost by refusing them here.
+     * Three types, all inert renderers. Still deliberately NARROWER than
+     * cicto.uploads.mimes: these are the types whose own BYTES are sent to the
+     * browser.
+     *
+     * Word and Excel are not on this list and must not be -- the browser
+     * cannot render them, and serving their bytes inline would be the exact
+     * hazard above. They are previewable by a different route since
+     * 2026-09-20: OfficeDocumentPreview converts them to HTML on the server
+     * and the controller sends THAT, under the same deny-all policy. See
+     * isPreviewable(), which is the question the page actually asks.
      *
      * The VALUE is what gets sent, never the stored mime_type string. The
      * stored one is sniffed from the bytes at upload time and is trustworthy
@@ -123,7 +171,21 @@ class DocumentFile extends Model
      */
     public function isPreviewable(): bool
     {
-        return array_key_exists((string) $this->mime_type, self::PREVIEWABLE);
+        if (array_key_exists((string) $this->mime_type, self::PREVIEWABLE)) {
+            return true;
+        }
+
+        // Converted rather than served as-is. The page does not care which of
+        // the two it gets -- both arrive as something an iframe can render --
+        // so this is the one question it asks.
+        return app(OfficeDocumentPreview::class)->supports($this->mime_type);
+    }
+
+    /** Is this one of the types the server renders to HTML first? */
+    public function isConverted(): bool
+    {
+        return ! array_key_exists((string) $this->mime_type, self::PREVIEWABLE)
+            && app(OfficeDocumentPreview::class)->supports($this->mime_type);
     }
 
     /** The Content-Type to serve inline, or null if this type is not on the list. */

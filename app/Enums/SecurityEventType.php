@@ -52,6 +52,16 @@ enum SecurityEventType: string
     case FilePreviewed = 'file.previewed';
 
     case DocumentSigned = 'signature.created';
+
+    /*
+     * Its own type, not a bare delete. A signature that was withdrawn is the
+     * one thing in this log a dispute is most likely to turn on -- "it was
+     * signed and then it was not" -- and it must be findable without reading
+     * every row. The summary names the office, so the trail survives the row
+     * it describes being gone.
+     */
+    case SignatureUndone = 'signature.undone';
+
     case SignatureTampered = 'signature.tampered';
 
     case BackupCompleted = 'backup.completed';
@@ -77,6 +87,7 @@ enum SecurityEventType: string
             self::FileDownloaded => 'File downloaded',
             self::FilePreviewed => 'File previewed',
             self::DocumentSigned => 'Document signed',
+            self::SignatureUndone => 'Signature withdrawn',
             self::SignatureTampered => 'Signature mismatch detected',
             self::BackupCompleted => 'Backup completed',
             self::BackupFailed => 'Backup failed',

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Documents;
 
+use App\Actions\Documents\RouteDocument;
 use App\Enums\DocumentStatus;
 use App\Enums\MovementAction;
 use App\Enums\RouteStopStatus;
@@ -199,11 +200,15 @@ class RoutingTest extends TestCase
      * Return button. This is that button set, asserted through the same
      * `available_actions` payload the page renders from -- so it fails if
      * approve or reject creeps back into the workflow map, and it fails if
-     * Completed starts being offered halfway down a route. Send to Another
-     * Office stays in the middle of a route: the 2026-09-19 removal applies
-     * "only on the last route office".
+     * Completed starts being offered halfway down a route.
+     *
+     * Send to Another Office went on 2026-09-20. It used to stay in the middle
+     * of a route, because the 2026-09-19 removal applied "only on the last
+     * route office"; the client then asked for it gone from every office while
+     * the plan is running, leaving "only received or returned". DocumentPolicy
+     * carries the reasoning and the history of the reversal.
      */
-    public function test_a_queued_office_is_offered_receive_send_and_return(): void
+    public function test_a_queued_office_is_offered_only_receive_and_return(): void
     {
         [$mpdo, $mto, $hrmo] = $this->offices();
         $document = $this->registerDocument($mpdo, $this->staff($mpdo));
@@ -216,9 +221,9 @@ class RoutingTest extends TestCase
             ->viewData('page')['props']['document']['available_actions'];
 
         $this->assertSame(
-            ['forwarded', 'received', 'returned'],
+            ['received', 'returned'],
             array_column($actions, 'value'),
-            'A stop with an office still queued behind it may send on, receive, or return -- and nothing else.',
+            'With an office still queued behind it, a stop may only receive or return.',
         );
 
         // Exactly one of them nags for a reason, and it is the return.
@@ -283,11 +288,15 @@ class RoutingTest extends TestCase
     }
 
     /**
-     * The originating office is not the last route office, so it keeps Send to
-     * Another Office beside Received: the 2026-09-19 removal applies only where
-     * Received would complete the document.
+     * The originating office is the FIRST stop of its own route, and offices
+     * behind it are still queued -- so since 2026-09-20 it has Received and
+     * nothing else.
+     *
+     * Return is absent for a different reason that predates all of this: a
+     * return goes to the originating office, and this IS the originating
+     * office, so there is nowhere to send it.
      */
-    public function test_the_originating_office_of_a_routed_document_keeps_send_and_receive(): void
+    public function test_the_originating_office_of_a_routed_document_keeps_only_receive(): void
     {
         Storage::fake('documents');
 
@@ -310,7 +319,7 @@ class RoutingTest extends TestCase
             ->assertOk()
             ->viewData('page')['props']['document']['available_actions'];
 
-        $this->assertSame(['forwarded', 'received'], array_column($actions, 'value'));
+        $this->assertSame(['received'], array_column($actions, 'value'));
     }
 
     /**
@@ -466,7 +475,7 @@ class RoutingTest extends TestCase
         $this->send($this->admin($mpdo), $document, [$mto, $hrmo]);
 
         // MTO changes its mind and sends it to the Mayor, then Legal, instead.
-        $this->send($this->admin($mto), $document->refresh(), [$mayor, $legal]);
+        $this->reroute($this->admin($mto), $document->refresh(), [$mayor, $legal]);
 
         $document->refresh();
 
@@ -629,8 +638,11 @@ class RoutingTest extends TestCase
         $this->send($this->admin($mpdo), $document, [$mto, $hrmo]);
 
         // MTO holds it, and sends it to the Mayor instead of letting the plan
-        // carry it to HRMO.
-        $this->send($this->admin($mto), $document->refresh(), [$mayor]);
+        // carry it to HRMO. Through the action: since 2026-09-20 the endpoint
+        // refuses this while HRMO is still queued, which is the point of the
+        // rule -- but the tearing-down it triggers still has to be right,
+        // because a Super Admin recovering a dead last stop reaches it.
+        $this->reroute($this->admin($mto), $document->refresh(), [$mayor]);
 
         $document->refresh();
 
@@ -695,7 +707,7 @@ class RoutingTest extends TestCase
         $admin = $this->admin($mpdo);
 
         $this->send($admin, $document, [$mto, $hrmo]);
-        $this->send($this->admin($mto), $document->refresh(), [$mayor]);
+        $this->reroute($this->admin($mto), $document->refresh(), [$mayor]);
 
         $document->refresh();
 
@@ -705,6 +717,116 @@ class RoutingTest extends TestCase
             'Changing your mind must not leave the old tail queued.',
         );
         $this->assertSame($mayor->id, $document->openMovement->to_office_id);
+    }
+
+    /**
+     * THE 2026-09-20 RULE ITSELF: while a route is running, nobody sends by
+     * hand -- not the office holding the folder, not a Super Admin.
+     *
+     * The client asked for the middle of a route to show "only received or
+     * returned", and chose explicitly that it should bind Super Admin too.
+     * What it costs is the ability to change a plan once it has started; the
+     * answer to a wrong route is Return or Reject, not a detour.
+     *
+     * A hand-picked send does not sit alongside a route, it DESTROYS one:
+     * AdvanceRoute cancels every remaining stop on a Forwarded, so one press
+     * at the second of fifty-two offices silently threw the other fifty away.
+     */
+    public function test_nobody_may_send_by_hand_while_the_route_is_still_running(): void
+    {
+        [$mpdo, $mto, $hrmo, $mayor] = $this->offices();
+        $document = $this->registerDocument($mpdo, $this->staff($mpdo));
+
+        $this->send($this->admin($mpdo), $document, [$mto, $hrmo]);
+        $document->refresh();
+
+        $detour = fn (User $actor) => $this->actingAs($actor)
+            ->post(route('documents.transitions.store', $document), [
+                'action' => 'forwarded',
+                'to_office_ids' => [$mayor->id],
+                'expected_movement_id' => $this->openLegId($document),
+            ]);
+
+        $detour($this->admin($mto))->assertForbidden();
+        $detour($this->superAdmin())->assertForbidden();
+
+        // The plan is untouched by the refusals, which is the whole point.
+        $this->assertSame(
+            1,
+            $document->routeStops()->where('status', RouteStopStatus::Pending)->count(),
+        );
+
+        // And the panel offers exactly the two buttons that were asked for.
+        $actions = $this->actingAs($this->admin($mto))
+            ->get(route('documents.show', $document))
+            ->assertOk()
+            ->viewData('page')['props']['document']['available_actions'];
+
+        $this->assertSame(['received', 'returned'], array_column($actions, 'value'));
+    }
+
+    /**
+     * ...unless hiding it would strand the folder for good.
+     *
+     * A mid-route office that was deactivated, or lost its last active Admin,
+     * can neither receive the document nor pass it on. Send comes back there
+     * -- the same recovery exception the last-office rule has carried since
+     * 2026-09-19, for the same reason.
+     */
+    public function test_a_mid_route_office_that_cannot_receive_keeps_send(): void
+    {
+        [$mpdo, $mto, $hrmo] = $this->offices();
+        $document = $this->registerDocument($mpdo, $this->staff($mpdo));
+
+        $this->send($this->admin($mpdo), $document, [$mto, $hrmo]);
+
+        // MTO loses its only Admin, so nobody there can take the folder in.
+        User::query()->where('office_id', $mto->id)->update(['is_active' => false]);
+
+        $actions = $this->actingAs($this->superAdmin())
+            ->get(route('documents.show', $document->refresh()))
+            ->assertOk()
+            ->viewData('page')['props']['document']['available_actions'];
+
+        $this->assertContains(
+            'forwarded',
+            array_column($actions, 'value'),
+            'A document at a desk that cannot receive must still have a way out.',
+        );
+    }
+
+    /**
+     * THE 20-OFFICE CAP IS GONE, client request 2026-09-20.
+     *
+     * They picked all 52 departments for a circular and were told "The
+     * department field must not have more than 20 items." Twenty was never a
+     * domain rule -- nothing breaks at twenty-one -- so the ceiling is now the
+     * number of active offices, which `distinct` and `exists` already made the
+     * real limit. See App\Support\RoutePlan.
+     *
+     * Twenty-five here rather than fifty-two: the point is that the old
+     * constant no longer binds, and every extra office is another factory
+     * insert on a test that proves nothing more by being slower.
+     */
+    public function test_a_route_may_be_longer_than_the_old_twenty_office_cap(): void
+    {
+        [$mpdo] = $this->offices();
+        $document = $this->registerDocument($mpdo, $this->staff($mpdo));
+
+        $destinations = collect(range(1, 25))
+            ->map(fn (int $n) => $this->office('D'.$n, 'Department '.$n))
+            ->all();
+
+        $this->send($this->admin($mpdo), $document, $destinations);
+
+        $document->refresh();
+
+        // One is being visited now; the other twenty-four are queued behind it.
+        $this->assertSame(25, $document->routeStops()->count());
+        $this->assertSame(
+            $destinations[0]->id,
+            $document->openMovement->to_office_id,
+        );
     }
 
     public function test_the_same_office_cannot_appear_twice_in_one_route(): void
@@ -1079,6 +1201,11 @@ class RoutingTest extends TestCase
      * route office" -- it is not on the route at all -- so it keeps every
      * button it had before 2026-09-19. (Receiving there still completes the
      * document, as it always did, and the page says so.)
+     *
+     * Nor does the 2026-09-20 rule reach it: that one asks whether stops are
+     * still PENDING, and the hand-picked send that brought the folder here
+     * cancelled every one of them. Both rules leave this office alone, which
+     * is what makes it the place a mis-routed document can be rescued from.
      */
     public function test_an_office_reached_off_the_plan_keeps_all_its_buttons(): void
     {
@@ -1086,8 +1213,9 @@ class RoutingTest extends TestCase
         $document = $this->registerDocument($mpdo, $this->staff($mpdo));
 
         $this->send($this->admin($mpdo), $document, [$mto, $hrmo]);
-        // MTO detours it to the Mayor by hand, which cancels HRMO.
-        $this->send($this->admin($mto), $document->refresh(), [$mayor]);
+        // MTO detours it to the Mayor by hand, which cancels HRMO. Via the
+        // action, because the endpoint now refuses a send with HRMO queued.
+        $this->reroute($this->admin($mto), $document->refresh(), [$mayor]);
 
         $props = $this->actingAs($this->admin($mayor))
             ->get(route('documents.show', $document->refresh()))
@@ -1213,6 +1341,32 @@ class RoutingTest extends TestCase
     }
 
     /** @param  list<Office>  $destinations */
+    /**
+     * A re-route performed through the ACTION rather than the endpoint.
+     *
+     * Since 2026-09-20 the endpoint refuses a hand-picked send while a route
+     * still has pending stops, so `send()` cannot set these states up any
+     * more. The routing ALGEBRA it exercises -- monotonic positions,
+     * cancelling the old tail, the panel reading the whole journey back -- is
+     * unchanged and still runs on every registration, so it is still worth
+     * testing; only the door it used to come through is shut.
+     *
+     * DocumentWorkflowController calls RouteDocument exactly like this after
+     * the policy has said yes, which is why bypassing the policy here tests
+     * the same code the application runs.
+     *
+     * @param  list<Office>  $destinations
+     */
+    private function reroute(User $actor, Document $document, array $destinations): void
+    {
+        app(RouteDocument::class)->handle(
+            document: $document,
+            actor: $actor,
+            officeIds: array_map(fn (Office $office) => $office->id, $destinations),
+            expectedMovementId: $this->openLegId($document),
+        );
+    }
+
     private function send(User $actor, Document $document, array $destinations): void
     {
         $this->actingAs($actor)

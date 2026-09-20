@@ -19,11 +19,11 @@ import type { DocumentFileItem } from '@/types';
  * "make it big" path, reached from the Attachments list and from the Full
  * screen button on the signing panel.
  *
- * Only PDF, PNG and JPEG arrive here — DocumentFile::PREVIEWABLE is a closed
- * allowlist and the endpoint refuses everything else, so `is_previewable` is
- * checked before a button is ever offered. Word and Excel uploads are accepted
- * by the system but have no browser viewer; those get the download button and a
- * sentence saying so, never a blank frame.
+ * `is_previewable` is checked before a button is ever offered, and since
+ * 2026-09-20 it covers .docx and .xlsx too — the server converts those to
+ * HTML rather than sending their bytes. Only the older binary .doc and .xls
+ * are left with no viewer; those get the download button and a sentence
+ * saying so, never a blank frame.
  */
 export function FilePreviewDialog({
     documentId,

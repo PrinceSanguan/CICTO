@@ -169,6 +169,67 @@ class DocumentPolicy
         }
 
         /*
+         * AND NEITHER IS SEND TO ANOTHER OFFICE, WHILE THE ROUTE IS RUNNING --
+         * the client's decision of 2026-09-20, widening the one below.
+         *
+         * A hand-picked send does not sit alongside a route; it DESTROYS one.
+         * AdvanceRoute cancels every remaining stop on a Forwarded, on the
+         * reasoning that "silently keeping a queue that no longer matches what
+         * they typed is worse than dropping it" -- so one press at the second
+         * of six offices throws the other four away, with nothing on the page
+         * saying so. The offices in the middle of a route were the ones most
+         * able to do that and least likely to mean it.
+         *
+         * With the plan running, the only two things an office holding the
+         * folder needs are RECEIVED (pass it on, which the route does for
+         * them) and RETURN (send it back for correction, which deliberately
+         * leaves the queue intact). That is the panel the client asked for:
+         * "only received or returned".
+         *
+         * THIS IS A REVERSAL, and worth saying so plainly. A first version hid
+         * Send at every stop; on 2026-09-19 the client narrowed it to the last
+         * office only ("applicable only on the last route office") and the
+         * broad version was reverted. On 2026-09-20 they asked for the broad
+         * one back. Both are recorded because the next report of "Send is
+         * still showing" needs to be read against the CURRENT rule, not the
+         * one before it.
+         *
+         * Unchanged, and all of it deliberate:
+         *
+         *  - an UNROUTED document has no stops, so it keeps Send -- it is the
+         *    only way to move one at all;
+         *
+         *  - a document whose route was already abandoned by a hand-picked
+         *    send has no pending stops left, so this rule does not reach it;
+         *    the office it landed on is off the plan and keeps every button,
+         *    exactly as it did before;
+         *
+         *  - RETURN, RESUBMIT and REJECT are untouched. Refusing a bad folder
+         *    mid-route is the whole point of being able to refuse it.
+         *
+         * TWO ESCAPE HATCHES, and neither is optional -- without them this rule
+         * builds documents that can never move again:
+         *
+         *  - RECEIVED MUST ACTUALLY BE AVAILABLE. "Only received or returned"
+         *    assumes there is a Received to press. A legacy `approved`
+         *    document cannot be received at all, so hiding Send there leaves
+         *    it with no exit whatsoever: not received, not completed (stops
+         *    are pending), not forwarded. Its only way out is a hand-picked
+         *    send, and it keeps one.
+         *
+         *  - THE HOLDING OFFICE MUST BE ABLE TO RECEIVE. Same test and same
+         *    reason as the rule below: an office that was deactivated, or has
+         *    no active Admin left, can neither take the folder in nor pass it
+         *    on, so Send comes back for a Super Admin to redirect it.
+         */
+        if ($action === MovementAction::Forwarded
+            && $this->hasPendingStops($document)
+            && DocumentWorkflow::allows($document->status, MovementAction::Received)
+            && $this->holdingOfficeCanReceive($document)) {
+            return false;
+        }
+
+        /*
          * AT THE LAST OFFICE ON A ROUTE, RECEIVED AND RETURN ARE THE ONLY
          * BUTTONS -- the client's decision of 2026-09-19. Looking at that
          * office's Actions panel ("Send to Another Office", "Received",
@@ -476,8 +537,12 @@ class DocumentPolicy
     /**
      * Whose desk is it on? A super admin acts anywhere; everyone else needs the
      * open leg to point at their office.
+     *
+     * Public since 2026-09-20 so DocumentSignaturePolicy can ask the same
+     * question when withdrawing a signature. One definition of "holding it",
+     * not two that drift.
      */
-    private function holdsDocument(User $user, Document $document): bool
+    public function holdsDocument(User $user, Document $document): bool
     {
         if ($user->isSuperAdmin()) {
             return true;

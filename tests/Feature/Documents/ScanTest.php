@@ -21,7 +21,7 @@ class ScanTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_a_courier_scanning_a_label_sees_only_status_and_location(): void
+    public function test_a_courier_scanning_a_label_sees_the_title_status_and_location(): void
     {
         $office = $this->office('MPDO', 'Planning Office');
         $document = $this->registerDocument($office, $this->staff($office));
@@ -32,12 +32,17 @@ class ScanTest extends TestCase
 
         // A separate page, not the staff page with fields hidden -- hiding in
         // the component still ships the data in the Inertia payload.
+        //
+        // `title` joined this list on 2026-09-20 at the client's request; see
+        // ScanController for what that discloses and why they chose it.
+        // `description` and `remarks` did not, and that is the line this
+        // assertion now exists to hold.
         $response->assertInertia(
             fn ($page) => $page
                 ->component('documents/scan-public')
                 ->where('document.control_number', $document->control_number)
+                ->where('document.title', $document->title)
                 ->where('document.current_office', 'Planning Office')
-                ->missing('document.title')
                 ->missing('document.description')
                 ->missing('document.remarks'),
         );
@@ -85,7 +90,17 @@ class ScanTest extends TestCase
             );
     }
 
-    public function test_the_scan_payload_never_contains_the_document_title(): void
+    /**
+     * The title is shown to ANYONE holding the folder, which is the point and
+     * also the cost.
+     *
+     * This test used to assert the exact opposite, with this same example
+     * string. It is kept, inverted, rather than deleted: the pairing of "a
+     * title that should not travel" with "it travels" is the clearest record
+     * of a decision the client made on 2026-09-20, and the next person to read
+     * it should see the trade rather than a bare green tick.
+     */
+    public function test_the_scan_page_shows_the_document_title_to_the_public(): void
     {
         $office = $this->office();
         $document = $this->registerDocument($office, $this->staff($office));
@@ -93,7 +108,56 @@ class ScanTest extends TestCase
 
         $this->get("/s/{$document->qr_token}")
             ->assertOk()
-            ->assertDontSee('Confidential disciplinary case', escape: false);
+            ->assertInertia(
+                fn ($page) => $page->where(
+                    'document.title',
+                    'Confidential disciplinary case',
+                ),
+            );
+    }
+
+    /** A title names the document. These two are its contents, and stay in. */
+    public function test_the_scan_payload_still_withholds_description_and_remarks(): void
+    {
+        $office = $this->office();
+        $document = $this->registerDocument($office, $this->staff($office));
+        $document->forceFill([
+            'description' => 'Findings against the respondent employee',
+        ])->save();
+
+        $this->get("/s/{$document->qr_token}")
+            ->assertOk()
+            ->assertDontSee('Findings against the respondent employee', escape: false)
+            ->assertInertia(
+                fn ($page) => $page
+                    ->missing('document.description')
+                    ->missing('document.remarks'),
+            );
+    }
+
+    /**
+     * The title has to survive the trip to the SCREEN, not just the payload.
+     *
+     * ScanTest has been caught by exactly this before: it asserted a prop the
+     * component never read, and "Currently at" printed "Not yet recorded"
+     * through the whole of UAT with the suite green.
+     */
+    public function test_the_scan_page_renders_the_title_under_the_control_number(): void
+    {
+        $source = (string) file_get_contents(
+            resource_path('js/pages/documents/scan-public.tsx'),
+        );
+
+        $code = strpos($source, '{document.control_number}');
+        $title = strpos($source, '{document.title}');
+
+        $this->assertNotFalse($title, 'The page never reads document.title.');
+        $this->assertNotFalse($code);
+        $this->assertGreaterThan(
+            $code,
+            $title,
+            'The title must render BELOW the control number, not above it.',
+        );
     }
 
     public function test_staff_who_may_read_the_document_are_redirected_to_the_full_view(): void

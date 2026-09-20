@@ -100,20 +100,53 @@ class FilePreviewTest extends TestCase
     }
 
     /**
-     * Word and Excel are accepted uploads with no browser viewer. 415, because
-     * the refusal is about the type and not about the person asking.
+     * LEGACY Word and Excel are accepted uploads with no viewer at all. 415,
+     * because the refusal is about the type and not about the person asking.
+     *
+     * Their modern counterparts stopped being refused on 2026-09-20 --
+     * OfficeDocumentPreview converts .docx and .xlsx to HTML on the server --
+     * but the old binary formats have no reader worth the name, and pretending
+     * otherwise would be worse than the download link.
      */
     public function test_a_file_type_with_no_viewer_is_refused_rather_than_guessed_at(): void
     {
+        // One document, retyped -- documentWithFile() creates its own office,
+        // and a second call collides on offices.code.
         [$document, $file] = $this->documentWithFile();
+
+        foreach (['application/msword', 'application/vnd.ms-excel'] as $legacy) {
+            DocumentFile::query()->whereKey($file->id)->update(['mime_type' => $legacy]);
+
+            $this->actingAs($document->creator)
+                ->get($this->previewUrl($document, $file->refresh()))
+                ->assertStatus(415);
+        }
+    }
+
+    /**
+     * ...and the modern ones come back as HTML the server produced, never as
+     * their own bytes. Serving a .docx inline would be the very hazard
+     * DocumentFile::PREVIEWABLE exists to close.
+     */
+    public function test_a_word_version_is_converted_rather_than_served_as_its_own_bytes(): void
+    {
+        [$document, $file] = $this->documentWithFile('memo.docx', 'PK not really a docx');
 
         DocumentFile::query()->whereKey($file->id)->update([
             'mime_type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         ]);
 
-        $this->actingAs($document->creator)
+        $response = $this->actingAs($document->creator)
             ->get($this->previewUrl($document, $file->refresh()))
-            ->assertStatus(415);
+            ->assertOk();
+
+        $this->assertStringContainsString(
+            'text/html',
+            (string) $response->headers->get('Content-Type'),
+        );
+
+        // The upload's own bytes must not appear in the response.
+        $this->assertStringNotContainsString('PK not really a docx', (string) $response->getContent());
     }
 
     /**

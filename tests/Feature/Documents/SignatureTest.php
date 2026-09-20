@@ -467,7 +467,9 @@ class SignatureTest extends TestCase
         $this->assertStringContainsString('<img src="data:image/svg+xml;base64,', $body);
         $this->assertStringNotContainsString('<svg', $body);
 
-        $this->assertStringContainsString('Valid, but superseded.', $render(true, true));
+        // "replaced", not "superseded" -- the client's word since 2026-09-20,
+        // and the certificate has to use the one the badge on screen uses.
+        $this->assertStringContainsString('Valid, but replaced.', $render(true, true));
         $this->assertStringContainsString('Does not match.', $render(false, false));
     }
 }

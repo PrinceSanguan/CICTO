@@ -26,10 +26,11 @@ import type { DocumentFileItem } from '@/types';
  *  - A PDF gets PdfSignaturePlacer, which draws the pages into canvases so a
  *    click has coordinates. That is the only way to know where somebody put
  *    their signature.
- *  - Anything else gets the plain viewer. A PNG or JPEG can be read but not
- *    stamped -- the produced file has to be a PDF -- and Word and Excel cannot
- *    be shown at all. Both still sign, as a record bound to the file hash,
- *    which is what every signature was before today.
+ *  - Anything else gets the plain viewer: a PNG or JPEG, or the HTML the
+ *    server converts a .docx or .xlsx into (2026-09-20). All of them can be
+ *    READ; none can be STAMPED, because the produced file has to be a PDF.
+ *    They still sign, as a record bound to the file hash, which is what every
+ *    signature was before stamping existed.
  *
  * `@container` rather than viewport breakpoints, the same way
  * document-tracking.tsx does it: this panel is rendered both full width and

@@ -11,11 +11,15 @@ import type { DocumentFileItem } from '@/types';
  * be on screen WHILE it is signed rather than behind a dialog that has to be
  * closed first.
  *
- * Only PDF, PNG and JPEG reach the <iframe>/<img>: DocumentFile::PREVIEWABLE is
- * a closed allowlist and DocumentFileController::preview refuses everything
- * else with a 415. Word and Excel are accepted uploads with no browser viewer,
- * so they get `DocumentViewerNotice` and a download button -- never a frame
- * that renders blank and looks broken.
+ * WHAT ARRIVES IN THE FRAME is either the file's own bytes -- PDF, PNG, JPEG,
+ * the closed allowlist in DocumentFile::PREVIEWABLE -- or, since 2026-09-20,
+ * HTML the server produced from a .docx or .xlsx. The component cannot tell
+ * the two apart and does not need to: both are things an iframe renders, and
+ * `is_previewable` is the one question it asks.
+ *
+ * Only the older binary .doc and .xls have no viewer left. Those get
+ * `DocumentViewerNotice` and a download button -- never a frame that renders
+ * blank and looks broken.
  */
 export function DocumentViewer({
     documentId,
@@ -101,7 +105,13 @@ export function DocumentViewerNotice({
             ? 'No file is attached to this document, so there is nothing to read here.'
             : file.is_purged
               ? `Version ${file.version} is no longer stored — it was removed under the retention policy. What you sign is still recorded against it.`
-              : `${file.original_name} cannot be shown in the browser. Word and Excel files have no viewer here, so download it to read it before you sign.`;
+              : /*
+                     Reached by fewer types since 2026-09-20: .docx and .xlsx
+                     are converted to HTML on the server and render in the
+                     frame like anything else. What is left here is the older
+                     binary .doc and .xls, which have no reader worth offering.
+                 */
+                `${file.original_name} cannot be shown in the browser. This is an older Word or Excel format with no viewer here, so download it to read it before you sign.`;
 
     const downloadable = file !== null && !file.is_purged;
 

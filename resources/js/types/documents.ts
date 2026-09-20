@@ -251,6 +251,12 @@ export type OfficeDwell = {
 export type SignatureItem = {
     id: number;
     serial: string;
+
+    /**
+     * §15 undo. Answered by DocumentSignaturePolicy, never guessed at here:
+     * it depends on who holds the folder and what has happened since.
+     */
+    can_undo: boolean;
     signer_name: string;
     signer_position: string | null;
     signer_office: string | null;

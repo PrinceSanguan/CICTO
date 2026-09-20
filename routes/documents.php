@@ -66,6 +66,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('documents/{document}/signatures', [DocumentSignatureController::class, 'store'])
         ->name('documents.signatures.store');
 
+    /*
+     * §15 undo, the client's request of 2026-09-20. DELETE because it removes
+     * the attestation; DocumentSignaturePolicy::undo decides who may, and the
+     * page only offers the button when it has said yes.
+     */
+    Route::delete('documents/{document}/signatures/{signature}', [DocumentSignatureController::class, 'destroy'])
+        ->scopeBindings()
+        ->name('documents.signatures.destroy');
+
     Route::get('documents/{document}/signatures/{signature}/certificate', [DocumentSignatureController::class, 'certificate'])
         ->scopeBindings()
         ->name('documents.signatures.certificate');

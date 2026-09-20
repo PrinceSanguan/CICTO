@@ -23,6 +23,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $document_file_id
  * @property int|null $stamped_file_id
  * @property int $user_id
+ * @property int|null $office_id
  * @property string $signer_name
  * @property string|null $signer_position
  * @property string|null $signer_office
@@ -269,8 +270,18 @@ class DocumentSignature extends Model
     }
 
     /**
-     * A signature is superseded when a newer version of the file exists.
-     * Derived from version order -- never stored, so it cannot go stale.
+     * A signature is superseded when the document has been CHANGED since --
+     * that is, when somebody uploaded a newer version of the file.
+     *
+     * Versions produced by stamping are excluded, because otherwise every
+     * stamped signature superseded itself: signing v1 appends the stamped v2,
+     * and "a newer version exists" was then true the instant the row was
+     * written. Four signatures on one folder all read as out of date while
+     * nothing about the document had actually changed.
+     *
+     * Same rule as DocumentFile::lastUploadedVersion() and the already-signed
+     * guard in SignDocument -- a mark on the page is not new content; a
+     * re-upload is. Derived, never stored, so it cannot go stale.
      */
     public function isSuperseded(): bool
     {
@@ -278,17 +289,12 @@ class DocumentSignature extends Model
 
         if ($file === null) {
             // Signing a fileless document is refused now, but rows written
-            // before that guard existed still have to answer honestly: any file
-            // at all supersedes a signature that was bound to none.
-            return DocumentFile::query()
-                ->where('document_id', $this->document_id)
-                ->exists();
+            // before that guard existed still have to answer honestly: any
+            // uploaded file at all supersedes a signature bound to none.
+            return DocumentFile::lastUploadedVersion($this->document_id) > 0;
         }
 
-        return DocumentFile::query()
-            ->where('document_id', $file->document_id)
-            ->where('version', '>', $file->version)
-            ->exists();
+        return DocumentFile::lastUploadedVersion($file->document_id) > $file->version;
     }
 
     /** @param  Builder<self>  $query */

@@ -7,6 +7,7 @@ use App\Actions\Documents\RouteDocument;
 use App\Actions\Documents\SignDocument;
 use App\Actions\Documents\StoreDocumentFile;
 use App\Actions\Documents\TransitionDocument;
+use App\Actions\Documents\WithdrawSignaturesOnReturn;
 use App\Enums\MovementAction;
 use App\Enums\SignatureMethod;
 use App\Http\Requests\Documents\TransitionDocumentRequest;
@@ -45,6 +46,7 @@ class DocumentWorkflowController extends Controller
         AdvanceRoute $advance,
         SignDocument $sign,
         StoreDocumentFile $store,
+        WithdrawSignaturesOnReturn $withdraw,
     ): RedirectResponse {
         $action = $request->enum('action', MovementAction::class);
 
@@ -61,7 +63,7 @@ class DocumentWorkflowController extends Controller
          * is recorded against the leg that carried it.
          */
         if ($action === MovementAction::Resubmitted || $action === MovementAction::Returned) {
-            [$moved, $file] = DB::transaction(function () use ($request, $document, $action, $transition, $advance, $store): array {
+            [$moved, $file] = DB::transaction(function () use ($request, $document, $action, $transition, $advance, $store, $withdraw): array {
                 $moved = $transition->handle(
                     document: $document,
                     action: $action,
@@ -76,6 +78,21 @@ class DocumentWorkflowController extends Controller
                 // down a route. Called anyway, so a route rule added for either
                 // one later is not silently skipped on this path.
                 $advance->handle($document, $action, $request->user(), $request);
+
+                /*
+                 * A return takes the signatures off, client rule 2026-09-20 --
+                 * "babalik yung version ng office before". The marks and the
+                 * versions they stamped go, so what comes back for correction
+                 * is the clean copy.
+                 *
+                 * BEFORE the upload below, and the order is the whole trick: a
+                 * corrected file moves the baseline those marks are measured
+                 * against, so uploading first would make every one of them
+                 * look already-superseded and leave them all in place.
+                 */
+                if ($action === MovementAction::Returned) {
+                    $withdraw->handle($document, $request->user());
+                }
 
                 $upload = $request->file('file');
 

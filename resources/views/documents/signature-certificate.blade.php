@@ -96,7 +96,7 @@
 --}}
 @if ($valid && $superseded)
     <div class="verdict warn">
-        <strong>Valid, but superseded.</strong>
+        <strong>Valid, but replaced.</strong>
         A newer version of this document has been uploaded since it was signed.
         This certificate covers version {{ $signature->file?->version }} only.
     </div>

@@ -5,6 +5,7 @@ namespace App\Http\Requests\Documents;
 use App\Enums\DocumentPriority;
 use App\Models\Document;
 use App\Support\DocumentUpload;
+use App\Support\RoutePlan;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -99,7 +100,9 @@ class StoreDocumentRequest extends FormRequest
              * deploy, still posts. prepareForValidation() folds it in, so there
              * is exactly one shape below this line.
              */
-            'office_ids' => ['required', 'array', 'max:20'],
+            // No practical ceiling: the client routes to every department.
+            // RoutePlan says why there is still a number here at all.
+            'office_ids' => ['required', 'array', 'max:'.RoutePlan::maxOffices()],
             'office_ids.*' => [
                 'integer',
                 // A department twice in one route is a typo, not a round trip:

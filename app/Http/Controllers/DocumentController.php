@@ -8,6 +8,7 @@ use App\Enums\DocumentStatus;
 use App\Http\Requests\Documents\IndexDocumentRequest;
 use App\Http\Requests\Documents\StoreDocumentRequest;
 use App\Models\Document;
+use App\Models\DocumentSignature;
 use App\Models\DocumentType;
 use App\Models\Office;
 use App\Support\DocumentUpload;
@@ -227,6 +228,27 @@ class DocumentController extends Controller
         return implode(', ', $names).' and '.$last;
     }
 
+    /**
+     * The newest version somebody UPLOADED, for the signature rows.
+     *
+     * Same rule as DocumentFile::lastUploadedVersion, answered from the
+     * relations show() has already loaded rather than with another query.
+     * Versions that stamping produced do not count: a stamped signature sits
+     * one version below its own output, so the plain max marked every
+     * signature on the page superseded the moment it was made.
+     */
+    private function lastUploadedVersion(Document $document): int
+    {
+        $stamped = $document->signatures
+            ->pluck('stamped_file_id')
+            ->filter()
+            ->all();
+
+        return (int) $document->files
+            ->whereNotIn('id', $stamped)
+            ->max('version');
+    }
+
     public function show(Document $document): Response
     {
         $this->authorize('view', $document);
@@ -251,6 +273,24 @@ class DocumentController extends Controller
             'routeStops.office:id,name',
         ]);
 
+        /*
+         * Hand each signature THE DOCUMENT WE ALREADY HAVE.
+         *
+         * DocumentSignaturePolicy::undo is asked once per signature row, and
+         * it reads $signature->document. Eager-loading `signatures.document`
+         * would satisfy that in one query, but it hydrates a SECOND, bare
+         * Document -- so the policy's "has anybody signed since" and "was
+         * anything uploaded since" would find no loaded relations on it and
+         * query per row anyway. Pointing the relation at $document, which
+         * already has its files, signatures and open leg, is what makes those
+         * reads free.
+         *
+         * Measured in QA on 2026-09-20: two queries per signature before this.
+         */
+        $document->signatures->each(
+            fn (DocumentSignature $signature) => $signature->setRelation('document', $document),
+        );
+
         return Inertia::render('documents/show', [
             'document' => $this->presenter->detail($document, $user),
             'timeline' => $this->presenter->timeline($document->movements),
@@ -259,7 +299,8 @@ class DocumentController extends Controller
             'files' => $this->presenter->files($document->files),
             'signatures' => $this->presenter->signatures(
                 $document->signatures,
-                (int) $document->files->max('version'),
+                $this->lastUploadedVersion($document),
+                $user,
             ),
             'comments' => $this->presenter->comments($document->comments, $user),
             /*

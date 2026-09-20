@@ -23,6 +23,11 @@ import { ToneBadge } from '@/components/documents/status-badge';
 import { UploadErrorDialog } from '@/components/documents/upload-error-dialog';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
 import { useUploadGuard } from '@/hooks/use-upload-guard';
 import type { StampPlacement } from '@/lib/pdf-stamp';
@@ -159,6 +164,9 @@ export default function ShowDocument({
      * a mark the form no longer held, beside a Sign button that would not press.
      */
     const [signaturePadKey, setSignaturePadKey] = useState(0);
+
+    /** Which signature's Undo is in flight, so only that one row reads busy. */
+    const [undoing, setUndoing] = useState<number | null>(null);
 
     /*
      * §15 stamping. One per form, because the two are independent: an office
@@ -1379,7 +1387,21 @@ export default function ShowDocument({
                                             key={file.id}
                                             className="flex items-center justify-between gap-2 text-sm"
                                         >
-                                            <span className="min-w-0 flex-1 truncate">
+                                            {/*
+                                                `truncate` used to sit on this
+                                                wrapper, and its
+                                                white-space: nowrap was
+                                                inherited by the note below --
+                                                so once signing started writing
+                                                "Signed by X (Office). Signature
+                                                serial ..." into replace_reason,
+                                                every version line was cut off
+                                                mid-word with no way to read the
+                                                rest (client, 2026-09-20).
+                                                Only the FILE NAME needs
+                                                containing; the note wraps.
+                                            */}
+                                            <span className="min-w-0 flex-1">
                                                 <span className="font-medium">
                                                     v{file.version}
                                                 </span>
@@ -1389,13 +1411,16 @@ export default function ShowDocument({
                                                         current
                                                     </span>
                                                 )}{' '}
-                                                · {file.original_name}
+                                                ·{' '}
+                                                <span className="break-all">
+                                                    {file.original_name}
+                                                </span>
                                                 <span className="text-muted-foreground">
                                                     {' '}
                                                     ({file.size})
                                                 </span>
                                                 {file.replace_reason && (
-                                                    <span className="block text-xs text-muted-foreground">
+                                                    <span className="mt-0.5 block text-xs break-words text-muted-foreground">
                                                         {file.replace_reason}
                                                     </span>
                                                 )}
@@ -1410,12 +1435,14 @@ export default function ShowDocument({
                                             ) : (
                                                 <span className="flex shrink-0 items-center">
                                                     {/*
-                                                        Offered only for what the
-                                                        browser can actually render.
-                                                        Word and Excel uploads are
-                                                        accepted by the system but
-                                                        have no viewer, and a button
-                                                        that opens an empty frame is
+                                                        Offered only for what can
+                                                        actually be rendered --
+                                                        the file's own bytes, or
+                                                        the HTML the server makes
+                                                        of a .docx or .xlsx. Older
+                                                        .doc and .xls have no
+                                                        viewer, and a button that
+                                                        opens an empty frame is
                                                         worse than no button.
                                                     */}
                                                     {file.is_previewable && (
@@ -1585,37 +1612,122 @@ export default function ShowDocument({
                                                                 ` · signed v${item.file_version}`}
                                                         </p>
                                                     </div>
-                                                    <ToneBadge
-                                                        tone={
-                                                            !item.valid
-                                                                ? 'red'
-                                                                : item.superseded
-                                                                  ? 'amber'
-                                                                  : 'emerald'
-                                                        }
-                                                    >
-                                                        {!item.valid
-                                                            ? 'Mismatch'
-                                                            : item.superseded
-                                                              ? 'Superseded'
-                                                              : 'Valid'}
-                                                    </ToneBadge>
+                                                    {/*
+                                                        "Replaced", not "Superseded" -- the client's word,
+                                                        2026-09-20. A records clerk should not have to know
+                                                        what supersession is to read their own register.
+
+                                                        The badge is only ever a word, so the sentence that
+                                                        explains it lives in a tooltip on hover and focus.
+                                                        TooltipProvider is mounted app-wide in app.tsx.
+                                                    */}
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <span
+                                                                tabIndex={0}
+                                                                className="cursor-help"
+                                                            >
+                                                                <ToneBadge
+                                                                    tone={
+                                                                        !item.valid
+                                                                            ? 'red'
+                                                                            : item.superseded
+                                                                              ? 'amber'
+                                                                              : 'emerald'
+                                                                    }
+                                                                >
+                                                                    {!item.valid
+                                                                        ? 'Mismatch'
+                                                                        : item.superseded
+                                                                          ? 'Replaced'
+                                                                          : 'Valid'}
+                                                                </ToneBadge>
+                                                            </span>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent className="max-w-xs">
+                                                            <p>
+                                                                {!item.valid
+                                                                    ? 'The file no longer matches the fingerprint recorded when this was signed. Someone replaced the bytes without going through the register.'
+                                                                    : item.superseded
+                                                                      ? `A newer version has been uploaded since this was signed${
+                                                                            item.file_version ===
+                                                                            null
+                                                                                ? ''
+                                                                                : ` — this signature covers v${item.file_version}`
+                                                                        }. It still records what was signed and when; it just no longer describes the current file.`
+                                                                      : 'This signature covers the version the document is on now, and the file still matches the fingerprint recorded when it was signed.'}
+                                                            </p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
                                                 </div>
-                                                <a
-                                                    href={documents.signatures.certificate.url(
-                                                        {
-                                                            document:
-                                                                document.id,
-                                                            signature:
-                                                                item.serial,
-                                                        },
+                                                <div className="mt-1 flex flex-wrap items-center gap-3">
+                                                    <a
+                                                        href={documents.signatures.certificate.url(
+                                                            {
+                                                                document:
+                                                                    document.id,
+                                                                signature:
+                                                                    item.serial,
+                                                            },
+                                                        )}
+                                                        target="_blank"
+                                                        rel="noopener"
+                                                        className="text-xs underline"
+                                                    >
+                                                        Signature certificate
+                                                        (PDF)
+                                                    </a>
+
+                                                    {/*
+                                                        §15 undo, client request 2026-09-20. Offered only where
+                                                        DocumentSignaturePolicy said yes -- while the folder is
+                                                        still on your office's desk, with nobody having signed
+                                                        or uploaded after you.
+
+                                                        A plain button, no confirm dialog: the whole point is
+                                                        that the mark was a mistake, and the page already says
+                                                        underneath what pressing it takes away. Browser dialogs
+                                                        are also the one thing the scan console must never
+                                                        raise, so the app avoids the habit.
+                                                    */}
+                                                    {item.can_undo && (
+                                                        <button
+                                                            type="button"
+                                                            disabled={
+                                                                undoing ===
+                                                                item.id
+                                                            }
+                                                            onClick={() => {
+                                                                setUndoing(
+                                                                    item.id,
+                                                                );
+                                                                router.delete(
+                                                                    documents.signatures.destroy.url(
+                                                                        {
+                                                                            document:
+                                                                                document.id,
+                                                                            signature:
+                                                                                item.serial,
+                                                                        },
+                                                                    ),
+                                                                    {
+                                                                        preserveScroll: true,
+                                                                        onFinish:
+                                                                            () =>
+                                                                                setUndoing(
+                                                                                    null,
+                                                                                ),
+                                                                    },
+                                                                );
+                                                            }}
+                                                            className="text-xs text-danger underline disabled:opacity-50"
+                                                        >
+                                                            {undoing === item.id
+                                                                ? 'Removing…'
+                                                                : 'Undo my signature'}
+                                                        </button>
                                                     )}
-                                                    target="_blank"
-                                                    rel="noopener"
-                                                    className="text-xs underline"
-                                                >
-                                                    Signature certificate (PDF)
-                                                </a>
+                                                </div>
                                             </li>
                                         ))}
                                     </ul>

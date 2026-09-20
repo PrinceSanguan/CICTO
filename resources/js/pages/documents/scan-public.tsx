@@ -5,6 +5,7 @@ import type { Tone } from '@/types';
 type Props = {
     document: {
         control_number: string;
+        title: string;
         status_label: string;
         status_tone: Tone;
         current_office: string | null;
@@ -20,8 +21,13 @@ type Props = {
  * Hiding fields in the component still ships them in the Inertia payload, which
  * is exactly how confidential data leaks.
  *
- * Everything here is either already printed on the label the viewer is holding,
- * or is the status they scanned to find out.
+ * Everything here is either printed on the label the viewer is holding, the
+ * status they scanned to find out, or -- since the client asked for it on
+ * 2026-09-20 -- the document's title. The title is the one field on this page
+ * that is NOT on the label, and ScanController says what that costs.
+ *
+ * Description and remarks are still absent, and the test suite holds that
+ * line: a title names a document, those two are its contents.
  */
 export default function ScanPublic({ document }: Props) {
     return (
@@ -36,6 +42,20 @@ export default function ScanPublic({ document }: Props) {
                     <h1 className="mt-1 font-mono text-lg font-semibold">
                         {document.control_number}
                     </h1>
+
+                    {/*
+                        Under the code, not instead of it. The code is what a
+                        courier reads down a phone and what the register is
+                        indexed by, so it keeps the heading; the title is what
+                        tells them which folder they are holding.
+
+                        `break-words` because titles are free text up to 191
+                        characters and this card is 24rem wide on the phone
+                        every one of these scans happens on.
+                    */}
+                    <p className="mt-1.5 text-sm leading-snug break-words">
+                        {document.title}
+                    </p>
 
                     <dl className="mt-6 space-y-4 text-sm">
                         <div>

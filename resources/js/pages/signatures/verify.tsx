@@ -71,8 +71,17 @@ export default function VerifySignature({
                                     </>
                                 ) : signature.superseded ? (
                                     <>
-                                        <strong>Valid, but superseded.</strong>{' '}
-                                        A newer version has been uploaded since
+                                        {/*
+                                            "Replaced", matching the badge on
+                                            the document page (client,
+                                            2026-09-20). This page is read by
+                                            whoever is holding the printed
+                                            paper, so it is the last place that
+                                            should use a different word for the
+                                            same thing.
+                                        */}
+                                        <strong>Valid, but replaced.</strong> A
+                                        newer version has been uploaded since
                                         this was signed. It covers version{' '}
                                         {signature.file_version} only.
                                     </>

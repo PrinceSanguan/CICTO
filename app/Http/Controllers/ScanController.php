@@ -79,6 +79,29 @@ class ScanController extends Controller
         return Inertia::render('documents/scan-public', [
             'document' => [
                 'control_number' => $document->control_number,
+
+                /*
+                 * THE TITLE IS DELIBERATELY PUBLIC, client request 2026-09-20.
+                 *
+                 * It was withheld until then, and the reasoning that withheld
+                 * it was not wrong: the control number identifies a folder
+                 * only to someone who already has the register, while a title
+                 * like "Termination of <name>" identifies its SUBJECT to
+                 * anybody who scans the label in a mailroom. The printed label
+                 * still carries nothing but the code for that same reason.
+                 *
+                 * The client's answer is that a courier holding an unlabelled
+                 * folder cannot tell which document they are tracking, and
+                 * that the code alone is useless to the citizen who filed it.
+                 * That is their call to make -- it is their register and their
+                 * RA 10173 exposure -- and it is recorded here so the next
+                 * person does not "fix" it back.
+                 *
+                 * What did NOT change: description and remarks stay out. A
+                 * title is a name; those two are contents.
+                 */
+                'title' => $document->title,
+
                 'status_label' => $document->status->publicLabel(),
                 // publicTone(), to pair with publicLabel() above. tone() is
                 // per workflow STATE, so an initiated and a returned document

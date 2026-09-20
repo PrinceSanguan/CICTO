@@ -7,6 +7,7 @@ use App\Enums\SignatureMethod;
 use App\Exceptions\StaleWorkflowStateException;
 use App\Models\Document;
 use App\Support\DocumentUpload;
+use App\Support\RoutePlan;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -147,7 +148,8 @@ class TransitionDocumentRequest extends FormRequest
             'to_office_ids' => [
                 'nullable',
                 'array',
-                'max:20',
+                // Same as registration: as many departments as there are.
+                'max:'.RoutePlan::maxOffices(),
                 // `required` already refuses null and the empty array, so there
                 // is no `min:1` here to fire on every non-forward action.
                 Rule::requiredIf(fn () => $this->input('action') === MovementAction::Forwarded->value),

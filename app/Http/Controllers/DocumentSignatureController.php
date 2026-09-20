@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Documents\SignDocument;
+use App\Actions\Documents\UndoSignature;
 use App\Enums\SignatureMethod;
 use App\Http\Requests\Documents\StoreSignatureRequest;
 use App\Models\Document;
@@ -10,6 +11,7 @@ use App\Models\DocumentSignature;
 use App\Services\QrCodeRenderer;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\HtmlString;
 use Inertia\Inertia;
@@ -77,6 +79,37 @@ class DocumentSignatureController extends Controller
                     $signature->purposeLabel(),
                     $signature->serial,
                 ),
+        ]);
+    }
+
+    /**
+     * §15 undo: an office withdraws its own mark.
+     *
+     * The client asked for this on 2026-09-20 -- one signature per office, so
+     * an office must be able to correct a wrong one. Every condition lives in
+     * DocumentSignaturePolicy::undo; the narrow one they named is that the
+     * folder must still be on your desk.
+     */
+    public function destroy(
+        Request $request,
+        Document $document,
+        DocumentSignature $signature,
+        UndoSignature $undo,
+    ): RedirectResponse {
+        abort_unless($signature->document_id === $document->id, 404);
+
+        $this->authorize('undo', $signature);
+
+        $purpose = $signature->purposeLabel();
+
+        $undo->handle($signature, $request->user());
+
+        return back()->with('toast', [
+            'type' => 'success',
+            'message' => sprintf(
+                '%s signature withdrawn. You can sign again.',
+                $purpose,
+            ),
         ]);
     }
 

@@ -470,10 +470,12 @@ class DocumentPresenter
                 'replace_reason' => $file->replace_reason,
                 'is_purged' => $file->isPurged(),
 
-                // Whether the browser will render this one. Word and Excel
-                // uploads are accepted but have no viewer, so the page offers
-                // them a download and says why rather than opening a blank
-                // frame. The allowlist itself lives on the model, so the button
+                // Whether this one can be shown on screen at all -- either as
+                // its own bytes or, for .docx and .xlsx, as the HTML the
+                // server converts it into (2026-09-20). Older .doc and .xls
+                // still cannot, so the page offers them a download and says
+                // why rather than opening a blank frame. The rule itself lives
+                // on the model, so the button
                 // and the endpoint cannot disagree about what is previewable.
                 'is_previewable' => $file->isPreviewable(),
             ];
@@ -534,21 +536,33 @@ class DocumentPresenter
      * page always shows the state as of now -- a file swapped an hour ago shows
      * as mismatched without waiting for the nightly sweep.
      *
-     * $maxVersion is passed in from the already-loaded files collection.
-     * Without it every row called isSuperseded(), which is one COUNT query per
-     * signature -- the page ran N+1 for a number it already had in memory.
+     * $maxUploadedVersion is the newest version somebody UPLOADED, passed in by
+     * the caller so this does not run one query per row -- the page ran N+1 for
+     * a number it already had in memory. It must EXCLUDE versions that stamping
+     * produced (see DocumentFile::lastUploadedVersion): a stamped signature
+     * always sits one version below its own output, so counting those marked
+     * every signature superseded the moment it was made.
+     *
+     * `can_undo` is the §15 undo button of 2026-09-20, answered per row by
+     * DocumentSignaturePolicy rather than guessed at in the component -- it
+     * depends on who is holding the folder and on what has happened since,
+     * neither of which the page knows. Null $viewer means nobody may.
      *
      * @param  iterable<int, DocumentSignature>  $signatures
      * @return array<int, array<string, mixed>>
      */
-    public function signatures(iterable $signatures, ?int $maxVersion = null): array
-    {
+    public function signatures(
+        iterable $signatures,
+        ?int $maxUploadedVersion = null,
+        ?User $viewer = null,
+    ): array {
         $rows = [];
 
         foreach ($signatures as $signature) {
             $rows[] = [
                 'id' => $signature->id,
                 'serial' => $signature->serial,
+                'can_undo' => $viewer?->can('undo', $signature) ?? false,
                 'signer_name' => $signature->signer_name,
                 'signer_position' => $signature->signer_position,
                 'signer_office' => $signature->signer_office,
@@ -558,11 +572,11 @@ class DocumentPresenter
                 'file_version' => $signature->file?->version,
                 'signed_at' => $signature->signed_at->toIso8601String(),
                 'valid' => $signature->isValid(),
-                'superseded' => $maxVersion === null
+                'superseded' => $maxUploadedVersion === null
                     ? $signature->isSuperseded()
                     : ($signature->file === null
-                        ? $maxVersion > 0
-                        : $signature->file->version < $maxVersion),
+                        ? $maxUploadedVersion > 0
+                        : $signature->file->version < $maxUploadedVersion),
             ];
         }
 
