@@ -24,6 +24,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Literal segments before the wildcard, or /documents/scan resolves as a
     // document with the id "scan".
     Route::get('documents/scan', [ScanController::class, 'console'])->name('documents.scan');
+
+    /*
+     * The staff half of a scan: resolve whatever was TYPED.
+     *
+     * Separate from the public /s/{token} path, and it has to be. That one
+     * resolves an unguessable token, which is what lets it be public --
+     * possession proves you have seen the folder. A CONTROL NUMBER is
+     * sequential and guessable, so resolving one there would let anybody walk
+     * OCM-2026-00001 upwards and read the status, office and title of every
+     * document in the register.
+     *
+     * Behind auth it is a different question entirely: a signed-in clerk can
+     * already search by control number, so accepting one here reveals nothing
+     * new -- and it is what the label's own large mono control number, and the
+     * box that says "or type the code", have been promising all along.
+     */
+    Route::get('documents/scan/resolve', [ScanController::class, 'resolve'])
+        ->name('documents.scan.resolve');
     Route::get('documents/labels/print', [DocumentLabelController::class, 'print'])->name('documents.labels.print');
 
     Route::get('documents', [DocumentController::class, 'index'])->name('documents.index');

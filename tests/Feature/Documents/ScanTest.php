@@ -284,4 +284,113 @@ class ScanTest extends TestCase
             ->assertSee($document->control_number)
             ->assertSee('<svg', escape: false);
     }
+
+    /**
+     * THE BUG REPORTED 2026-09-20: an office typed the control number printed
+     * on the label into the box that says "or type the code", and was told the
+     * document does not exist.
+     *
+     * The console posted everything to the public /s/{token} path, which
+     * resolves the 26-character QR token and nothing else -- so the one
+     * identifier a human can read off the label was the one it could not use.
+     */
+    public function test_the_staff_scan_box_resolves_a_control_number(): void
+    {
+        $office = $this->office('MPDO', 'Planning Office');
+        $document = $this->registerDocument($office, $this->staff($office));
+
+        $this->actingAs($this->admin($office))
+            ->get(route('documents.scan.resolve', ['code' => $document->control_number]))
+            ->assertRedirect(route('documents.show', $document));
+    }
+
+    /** A QR token still goes to the public path, which decides what to show. */
+    public function test_the_staff_scan_box_still_resolves_a_qr_token(): void
+    {
+        $office = $this->office();
+        $document = $this->registerDocument($office, $this->staff($office));
+
+        $this->actingAs($this->admin($office))
+            ->get(route('documents.scan.resolve', ['code' => $document->qr_token]))
+            ->assertRedirect(route('scan.show', ['token' => $document->qr_token]));
+    }
+
+    /** A wedge scanner types the whole URL, so the whole URL has to work. */
+    public function test_the_staff_scan_box_accepts_a_whole_scanned_url(): void
+    {
+        $office = $this->office();
+        $document = $this->registerDocument($office, $this->staff($office));
+
+        $this->actingAs($this->admin($office))
+            ->get(route('documents.scan.resolve', [
+                'code' => 'https://cicto.site/s/'.$document->qr_token,
+            ]))
+            ->assertRedirect(route('scan.show', ['token' => $document->qr_token]));
+    }
+
+    /**
+     * A control number is SEQUENTIAL, so the public path must never resolve
+     * one -- otherwise anybody could walk OCM-2026-00001 upwards and read the
+     * status, office and title of every document in the register.
+     */
+    public function test_the_public_path_still_refuses_a_control_number(): void
+    {
+        $office = $this->office();
+        $document = $this->registerDocument($office, $this->staff($office));
+
+        $this->get('/s/'.$document->control_number)
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->component('documents/scan-not-found'));
+    }
+
+    /** ...and the staff resolver is not a way in for someone with no session. */
+    public function test_the_staff_resolver_needs_a_session(): void
+    {
+        $office = $this->office();
+        $document = $this->registerDocument($office, $this->staff($office));
+
+        $this->get(route('documents.scan.resolve', ['code' => $document->control_number]))
+            ->assertRedirect(route('login'));
+    }
+
+    /**
+     * A real control number belonging to an office you cannot read answers
+     * exactly like a made-up one.
+     *
+     * Anything else turns this box into a way to confirm which control
+     * numbers exist across offices the person is not allowed to open.
+     */
+    public function test_a_document_you_may_not_read_is_indistinguishable_from_a_miss(): void
+    {
+        $mine = $this->office('MPDO', 'Planning Office');
+        $theirs = $this->office('TREA', 'Treasury');
+
+        $hidden = $this->registerDocument($theirs, $this->staff($theirs));
+
+        $real = $this->actingAs($this->admin($mine))
+            ->get(route('documents.scan.resolve', ['code' => $hidden->control_number]));
+
+        $invented = $this->actingAs($this->admin($mine))
+            ->get(route('documents.scan.resolve', ['code' => 'MPDO-2026-99999']));
+
+        $real->assertRedirect(route('documents.scan'));
+        $invented->assertRedirect(route('documents.scan'));
+    }
+
+    /** A miss comes back to the box, with the code echoed for checking. */
+    public function test_a_miss_returns_to_the_console_and_says_what_it_could_not_find(): void
+    {
+        $office = $this->office();
+
+        $this->actingAs($this->admin($office))
+            ->get(route('documents.scan.resolve', ['code' => 'MPDO-2026-99999']))
+            ->assertRedirect(route('documents.scan'));
+
+        $this->actingAs($this->admin($office))
+            ->get(route('documents.scan'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('documents/scan')
+                ->where('miss', 'MPDO-2026-99999'));
+    }
 }

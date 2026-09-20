@@ -23,12 +23,12 @@ import { ToneBadge } from '@/components/documents/status-badge';
 import { UploadErrorDialog } from '@/components/documents/upload-error-dialog';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
     Tooltip,
     TooltipContent,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Input } from '@/components/ui/input';
 import { useUploadGuard } from '@/hooks/use-upload-guard';
 import type { StampPlacement } from '@/lib/pdf-stamp';
 import { stampFailure, useSignatureStamp } from '@/lib/use-signature-stamp';

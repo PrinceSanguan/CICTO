@@ -20,7 +20,7 @@ import documents from '@/routes/documents';
  *     http://192.168.x.x it is simply unavailable -- a browser rule, not a
  *     setting. The page says so rather than offering a button that cannot work.
  */
-export default function ScanConsole() {
+export default function ScanConsole({ miss }: { miss?: string | null }) {
     const [token, setToken] = useState('');
     const [cameraRequested, setCameraRequested] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -36,12 +36,22 @@ export default function ScanConsole() {
             return;
         }
 
-        // A wedge scanner types the whole URL that was encoded in the QR, and
-        // the camera decodes that same URL, so accept either form.
-        const parts = trimmed.split('/');
-        const scanned = parts[parts.length - 1];
+        /*
+            Everything goes to the STAFF resolver, which accepts both a QR
+            token and a control number and redirects to whichever one it
+            recognises.
 
-        router.get(`/s/${scanned}`);
+            It used to go straight to the public /s/{token} path, and that is
+            the bug an office reported on 2026-09-20: they typed the control
+            number printed in large mono on the label -- into a box that says
+            "or type the code" -- and were told the document does not exist,
+            because that path resolves tokens and nothing else.
+
+            The wedge scanner types a whole URL and the camera decodes the
+            same one; the resolver takes the last path segment, so either form
+            can be handed over untouched.
+        */
+        router.get(documents.scan.resolve.url({ query: { code: trimmed } }));
     }, []);
 
     // The hook releases the camera itself before invoking this, so there is
@@ -155,6 +165,7 @@ export default function ScanConsole() {
                         token={token}
                         onChange={setToken}
                         onSubmit={() => resolve(token)}
+                        miss={miss}
                     />
                 </div>
 
@@ -382,11 +393,15 @@ function WedgeEntry({
     token,
     onChange,
     onSubmit,
+    miss,
 }: {
     inputRef: React.RefObject<HTMLInputElement | null>;
     token: string;
     onChange: (value: string) => void;
     onSubmit: () => void;
+
+    /** What the last lookup could not find, echoed back so it can be checked. */
+    miss?: string | null;
 }) {
     return (
         <form
@@ -417,8 +432,30 @@ function WedgeEntry({
 
             <p className="mt-2 text-xs text-navy-soft/70">
                 A USB barcode scanner types into this box and submits by itself.
-                Keep the cursor here.
+                Keep the cursor here. You can also type the control number
+                printed on the label, such as OCM-2026-00014.
             </p>
+
+            {/*
+                The console used to redirect to a full "Document not found"
+                page for a mistyped code, losing the scan box and whatever was
+                in it. A miss is the ordinary outcome of a smudged label, so it
+                is answered here, beside the box, with the code echoed back so
+                it can be compared against the paper.
+            */}
+            {miss && (
+                <p
+                    role="alert"
+                    className="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-800"
+                >
+                    Nothing matched{' '}
+                    <span className="font-mono font-semibold break-all">
+                        {miss}
+                    </span>
+                    . Check it against the label, or search the register by
+                    control number.
+                </p>
+            )}
 
             <button
                 type="submit"

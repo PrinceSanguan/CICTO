@@ -32,9 +32,68 @@ class ScanController extends Controller
      * Camera scanning requires a secure context, which is a deployment fact
      * nobody has confirmed yet -- the page decides at runtime.
      */
-    public function console(): Response
+    public function console(Request $request): Response
     {
-        return Inertia::render('documents/scan');
+        return Inertia::render('documents/scan', [
+            // What resolve() could not find, so the console can say so
+            // instead of appearing to have ignored the scan.
+            'miss' => $request->session()->get('scanMiss'),
+        ]);
+    }
+
+    /**
+     * The staff scan box, which accepts whatever is on the label.
+     *
+     * THE BUG THIS FIXES, reported 2026-09-20: an office scanned a label,
+     * typed `OCM-2026-00014` into the box that says "Scan the label, or type
+     * the code", and got "Document not found" for a document that exists. The
+     * console was sending everything to the public /s/{token} path, which
+     * resolves the 26-character QR token and nothing else -- so the control
+     * number printed in large mono on that very label, the one the label's own
+     * comment calls "the human fallback", was the one thing it could not
+     * resolve.
+     *
+     * A control number is accepted HERE and never on the public path. It is
+     * sequential, so resolving one without a session would hand anybody the
+     * whole register a number at a time; behind auth it is something a clerk
+     * can already search for.
+     *
+     * The answer is always a redirect, never a page of its own: whatever was
+     * typed, the operator ends up where that thing lives.
+     */
+    public function resolve(Request $request): RedirectResponse
+    {
+        $code = trim((string) $request->query('code'));
+
+        // A wedge scanner types the whole encoded URL, so take the last
+        // segment the same way the console's own reader does.
+        $segments = explode('/', rtrim($code, '/'));
+        $tail = (string) end($segments);
+
+        // A token goes to the public path, which already decides what to show
+        // based on the viewer's session -- staff get redirected to the
+        // document, everyone else gets the reduced page.
+        if (QrToken::isValid($tail)) {
+            return redirect()->route('scan.show', ['token' => $tail]);
+        }
+
+        $document = Document::query()
+            ->where('control_number', $code)
+            ->first();
+
+        /*
+         * Not found AND not allowed both land on the same page, on purpose.
+         * Telling a clerk "that document exists but is not yours" would turn
+         * this box into a way to confirm which control numbers are real across
+         * offices they cannot read.
+         */
+        if ($document === null || $request->user()?->cannot('view', $document)) {
+            return redirect()
+                ->route('documents.scan')
+                ->with('scanMiss', $code);
+        }
+
+        return redirect()->route('documents.show', $document);
     }
 
     /**
