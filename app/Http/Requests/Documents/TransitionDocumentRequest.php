@@ -198,6 +198,26 @@ class TransitionDocumentRequest extends FormRequest
             // a RuntimeException surfacing as a 500.
             'signature_image' => ['nullable', 'string', 'max:683008'],
             'signature_typed_name' => ['nullable', 'string', 'max:191'],
+
+            /*
+             * The signed copy and where the mark went, when the releasing
+             * office printed its signature onto the page. Same shape and the
+             * same reasoning as StoreSignatureRequest -- read that one for why
+             * a client-composed PDF is accepted at all.
+             */
+            'signature_stamped_pdf' => [
+                'nullable',
+                'file',
+                'extensions:pdf',
+                'mimetypes:application/pdf',
+                'max:'.(int) config('cicto.uploads.max_size_kb'),
+            ],
+            'signature_placement' => ['nullable', 'array'],
+            'signature_placement.page' => ['required_with:signature_placement', 'integer', 'min:1', 'max:10000'],
+            'signature_placement.x' => ['required_with:signature_placement', 'numeric', 'min:0', 'lt:1'],
+            'signature_placement.y' => ['required_with:signature_placement', 'numeric', 'min:0', 'lt:1'],
+            'signature_placement.width' => ['required_with:signature_placement', 'numeric', 'gt:0', 'max:1'],
+            'signature_placement.height' => ['required_with:signature_placement', 'numeric', 'gt:0', 'max:1'],
         ];
     }
 
@@ -306,6 +326,18 @@ class TransitionDocumentRequest extends FormRequest
 
         if ($method?->requiresImage() && blank($this->input('signature_image'))) {
             $validator->errors()->add('signature_image', $method->missingImageMessage());
+        }
+
+        /*
+         * Both halves of a stamp, or neither. One without the other means the
+         * browser half-failed, and recording a signature whose story does not
+         * add up is worse than refusing it. Mirrors StoreSignatureRequest.
+         */
+        if ($this->hasFile('signature_stamped_pdf') !== filled($this->input('signature_placement'))) {
+            $validator->errors()->add(
+                'signature_stamped_pdf',
+                'The signed copy could not be prepared. Reload the page and sign again.',
+            );
         }
 
         if ($method === SignatureMethod::Typed) {

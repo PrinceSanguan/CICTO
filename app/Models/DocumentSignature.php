@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property int $document_id
  * @property int|null $document_movement_id
  * @property int|null $document_file_id
+ * @property int|null $stamped_file_id
  * @property int $user_id
  * @property string $signer_name
  * @property string|null $signer_position
@@ -29,6 +30,11 @@ use Illuminate\Support\Carbon;
  * @property SignatureMethod $method
  * @property string|null $image_disk
  * @property string|null $image_path
+ * @property int|null $stamp_page
+ * @property string|null $stamp_x
+ * @property string|null $stamp_y
+ * @property string|null $stamp_width
+ * @property string|null $stamp_height
  * @property string|null $document_hash_sha256
  * @property string $signature_hash_sha256
  * @property string|null $ip_address
@@ -120,6 +126,27 @@ class DocumentSignature extends Model
     public function file(): BelongsTo
     {
         return $this->belongsTo(DocumentFile::class, 'document_file_id');
+    }
+
+    /**
+     * The version this signature PRODUCED by stamping the mark onto the page,
+     * where one was produced.
+     *
+     * Distinct from file(), which is the version that was read and hashed. The
+     * pair is the whole audit story of a stamped signature: "signed v1, and
+     * that act created v2".
+     *
+     * @return BelongsTo<DocumentFile, $this>
+     */
+    public function stampedFile(): BelongsTo
+    {
+        return $this->belongsTo(DocumentFile::class, 'stamped_file_id');
+    }
+
+    /** Was this mark printed onto the page, rather than only filed beside it? */
+    public function isStamped(): bool
+    {
+        return $this->stamp_page !== null;
     }
 
     /** @return BelongsTo<DocumentMovement, $this> */

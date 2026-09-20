@@ -1,4 +1,5 @@
 import { Download } from 'lucide-react';
+import { DocumentViewer } from '@/components/documents/document-viewer';
 import {
     Dialog,
     DialogContent,
@@ -10,12 +11,13 @@ import documents from '@/routes/documents';
 import type { DocumentFileItem } from '@/types';
 
 /**
- * Reading a version on screen, rather than downloading it and hunting through
- * a Downloads folder.
+ * Reading a version at full size.
  *
- * §15 is the reason this matters more than convenience: a signature binds to
- * one exact file version, so the person signing should be looking at the bytes
- * that are about to be hashed. The dialog names the version for that reason.
+ * Still here after the signing panel learned to render the file inline
+ * (2026-09-20): the panel shows the version beside the pad, which is enough
+ * for a one-page memo and cramped for a twenty-page ordinance. This is the
+ * "make it big" path, reached from the Attachments list and from the Full
+ * screen button on the signing panel.
  *
  * Only PDF, PNG and JPEG arrive here — DocumentFile::PREVIEWABLE is a closed
  * allowlist and the endpoint refuses everything else, so `is_previewable` is
@@ -36,17 +38,10 @@ export function FilePreviewDialog({
         return null;
     }
 
-    const source = documents.files.preview.url({
-        document: documentId,
-        file: file.id,
-    });
-
     const downloadUrl = documents.files.download.url({
         document: documentId,
         file: file.id,
     });
-
-    const isImage = file.mime_type.startsWith('image/');
 
     return (
         <Dialog open onOpenChange={onOpenChange}>
@@ -62,27 +57,11 @@ export function FilePreviewDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                {/*
-                    An iframe rather than <object>/<embed>: the app's CSP sets
-                    object-src 'none', so those two render nothing. frame-src
-                    falls through to default-src 'self', and this is same-origin,
-                    so the frame is allowed.
-                */}
-                <div className="min-h-0 flex-1 overflow-auto rounded-md border bg-muted">
-                    {isImage ? (
-                        <img
-                            src={source}
-                            alt={`Version ${file.version} of ${file.original_name}`}
-                            className="mx-auto block max-w-full"
-                        />
-                    ) : (
-                        <iframe
-                            src={source}
-                            title={`Version ${file.version} of ${file.original_name}`}
-                            className="h-full w-full"
-                        />
-                    )}
-                </div>
+                <DocumentViewer
+                    documentId={documentId}
+                    file={file}
+                    height="min-h-0 flex-1"
+                />
 
                 <p className="text-xs text-muted-foreground">
                     Can&rsquo;t see it? Some browsers refuse to display PDFs

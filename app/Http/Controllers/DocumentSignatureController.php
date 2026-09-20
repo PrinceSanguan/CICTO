@@ -18,18 +18,22 @@ use Inertia\Response as InertiaResponse;
 /**
  * §15 digital signatures.
  *
- * The signature is deliberately NOT stamped onto the uploaded PDF. Two reasons,
- * and both are load-bearing:
+ * SINCE 2026-09-20 the mark IS printed onto the page, at a spot the signer
+ * picks in the viewer. Both of the old objections still stand; neither is
+ * answered by ignoring them, so here is what each became:
  *
- *  1. Stamping rewrites the file, which changes its checksum -- destroying the
- *     exact binding the signature exists to create.
- *  2. Uploaded documents are client-supplied PDFs and scanner output. Free PHP
- *     tooling cannot reliably re-typeset PDF 1.5+ object streams, which is most
- *     modern PDFs, so "stamp it" quietly means "corrupt some of them".
+ *  1. "Stamping rewrites the file, destroying the binding." It does not
+ *     rewrite it. Stamping APPENDS a version and the signature keeps binding
+ *     to the one that was read -- see SignDocument, which holds the whole
+ *     argument.
+ *  2. "Free PHP tooling cannot re-typeset PDF 1.5+ object streams." Still
+ *     true, which is why nothing here touches the PDF. The signer's browser
+ *     composes the stamped copy with pdf-lib and posts it as a file.
  *
- * What ships instead is a one-page Signature Certificate carrying a QR to a
- * public verification page. That is printable, attachable, and checkable by
- * someone holding only the paper.
+ * The one-page Signature Certificate did not go away, and is still the thing
+ * that makes a signature checkable by someone holding only paper: the stamp is
+ * a picture of a signature, while the certificate carries the serial, the file
+ * hash and a QR to public verification.
  */
 class DocumentSignatureController extends Controller
 {
@@ -49,15 +53,30 @@ class DocumentSignatureController extends Controller
             drawnPng: $request->input('image'),
             purpose: $request->input('purpose') ?: DocumentSignature::PURPOSE_APPROVAL,
             request: $request,
+            placement: $request->validated('placement'),
+            stampedPdf: $request->file('stamped_pdf'),
         );
+
+        // Read back rather than trusted from the relation: the toast names a
+        // version number, and naming the wrong one sends a clerk to the wrong
+        // row in the Attachments list.
+        $stamped = $signature->stampedFile()->first();
 
         return back()->with('toast', [
             'type' => 'success',
-            'message' => sprintf(
-                '%s signature recorded. Certificate serial %s.',
-                $signature->purposeLabel(),
-                $signature->serial,
-            ),
+            'message' => $stamped !== null
+                ? sprintf(
+                    '%s signature placed on page %d and saved as v%d. Certificate serial %s.',
+                    $signature->purposeLabel(),
+                    (int) $signature->stamp_page,
+                    $stamped->version,
+                    $signature->serial,
+                )
+                : sprintf(
+                    '%s signature recorded. Certificate serial %s.',
+                    $signature->purposeLabel(),
+                    $signature->serial,
+                ),
         ]);
     }
 

@@ -133,6 +133,8 @@ class DocumentWorkflowController extends Controller
                         drawnPng: $request->input('signature_image'),
                         purpose: DocumentSignature::PURPOSE_RELEASE,
                         request: $request,
+                        placement: $request->validated('signature_placement'),
+                        stampedPdf: $request->file('signature_stamped_pdf'),
                     )
                     : null;
 

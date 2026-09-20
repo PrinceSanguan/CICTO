@@ -455,7 +455,11 @@ class SignatureTest extends TestCase
         $this->assertStringNotContainsString((string) $signature->document_hash_sha256, $body);
 
         // Still there: who signed, and the uploaded mark itself.
-        $this->assertStringContainsString($admin->name, $body);
+        //
+        // e(), because Blade escapes it and faker hands out names like
+        // "Fleta O'Reilly" -- which renders as "O&#039;Reilly" and failed this
+        // assertion roughly one run in twenty for no reason anyone could see.
+        $this->assertStringContainsString(e($admin->name), $body);
         $this->assertStringContainsString('data:image/png;base64,', $body);
 
         // The QR as an image: dompdf silently drops inline <svg>, which is why

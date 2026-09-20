@@ -51,9 +51,20 @@ const MIN_SHRUNK_WIDTH = 120;
 export function SignaturePad({
     onChange,
     disabled = false,
+    height = 'h-36',
 }: {
     onChange: (dataUrl: string | null, method: SignatureCaptureMethod) => void;
     disabled?: boolean;
+
+    /**
+     * Tailwind height for the pad.
+     *
+     * Taller beside a rendered document, where the pad would otherwise be a
+     * 144px strip against a 500px page. Static per render on purpose: the
+     * backing store is sized once, because resizing a canvas wipes what is
+     * drawn on it, so this must not be animated or toggled while someone signs.
+     */
+    height?: string;
 }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const fileRef = useRef<HTMLInputElement>(null);
@@ -244,9 +255,9 @@ export function SignaturePad({
                 return;
             }
 
-            const dataUrl = encodeWithinLimit(picture);
+            const encoded = encodeWithinLimit(picture);
 
-            if (dataUrl === null) {
+            if (encoded === null) {
                 setUploadError(
                     'That picture is too detailed to use as a signature. Crop it closer to the signature, or use a smaller image.',
                 );
@@ -254,10 +265,13 @@ export function SignaturePad({
                 return;
             }
 
-            showOnPad(picture);
+            // The PROCESSED canvas, not the original picture: the pad has to
+            // show what will actually be sent, paper knocked out and all, or
+            // the first time anybody sees the real mark is on the signed page.
+            showOnPad(encoded.canvas);
             setHasMark(true);
             setUploadedName(file.name);
-            onChange(dataUrl, 'uploaded');
+            onChange(encoded.dataUrl, 'uploaded');
         } catch {
             // Undecodable, or too big for the browser to redraw at all.
             if (load === loads.current) {
@@ -274,8 +288,8 @@ export function SignaturePad({
         }
     };
 
-    /** Draw the picture onto the visible pad, fitted inside it, centred. */
-    const showOnPad = (picture: Picture) => {
+    /** Draw the prepared mark onto the visible pad, fitted inside it, centred. */
+    const showOnPad = (source: HTMLCanvasElement) => {
         const canvas = canvasRef.current;
         const ctx = canvas?.getContext('2d');
 
@@ -289,15 +303,15 @@ export function SignaturePad({
         const rect = canvas.getBoundingClientRect();
         const padding = 8;
         const scale = Math.min(
-            (rect.width - padding * 2) / picture.width,
-            (rect.height - padding * 2) / picture.height,
+            (rect.width - padding * 2) / source.width,
+            (rect.height - padding * 2) / source.height,
             1,
         );
-        const width = picture.width * scale;
-        const height = picture.height * scale;
+        const width = source.width * scale;
+        const height = source.height * scale;
 
         ctx.drawImage(
-            picture.source,
+            source,
             (rect.width - width) / 2,
             (rect.height - height) / 2,
             width,
@@ -337,7 +351,7 @@ export function SignaturePad({
                     onPointerLeave={end}
                     onPointerCancel={end}
                     aria-label="Signature area. Draw your signature, or drop an image of it here."
-                    className={`h-36 w-full touch-none rounded-md border border-dashed bg-white transition dark:bg-neutral-100 ${
+                    className={`${height} w-full touch-none rounded-md border border-dashed bg-white transition dark:bg-neutral-100 ${
                         dragging ? 'border-2 border-brand bg-[#EEF4FD]' : ''
                     }`}
                 />
@@ -482,7 +496,9 @@ async function openPicture(file: File): Promise<Picture> {
  * it too small to read, which only an image that is mostly noise reaches. A
  * picture that is simply small is used as it is.
  */
-function encodeWithinLimit(picture: Picture): string | null {
+function encodeWithinLimit(
+    picture: Picture,
+): { dataUrl: string; canvas: HTMLCanvasElement } | null {
     let scale = Math.min(
         MAX_UPLOAD_WIDTH / picture.width,
         MAX_UPLOAD_HEIGHT / picture.height,
@@ -504,11 +520,12 @@ function encodeWithinLimit(picture: Picture): string | null {
         }
 
         ctx.drawImage(picture.source, 0, 0, width, height);
+        dropThePaper(ctx, width, height);
 
         const dataUrl = canvas.toDataURL('image/png');
 
         if (dataUrl.length <= MAX_DATA_URL_LENGTH) {
-            return dataUrl;
+            return { dataUrl, canvas };
         }
 
         scale *= 0.75;
@@ -521,4 +538,76 @@ function encodeWithinLimit(picture: Picture): string | null {
     }
 
     return null;
+}
+
+/**
+ * Make the paper behind an uploaded signature transparent.
+ *
+ * WHY THIS EXISTS. A drawn mark is strokes on an empty canvas, so it is
+ * already transparent. A photographed or scanned one is a white rectangle with
+ * some ink in the middle, and since 2026-09-20 that rectangle gets printed
+ * onto the document -- where it covers whatever it is placed over with a white
+ * box. The client asked for a signature that looks like ink on the page; a
+ * white patch punched through a table is the opposite of that.
+ *
+ * WHAT IT WILL NOT TOUCH. An image that already carries transparency is left
+ * exactly as it is: somebody who took the trouble to cut their signature out
+ * has already answered this question, and second-guessing them could only make
+ * it worse.
+ *
+ * The ramp between the two thresholds matters more than it looks. A hard cut
+ * leaves a hard white fringe around every stroke -- the anti-aliased edge
+ * pixels, which are neither ink nor paper -- and that fringe is exactly what
+ * makes a pasted signature look pasted.
+ *
+ * Only near-WHITE goes. A signature on cream or pale blue paper keeps its
+ * background rather than being eaten away at a threshold nobody chose, which
+ * is the visible, fixable failure; silently dissolving light pen strokes is
+ * the invisible one.
+ */
+function dropThePaper(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+): void {
+    /** At or above this, a pixel is paper. */
+    const PAPER = 244;
+
+    /** Below this, a pixel is ink and is never touched. */
+    const INK = 208;
+
+    let image: ImageData;
+
+    try {
+        image = ctx.getImageData(0, 0, width, height);
+    } catch {
+        // A tainted canvas. Cannot happen for a locally chosen file, but a
+        // signature that is merely opaque beats no signature at all.
+        return;
+    }
+
+    const pixels = image.data;
+
+    // Already cut out? Then it is not ours to re-cut.
+    for (let i = 3; i < pixels.length; i += 4) {
+        if (pixels[i] < 250) {
+            return;
+        }
+    }
+
+    for (let i = 0; i < pixels.length; i += 4) {
+        // Rec. 601 luma: a yellowed scan reads as paper, which it is.
+        const luma =
+            0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
+
+        if (luma >= PAPER) {
+            pixels[i + 3] = 0;
+        } else if (luma > INK) {
+            pixels[i + 3] = Math.round(
+                pixels[i + 3] * ((PAPER - luma) / (PAPER - INK)),
+            );
+        }
+    }
+
+    ctx.putImageData(image, 0, 0);
 }

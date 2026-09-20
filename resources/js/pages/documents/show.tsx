@@ -18,13 +18,15 @@ import {
     OfficeRoutePicker,
     routeError,
 } from '@/components/documents/office-route-picker';
-import { SignaturePad } from '@/components/documents/signature-pad';
+import { SignWithDocument } from '@/components/documents/sign-with-document';
 import { ToneBadge } from '@/components/documents/status-badge';
 import { UploadErrorDialog } from '@/components/documents/upload-error-dialog';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useUploadGuard } from '@/hooks/use-upload-guard';
+import type { StampPlacement } from '@/lib/pdf-stamp';
+import { stampFailure, useSignatureStamp } from '@/lib/use-signature-stamp';
 import documents from '@/routes/documents';
 import type {
     DocumentAction,
@@ -136,7 +138,16 @@ export default function ShowDocument({
     const versionUpload = useUploadGuard();
 
     // §15. `method` mirrors App\Enums\SignatureMethod.
-    const signature = useForm<{ method: string; image: string | null }>({
+    const signature = useForm<{
+        method: string;
+        image: string | null;
+
+        // Added by transform() only when the mark is being printed onto the
+        // page, but declared here so the server's refusal has a field to
+        // land on -- errors are typed from this shape.
+        stamped_pdf?: File | null;
+        placement?: StampPlacement | null;
+    }>({
         method: 'drawn',
         image: null,
     });
@@ -149,7 +160,49 @@ export default function ShowDocument({
      */
     const [signaturePadKey, setSignaturePadKey] = useState(0);
 
-    const submitAction = (value: string) => {
+    /*
+     * §15 stamping. One per form, because the two are independent: an office
+     * can place its release mark in the Forward panel while an approval sits
+     * half-placed in the section below, and a shared position would drag both.
+     * Only one placer is ever mounted at a time -- the Forward one appears
+     * with the tickbox -- so this costs nothing until it is used.
+     */
+    const approvalStamp = useSignatureStamp();
+    const releaseStamp = useSignatureStamp();
+
+    /** What the stamped version is called. Named after what it came from. */
+    const stampedName = currentFile?.original_name ?? 'signed.pdf';
+
+    const submitAction = async (value: string) => {
+        /*
+         * The signed copy is composed BEFORE anything is posted, and a failure
+         * here abandons the whole submit.
+         *
+         * Forwarding and signing go in one request, so a stamp that failed
+         * after the forward had already been sent would leave the folder at
+         * the next office carrying an unsigned page and no way to go back and
+         * add the mark -- the version it would have stamped is no longer the
+         * one on the signer's desk.
+         */
+        let stampedRelease: File | null = null;
+
+        if (
+            value === 'forwarded' &&
+            signOnSend &&
+            action.data.signature_image
+        ) {
+            try {
+                stampedRelease = await releaseStamp.buildStampedFile(
+                    action.data.signature_image,
+                    stampedName,
+                );
+            } catch (error) {
+                releaseStamp.setError(stampFailure(error));
+
+                return;
+            }
+        }
+
         // expected_movement_id is injected here rather than held in form state.
         // useForm captures its initial values once, so a copy taken at first
         // render goes stale the moment the first action succeeds -- and every
@@ -192,6 +245,14 @@ export default function ShowDocument({
                           signature_image: data.signature_image,
                       }
                     : {}),
+                ...(signing &&
+                stampedRelease !== null &&
+                releaseStamp.placement !== null
+                    ? {
+                          signature_stamped_pdf: stampedRelease,
+                          signature_placement: releaseStamp.placement,
+                      }
+                    : {}),
                 ...(correcting
                     ? {
                           file: data.file,
@@ -206,8 +267,9 @@ export default function ShowDocument({
             {
                 preserveScroll: true,
                 forceFormData:
-                    (value === 'resubmitted' || value === 'returned') &&
-                    action.data.file !== null,
+                    ((value === 'resubmitted' || value === 'returned') &&
+                        action.data.file !== null) ||
+                    stampedRelease !== null,
                 onError: (errors) => correctedUpload.reject(errors.file),
                 onSuccess: () => {
                     // reset() restores the defaults captured at first render,
@@ -962,38 +1024,29 @@ export default function ShowDocument({
                                                             {signOnSend && (
                                                                 <>
                                                                     {/*
-                                                                        A signature binds to
-                                                                        one exact version, so
-                                                                        the thing being signed
-                                                                        should be readable
-                                                                        without leaving the
-                                                                        page.
+                                                                        §15 binds a signature to one exact version, so
+                                                                        that version is rendered right here. Reading it
+                                                                        used to mean opening a dialog over the pad and
+                                                                        closing it again before you could sign (client,
+                                                                        2026-09-20).
                                                                     */}
-                                                                    {currentFile?.is_previewable && (
-                                                                        <Button
-                                                                            type="button"
-                                                                            size="sm"
-                                                                            variant="outline"
-                                                                            className="w-fit"
-                                                                            onClick={() =>
-                                                                                setPreviewFileId(
-                                                                                    currentFile.id,
-                                                                                )
-                                                                            }
-                                                                        >
-                                                                            <Eye className="size-4" />
-                                                                            Read
-                                                                            v
-                                                                            {
-                                                                                currentFile.version
-                                                                            }{' '}
-                                                                            before
-                                                                            signing
-                                                                        </Button>
-                                                                    )}
-                                                                    <SignaturePad
+                                                                    <SignWithDocument
+                                                                        documentId={
+                                                                            document.id
+                                                                        }
+                                                                        file={
+                                                                            currentFile
+                                                                        }
                                                                         disabled={
                                                                             action.processing
+                                                                        }
+                                                                        onOpenFullScreen={
+                                                                            currentFile?.is_previewable
+                                                                                ? () =>
+                                                                                      setPreviewFileId(
+                                                                                          currentFile.id,
+                                                                                      )
+                                                                                : undefined
                                                                         }
                                                                         onChange={(
                                                                             dataUrl,
@@ -1011,27 +1064,32 @@ export default function ShowDocument({
                                                                                 }),
                                                                             )
                                                                         }
+                                                                        signaturePng={
+                                                                            action
+                                                                                .data
+                                                                                .signature_image
+                                                                        }
+                                                                        placement={
+                                                                            releaseStamp.placement
+                                                                        }
+                                                                        onPlacementChange={
+                                                                            releaseStamp.setPlacement
+                                                                        }
+                                                                        onBytes={
+                                                                            releaseStamp.setBytes
+                                                                        }
+                                                                        stampError={
+                                                                            releaseStamp.error
+                                                                        }
+                                                                        notice={
+                                                                            <p className="text-xs text-muted-foreground">
+                                                                                {releaseStamp.placement ===
+                                                                                null
+                                                                                    ? 'Your signature is recorded against this exact file version as your office’s release.'
+                                                                                    : `Your signature will be printed on page ${releaseStamp.placement.page} and saved as a new version. The version you signed is kept unchanged.`}
+                                                                            </p>
+                                                                        }
                                                                     />
-                                                                    <p className="text-xs text-muted-foreground">
-                                                                        Your
-                                                                        signature
-                                                                        is
-                                                                        recorded
-                                                                        against
-                                                                        this
-                                                                        exact
-                                                                        file
-                                                                        version
-                                                                        as your
-                                                                        office&rsquo;s
-                                                                        release
-                                                                        — it is
-                                                                        not
-                                                                        printed
-                                                                        onto the
-                                                                        document
-                                                                        itself.
-                                                                    </p>
                                                                 </>
                                                             )}
                                                             <InputError
@@ -1091,7 +1149,9 @@ export default function ShowDocument({
 
                                         <Button
                                             onClick={() =>
-                                                submitAction(action.data.action)
+                                                void submitAction(
+                                                    action.data.action,
+                                                )
                                             }
                                             disabled={action.processing}
                                         >
@@ -1110,6 +1170,190 @@ export default function ShowDocument({
                                         </Button>
                                     </div>
                                 )}
+                            </section>
+                        )}
+                        {/*
+                            §15 signing, given the whole width.
+
+                            Offered on its own, not only inside the Forward panel. On a
+                            routed document the office moves it on by pressing Received,
+                            never Forward, so the release pad there never opened and no
+                            office down the route could sign. Both flags are Admin-only
+                            (client, 2026-09-15). Approval wins when both are allowed;
+                            the release signature is still offered afterwards, because
+                            they are different attestations.
+
+                            Lifted out of the narrow Signatures card on 2026-09-20: the
+                            version being signed is now rendered beside the pad, and a
+                            PDF in a half-width column is a PDF nobody reads. The card
+                            below still lists what has been signed.
+                        */}
+                        {(document.can.sign || document.can.signRelease) && (
+                            <section className="rounded-xl bg-white p-6 shadow-xl">
+                                <h3 className="mb-3 text-sm font-semibold">
+                                    {document.can.sign
+                                        ? 'Sign this document'
+                                        : 'Sign for release'}
+                                </h3>
+
+                                <form
+                                    onSubmit={(event) => {
+                                        event.preventDefault();
+
+                                        void (async () => {
+                                            /*
+                                                The signed copy is composed before anything is
+                                                posted. A failure abandons the submit rather
+                                                than quietly recording a signature that never
+                                                reached the page the signer put it on.
+                                            */
+                                            let stamped: File | null = null;
+
+                                            try {
+                                                stamped =
+                                                    await approvalStamp.buildStampedFile(
+                                                        signature.data.image,
+                                                        stampedName,
+                                                    );
+                                            } catch (error) {
+                                                approvalStamp.setError(
+                                                    stampFailure(error),
+                                                );
+
+                                                return;
+                                            }
+
+                                            const placement =
+                                                approvalStamp.placement;
+
+                                            signature.transform((data) => ({
+                                                ...data,
+                                                purpose: document.can.sign
+                                                    ? 'approval'
+                                                    : 'release',
+                                                ...(stamped !== null &&
+                                                placement !== null
+                                                    ? {
+                                                          stamped_pdf: stamped,
+                                                          placement,
+                                                      }
+                                                    : {}),
+                                            }));
+
+                                            signature.post(
+                                                DocumentSignatureController.store.url(
+                                                    {
+                                                        document: document.id,
+                                                    },
+                                                ),
+                                                {
+                                                    preserveScroll: true,
+                                                    forceFormData:
+                                                        stamped !== null,
+                                                    onSuccess: () => {
+                                                        signature.reset();
+                                                        approvalStamp.reset();
+                                                        setSignaturePadKey(
+                                                            (key) => key + 1,
+                                                        );
+                                                    },
+                                                },
+                                            );
+                                        })();
+                                    }}
+                                >
+                                    <SignWithDocument
+                                        documentId={document.id}
+                                        file={currentFile}
+                                        padKey={signaturePadKey}
+                                        disabled={signature.processing}
+                                        onOpenFullScreen={
+                                            currentFile?.is_previewable
+                                                ? () =>
+                                                      setPreviewFileId(
+                                                          currentFile.id,
+                                                      )
+                                                : undefined
+                                        }
+                                        onChange={(dataUrl, method) =>
+                                            signature.setData((data) => ({
+                                                ...data,
+                                                image: dataUrl,
+                                                method,
+                                            }))
+                                        }
+                                        signaturePng={signature.data.image}
+                                        placement={approvalStamp.placement}
+                                        onPlacementChange={
+                                            approvalStamp.setPlacement
+                                        }
+                                        onBytes={approvalStamp.setBytes}
+                                        stampError={approvalStamp.error}
+                                        notice={
+                                            /*
+                                                Stated up front, not buried in a manual. The client's
+                                                expectations are the main risk in this feature, not the
+                                                code -- and now that the mark really can land on the
+                                                page, the sentence has to say which of the two just
+                                                happened rather than always denying it.
+                                            */
+                                            <p className="text-xs text-muted-foreground">
+                                                {approvalStamp.placement ===
+                                                null ? (
+                                                    <>
+                                                        Your signature is saved
+                                                        as soon as you sign. It
+                                                        is recorded against this
+                                                        exact file version
+                                                        {document.can.sign
+                                                            ? ''
+                                                            : ' as your office’s release to the next office'}
+                                                        .
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        Your signature will be
+                                                        printed on page{' '}
+                                                        {
+                                                            approvalStamp
+                                                                .placement.page
+                                                        }{' '}
+                                                        and saved as a new
+                                                        version. The version you
+                                                        signed is kept
+                                                        unchanged.
+                                                    </>
+                                                )}
+                                            </p>
+                                        }
+                                    >
+                                        <InputError
+                                            message={signature.errors.image}
+                                        />
+                                        <InputError
+                                            message={
+                                                signature.errors.stamped_pdf
+                                            }
+                                        />
+                                        <Button
+                                            size="sm"
+                                            type="submit"
+                                            disabled={
+                                                signature.processing ||
+                                                !signature.data.image ||
+                                                (approvalStamp.stampable &&
+                                                    approvalStamp.placement ===
+                                                        null)
+                                            }
+                                        >
+                                            {signature.processing
+                                                ? 'Signing…'
+                                                : document.can.sign
+                                                  ? 'Sign document'
+                                                  : 'Sign for release'}
+                                        </Button>
+                                    </SignWithDocument>
+                                </form>
                             </section>
                         )}
                         <div className="grid gap-4 lg:grid-cols-2">
@@ -1375,117 +1619,6 @@ export default function ShowDocument({
                                             </li>
                                         ))}
                                     </ul>
-
-                                    {/*
-                                        Offered on its own, not only inside the
-                                        Forward panel. On a routed document the
-                                        office moves it on by pressing Received,
-                                        never Forward, so the release pad there
-                                        never opened and no office down the
-                                        route could sign. Both flags are
-                                        Admin-only (client, 2026-09-15). Approval
-                                        wins when both are allowed; the release
-                                        signature is still offered afterwards,
-                                        because they are different attestations.
-                                    */}
-                                    {(document.can.sign ||
-                                        document.can.signRelease) && (
-                                        <form
-                                            onSubmit={(event) => {
-                                                event.preventDefault();
-                                                signature.transform((data) => ({
-                                                    ...data,
-                                                    purpose: document.can.sign
-                                                        ? 'approval'
-                                                        : 'release',
-                                                }));
-                                                signature.post(
-                                                    DocumentSignatureController.store.url(
-                                                        {
-                                                            document:
-                                                                document.id,
-                                                        },
-                                                    ),
-                                                    {
-                                                        preserveScroll: true,
-                                                        onSuccess: () => {
-                                                            signature.reset();
-                                                            setSignaturePadKey(
-                                                                (key) =>
-                                                                    key + 1,
-                                                            );
-                                                        },
-                                                    },
-                                                );
-                                            }}
-                                            className="mt-4 space-y-3 border-t pt-4"
-                                        >
-                                            {currentFile?.is_previewable && (
-                                                <Button
-                                                    type="button"
-                                                    size="sm"
-                                                    variant="outline"
-                                                    className="w-fit"
-                                                    onClick={() =>
-                                                        setPreviewFileId(
-                                                            currentFile.id,
-                                                        )
-                                                    }
-                                                >
-                                                    <Eye className="size-4" />
-                                                    Read v{
-                                                        currentFile.version
-                                                    }{' '}
-                                                    before signing
-                                                </Button>
-                                            )}
-                                            <SignaturePad
-                                                key={signaturePadKey}
-                                                disabled={signature.processing}
-                                                onChange={(dataUrl, method) =>
-                                                    signature.setData(
-                                                        (data) => ({
-                                                            ...data,
-                                                            image: dataUrl,
-                                                            method,
-                                                        }),
-                                                    )
-                                                }
-                                            />
-                                            <InputError
-                                                message={signature.errors.image}
-                                            />
-                                            {/*
-                                        Stated up front, not buried in a manual.
-                                        The client's expectations are the main
-                                        risk in this feature, not the code.
-                                    */}
-                                            <p className="text-xs text-muted-foreground">
-                                                Your signature is saved as soon
-                                                as you sign. It is recorded
-                                                against this exact file version
-                                                {document.can.sign
-                                                    ? ''
-                                                    : ' as your office’s release to the next office'}{' '}
-                                                — it is not printed onto the
-                                                document itself.
-                                            </p>
-                                            <Button
-                                                size="sm"
-                                                type="submit"
-                                                disabled={
-                                                    signature.processing ||
-                                                    !signature.data.image
-                                                }
-                                            >
-                                                {signature.processing
-                                                    ? 'Signing…'
-                                                    : document.can.sign
-                                                      ? 'Sign document'
-                                                      : 'Sign for release'}
-                                            </Button>
-                                        </form>
-                                    )}
                                 </section>
 
                                 {/* §16 Comments */}
