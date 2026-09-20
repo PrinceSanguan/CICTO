@@ -81,19 +81,48 @@ class ScanController extends Controller
             ->where('control_number', $code)
             ->first();
 
+        if ($document === null) {
+            return $this->missed($code, 'missing');
+        }
+
         /*
-         * Not found AND not allowed both land on the same page, on purpose.
-         * Telling a clerk "that document exists but is not yours" would turn
-         * this box into a way to confirm which control numbers are real across
-         * offices they cannot read.
+         * "NOT YOURS" IS SAID OUT LOUD, and it is a reversal.
+         *
+         * The first version answered a real-but-unreadable document exactly
+         * like an invented one, so that this box could not be used to confirm
+         * which control numbers exist across offices. Within hours it cost
+         * exactly what a lie costs: an office typed a control number that was
+         * on the label in their hand, were told nothing matched, and went and
+         * queried the production database to find the document sitting there
+         * (2026-09-21). The page had said "does not exist" about something
+         * that did.
+         *
+         * What the honest answer leaks is EXISTENCE and nothing else -- no
+         * title, no status, not even which office holds it. Control numbers
+         * are sequential, printed on every label and read aloud across
+         * mailrooms, so "OCM has reached 14 this year" is not a secret worth
+         * making the register lie for. The contents stay behind the policy,
+         * which is the part that was ever protecting anything.
          */
-        if ($document === null || $request->user()?->cannot('view', $document)) {
-            return redirect()
-                ->route('documents.scan')
-                ->with('scanMiss', $code);
+        if ($request->user()?->cannot('view', $document)) {
+            return $this->missed($code, 'forbidden');
         }
 
         return redirect()->route('documents.show', $document);
+    }
+
+    /**
+     * Back to the box, saying which kind of nothing it was.
+     *
+     * A redirect rather than a page of its own: a mistyped code is the
+     * ordinary outcome of a smudged label, and losing the scanner's focus for
+     * it means the next scan goes nowhere.
+     */
+    private function missed(string $code, string $reason): RedirectResponse
+    {
+        return redirect()
+            ->route('documents.scan')
+            ->with('scanMiss', ['code' => $code, 'reason' => $reason]);
     }
 
     /**

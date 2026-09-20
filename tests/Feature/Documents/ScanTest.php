@@ -354,30 +354,58 @@ class ScanTest extends TestCase
     }
 
     /**
-     * A real control number belonging to an office you cannot read answers
-     * exactly like a made-up one.
+     * A document you cannot read must NOT be reported as non-existent.
      *
-     * Anything else turns this box into a way to confirm which control
-     * numbers exist across offices the person is not allowed to open.
+     * The first version answered this exactly like an invented code, so the
+     * box could not be used to confirm which control numbers exist elsewhere.
+     * Within hours it cost what a lie costs: an office typed a control number
+     * off the label in their hand, were told nothing matched, and queried the
+     * production database to find the document sitting there (2026-09-21).
+     *
+     * What the honest answer reveals is EXISTENCE alone -- no title, no
+     * status, not even the holding office. See ScanController::resolve.
      */
-    public function test_a_document_you_may_not_read_is_indistinguishable_from_a_miss(): void
+    public function test_a_document_you_may_not_read_says_so_rather_than_denying_it_exists(): void
     {
         $mine = $this->office('MPDO', 'Planning Office');
         $theirs = $this->office('TREA', 'Treasury');
 
         $hidden = $this->registerDocument($theirs, $this->staff($theirs));
+        $admin = $this->admin($mine);
 
-        $real = $this->actingAs($this->admin($mine))
-            ->get(route('documents.scan.resolve', ['code' => $hidden->control_number]));
+        $this->actingAs($admin)
+            ->get(route('documents.scan.resolve', ['code' => $hidden->control_number]))
+            ->assertRedirect(route('documents.scan'));
 
-        $invented = $this->actingAs($this->admin($mine))
-            ->get(route('documents.scan.resolve', ['code' => 'MPDO-2026-99999']));
-
-        $real->assertRedirect(route('documents.scan'));
-        $invented->assertRedirect(route('documents.scan'));
+        $this->actingAs($admin)
+            ->get(route('documents.scan'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('miss.code', $hidden->control_number)
+                ->where('miss.reason', 'forbidden'));
     }
 
-    /** A miss comes back to the box, with the code echoed for checking. */
+    /** ...and refusing still gives away nothing about the document itself. */
+    public function test_a_refusal_reveals_nothing_but_the_control_number(): void
+    {
+        $mine = $this->office('MPDO', 'Planning Office');
+        $theirs = $this->office('TREA', 'Treasury');
+
+        $hidden = $this->registerDocument($theirs, $this->staff($theirs));
+        $hidden->forceFill(['title' => 'Confidential disciplinary case'])->save();
+
+        $this->actingAs($this->admin($mine))
+            ->get(route('documents.scan.resolve', ['code' => $hidden->control_number]));
+
+        $this->actingAs($this->admin($mine))
+            ->get(route('documents.scan'))
+            ->assertOk()
+            ->assertDontSee('Confidential disciplinary case', escape: false)
+            ->assertDontSee('Treasury', escape: false)
+            ->assertInertia(fn ($page) => $page->missing('miss.title'));
+    }
+
+    /** An invented code is a different answer from a real one. */
     public function test_a_miss_returns_to_the_console_and_says_what_it_could_not_find(): void
     {
         $office = $this->office();
@@ -391,6 +419,7 @@ class ScanTest extends TestCase
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->component('documents/scan')
-                ->where('miss', 'MPDO-2026-99999'));
+                ->where('miss.code', 'MPDO-2026-99999')
+                ->where('miss.reason', 'missing'));
     }
 }

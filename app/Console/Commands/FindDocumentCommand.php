@@ -104,6 +104,22 @@ class FindDocumentCommand extends Command
             $this->components->warn('This document is ARCHIVED.');
         }
 
+        /*
+         * WHO CAN OPEN IT, because "the document exists but my screen says it
+         * does not" is the question that actually brings people here -- and on
+         * 2026-09-21 the answer turned out to be the view policy, not a
+         * missing row. Printing the two offices that satisfy it saves the next
+         * person from reading DocumentPolicy::view to find that out.
+         */
+        $this->line('');
+        $this->components->twoColumnDetail(
+            'Who can open it',
+            sprintf(
+                'Super Admins, %s, anyone at an office it has passed through, and whoever filed it',
+                $document->originatingOffice->name,
+            ),
+        );
+
         $this->line('');
         $this->components->twoColumnDetail('QR token', $document->qr_token);
         $this->components->twoColumnDetail(

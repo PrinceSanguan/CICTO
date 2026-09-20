@@ -20,7 +20,7 @@ import documents from '@/routes/documents';
  *     http://192.168.x.x it is simply unavailable -- a browser rule, not a
  *     setting. The page says so rather than offering a button that cannot work.
  */
-export default function ScanConsole({ miss }: { miss?: string | null }) {
+export default function ScanConsole({ miss }: { miss?: ScanMiss | null }) {
     const [token, setToken] = useState('');
     const [cameraRequested, setCameraRequested] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -387,6 +387,16 @@ function Notice({
     );
 }
 
+/**
+ * What a lookup could not resolve.
+ *
+ * `missing` and `forbidden` are deliberately different answers: the console
+ * told an office "nothing matched" about a document that existed, and they
+ * went to the database to find out otherwise (2026-09-21). See
+ * ScanController::resolve for what the honest answer does and does not reveal.
+ */
+type ScanMiss = { code: string; reason: 'missing' | 'forbidden' };
+
 /** The always-available path: a wired scanner, or typing. */
 function WedgeEntry({
     inputRef,
@@ -400,8 +410,8 @@ function WedgeEntry({
     onChange: (value: string) => void;
     onSubmit: () => void;
 
-    /** What the last lookup could not find, echoed back so it can be checked. */
-    miss?: string | null;
+    /** What the last lookup could not resolve, and which kind of nothing it was. */
+    miss?: ScanMiss | null;
 }) {
     return (
         <form
@@ -446,14 +456,32 @@ function WedgeEntry({
             {miss && (
                 <p
                     role="alert"
-                    className="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-800"
+                    className={`mt-3 rounded-md px-3 py-2 text-xs ${
+                        miss.reason === 'forbidden'
+                            ? 'bg-amber-50 text-amber-900'
+                            : 'bg-red-50 text-red-800'
+                    }`}
                 >
-                    Nothing matched{' '}
-                    <span className="font-mono font-semibold break-all">
-                        {miss}
-                    </span>
-                    . Check it against the label, or search the register by
-                    control number.
+                    {miss.reason === 'forbidden' ? (
+                        <>
+                            <span className="font-mono font-semibold break-all">
+                                {miss.code}
+                            </span>{' '}
+                            exists, but it is not your office&rsquo;s document —
+                            only the office holding it and a Super Admin can
+                            open it. Scan the QR code on the folder if you are
+                            holding it, or ask the office that issued it.
+                        </>
+                    ) : (
+                        <>
+                            Nothing matched{' '}
+                            <span className="font-mono font-semibold break-all">
+                                {miss.code}
+                            </span>
+                            . Check it against the label, or search the register
+                            by control number.
+                        </>
+                    )}
                 </p>
             )}
 
