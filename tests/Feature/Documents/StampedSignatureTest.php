@@ -1530,4 +1530,147 @@ class StampedSignatureTest extends TestCase
         );
         $this->assertStringContainsString('break-words', $list);
     }
+
+    /**
+     * A .docx can be SIGNED ON, client request 2026-09-21.
+     *
+     * The signed copy is a PDF rendition and the Word file stays as its own
+     * version -- SignablePdf says why. What matters on the server side is
+     * that the two can sit in one version list: the stamped upload is a PDF
+     * even though the version it was made from is not, and StoreDocumentFile
+     * takes its on-disk extension from the name the browser sends.
+     */
+    public function test_a_word_document_can_be_signed_and_keeps_its_original(): void
+    {
+        $document = $this->reviewable();
+        $admin = $this->admin($document->originatingOffice);
+        $word = $document->currentFile()->first();
+
+        // The document's current version is a Word file.
+        $word->forceFill([
+            'original_name' => 'minutes.docx',
+            'mime_type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ])->save();
+
+        $signature = app(SignDocument::class)->handle(
+            document: $document->fresh(),
+            signer: $admin,
+            method: SignatureMethod::Drawn,
+            drawnPng: $this->pngDataUrl(),
+            placement: $this->placement(),
+            // What the browser posts back: a PDF, named .pdf.
+            stampedPdf: UploadedFile::fake()->createWithContent(
+                'minutes.pdf',
+                '%PDF-1.4 the signed rendition',
+            ),
+        );
+
+        $stamped = $signature->stampedFile;
+
+        $this->assertNotNull($stamped);
+        $this->assertSame('minutes.pdf', $stamped->original_name);
+        $this->assertStringEndsWith('.pdf', $stamped->path);
+
+        // The Word file it was signed from is untouched and still a version.
+        $this->assertSame($word->id, $signature->document_file_id);
+        $this->assertSame('minutes.docx', $word->fresh()->original_name);
+        $this->assertSame(2, DocumentFile::query()->count());
+    }
+
+    /**
+     * The endpoint refuses a PDF sent under the source file's name.
+     *
+     * The browser derives the stamped upload's name by SWAPPING the
+     * extension, not appending one. If that ever regresses, a signed .docx
+     * would arrive as "minutes.docx" full of PDF bytes -- and this is the
+     * rule that stops it being written to disk under a name that lies about
+     * its contents.
+     */
+    public function test_a_stamped_upload_must_be_named_as_the_pdf_it_is(): void
+    {
+        $document = $this->reviewable();
+        $admin = $this->admin($document->originatingOffice);
+
+        $this->actingAs($admin)
+            ->post(route('documents.signatures.store', $document), [
+                'method' => SignatureMethod::Drawn->value,
+                'image' => $this->pngDataUrl(),
+                'stamped_pdf' => UploadedFile::fake()->createWithContent(
+                    'minutes.docx',
+                    '%PDF-1.4 the signed rendition',
+                ),
+                'placement' => $this->placement(),
+            ])
+            ->assertSessionHasErrors('stamped_pdf');
+
+        $this->assertSame(0, DocumentSignature::query()->count());
+    }
+
+    /**
+     * An office may not withdraw its mark from UNDER someone else's.
+     *
+     * Found by mutation testing in QA on 2026-09-21: DocumentSignaturePolicy
+     * refuses an undo when anybody has signed since, and removing that check
+     * left the whole suite green. Nothing was holding the line.
+     *
+     * It matters because a later signature was made against a document that
+     * carried the earlier one. Office A signs; a Super Admin countersigns
+     * while A still holds the folder; A then withdraws. What remains is the
+     * Super Admin's signature attesting to a page that, as far as the
+     * register now says, never had A's mark on it.
+     *
+     * The ownership and custody checks do not cover this: A's office owns the
+     * mark, and A is still holding the folder. Only the ordering check does.
+     */
+    public function test_a_signature_cannot_be_withdrawn_once_someone_has_signed_after_it(): void
+    {
+        $document = $this->reviewable();
+        $admin = $this->admin($document->originatingOffice);
+
+        $first = app(SignDocument::class)->handle(
+            document: $document,
+            signer: $admin,
+            method: SignatureMethod::Drawn,
+            drawnPng: $this->pngDataUrl(),
+        );
+
+        // Countersigned a moment later, with the folder still on A's desk.
+        $this->travel(1)->seconds();
+
+        app(SignDocument::class)->handle(
+            document: $document->fresh(),
+            signer: $this->superAdmin(),
+            method: SignatureMethod::Drawn,
+            drawnPng: $this->pngDataUrl(),
+        );
+
+        $this->assertTrue(
+            $admin->can('view', $document->fresh()),
+            'Precondition: A still holds the folder, so custody is not what refuses this.',
+        );
+
+        $this->assertFalse($admin->can('undo', $first->fresh()));
+
+        $this->actingAs($admin)
+            ->delete(route('documents.signatures.destroy', [$document, $first]))
+            ->assertForbidden();
+
+        $this->assertSame(2, DocumentSignature::query()->count());
+    }
+
+    /** ...but the LAST signature on the document can still be withdrawn. */
+    public function test_the_most_recent_signature_can_still_be_withdrawn(): void
+    {
+        $document = $this->reviewable();
+        $admin = $this->admin($document->originatingOffice);
+
+        $signature = app(SignDocument::class)->handle(
+            document: $document,
+            signer: $admin,
+            method: SignatureMethod::Drawn,
+            drawnPng: $this->pngDataUrl(),
+        );
+
+        $this->assertTrue($admin->can('undo', $signature->fresh()));
+    }
 }

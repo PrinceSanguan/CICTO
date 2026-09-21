@@ -8,6 +8,7 @@ use App\Models\Document;
 use App\Models\DocumentFile;
 use App\Models\SecurityEvent;
 use App\Services\OfficeDocumentPreview;
+use App\Services\SignablePdf;
 use App\Support\DocumentUpload;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -167,6 +168,60 @@ class DocumentFileController extends Controller
                 'Cache-Control' => 'private, no-store, max-age=0',
             ],
         );
+    }
+
+    /**
+     * The version as a PDF, for placing a signature on.
+     *
+     * §15 stamping draws the mark at a spot on a page, and the pipeline that
+     * does it -- pdf.js to show the pages, pdf-lib to embed the PNG -- needs a
+     * PDF. Word and Excel had no pages a browser could point at, so they could
+     * be read in the signing panel and not signed on; the client asked for
+     * every type to be signable (2026-09-21).
+     *
+     * Authorised as a PREVIEW, because that is what it is: the same content
+     * the signer may already read, in a different shape. It is not a
+     * download, and it never becomes a version -- the only thing stored is the
+     * stamped PDF the browser posts back.
+     */
+    public function signable(
+        Request $request,
+        Document $document,
+        DocumentFile $file,
+        SignablePdf $signable,
+    ): Response {
+        $this->authorize('preview', $file);
+
+        abort_unless($file->exists(), 410, 'This version is no longer stored.');
+        abort_unless($signable->supports($file), 415, 'This file type cannot be signed on the page.');
+
+        SecurityEvent::log(
+            SecurityEventType::FilePreviewed,
+            sprintf(
+                '%s opened %s v%d to place a signature.',
+                $request->user()->email ?? 'A user',
+                $document->control_number,
+                $file->version,
+            ),
+            $request->user(),
+            $document->control_number,
+        );
+
+        return response($signable->bytes($file), 200, [
+            'Content-Type' => 'application/pdf',
+            'X-Content-Type-Options' => 'nosniff',
+
+            // Fetched by the placer rather than framed, but the same deny-all
+            // reasoning applies to bytes built from somebody else's upload.
+            'Content-Security-Policy' => implode('; ', [
+                "default-src 'none'",
+                "script-src 'none'",
+                "object-src 'none'",
+                "frame-ancestors 'self'",
+            ]),
+
+            'Cache-Control' => 'private, no-store, max-age=0',
+        ]);
     }
 
     /**

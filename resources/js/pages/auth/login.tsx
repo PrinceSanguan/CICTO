@@ -9,7 +9,6 @@ import InputError from '@/components/input-error';
 import TextLink from '@/components/text-link';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Spinner } from '@/components/ui/spinner';
-import { register } from '@/routes';
 import { store } from '@/routes/login';
 import { request } from '@/routes/password';
 
@@ -140,15 +139,22 @@ export default function Login({ status, canResetPassword }: Props) {
                 )}
             </Form>
 
-            <p className="mt-6 text-center text-sm font-medium text-navy">
-                Don&rsquo;t have an account?{' '}
-                <TextLink
-                    href={register()}
-                    className="font-bold text-link no-underline hover:underline"
-                >
-                    Register
-                </TextLink>
-            </p>
+            {/*
+                NO "Don't have an account? Register" HERE, client request
+                2026-09-21.
+
+                Accounts in a municipal register are ISSUED, not claimed: a
+                Super Admin creates them on Manage Users, or the rollout
+                seeder mints one per office. Inviting a visitor at the login
+                screen to make their own was the opposite of that, and the
+                first thing anyone reaching cicto.site saw.
+
+                The /register route itself is untouched and still works --
+                removing the link is not the same as closing the door, and
+                closing it is a separate decision (Features::registration() in
+                config/fortify.php). Super Admin account creation never went
+                through it: that is POST super-admin/users.
+            */}
         </>
     );
 }

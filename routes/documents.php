@@ -74,6 +74,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->scopeBindings()
         ->name('documents.files.preview');
 
+    /*
+     * §15: the version as a PDF, so a signature can be placed on a page of it.
+     *
+     * Separate from preview, which serves the file for READING in whatever
+     * form suits it -- the bytes for a PDF, converted HTML for a .docx. The
+     * placer needs one shape it can render pages from and draw on, and that
+     * shape is always a PDF. See App\Services\SignablePdf.
+     */
+    Route::get('documents/{document}/files/{file}/signable.pdf', [DocumentFileController::class, 'signable'])
+        ->scopeBindings()
+        ->name('documents.files.signable');
+
     // §15 digital signatures.
     //
     // NO password.confirm, and that is the client's decision of 2026-09-13:

@@ -178,8 +178,23 @@ export default function ShowDocument({
     const approvalStamp = useSignatureStamp();
     const releaseStamp = useSignatureStamp();
 
-    /** What the stamped version is called. Named after what it came from. */
-    const stampedName = currentFile?.original_name ?? 'signed.pdf';
+    /**
+     * What the stamped version is called: the name it came from, carrying a
+     * .pdf extension.
+     *
+     * The extension is SWAPPED, not appended. What the browser posts back is
+     * always a PDF -- a signed .docx is a PDF rendition of it (see
+     * SignablePdf) -- and posting those bytes under the name
+     * "minutes.docx" fails StoreSignatureRequest's `extensions:pdf` before it
+     * gets anywhere, then would have written a .docx on disk if it had not.
+     */
+    const stampedName = currentFile
+        ? `${currentFile.original_name.replace(/\.[^./\\]+$/, '')}.pdf`
+        : 'signed.pdf';
+
+    /** A signed copy of a Word or Excel file is a PDF, and the signer is told so. */
+    const stampProducesRendition =
+        currentFile !== null && currentFile.mime_type !== 'application/pdf';
 
     const submitAction = async (value: string) => {
         /*
@@ -1094,7 +1109,11 @@ export default function ShowDocument({
                                                                                 {releaseStamp.placement ===
                                                                                 null
                                                                                     ? 'Your signature is recorded against this exact file version as your office’s release.'
-                                                                                    : `Your signature will be printed on page ${releaseStamp.placement.page} and saved as a new version. The version you signed is kept unchanged.`}
+                                                                                    : `Your signature will be printed on page ${releaseStamp.placement.page} and saved as a new version${
+                                                                                          stampProducesRendition
+                                                                                              ? ' (a PDF copy — the original file is kept unchanged)'
+                                                                                              : '. The version you signed is kept unchanged'
+                                                                                      }.`}
                                                                             </p>
                                                                         }
                                                                     />
@@ -1327,9 +1346,10 @@ export default function ShowDocument({
                                                                 .placement.page
                                                         }{' '}
                                                         and saved as a new
-                                                        version. The version you
-                                                        signed is kept
-                                                        unchanged.
+                                                        version
+                                                        {stampProducesRendition
+                                                            ? ' — a PDF copy, because a Word or Excel file cannot carry the mark itself. The original file stays as its own version.'
+                                                            : '. The version you signed is kept unchanged.'}
                                                     </>
                                                 )}
                                             </p>

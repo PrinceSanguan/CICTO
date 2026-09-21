@@ -1,9 +1,6 @@
 import { Maximize2 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import {
-    DocumentViewer,
-    DocumentViewerNotice,
-} from '@/components/documents/document-viewer';
+import { DocumentViewerNotice } from '@/components/documents/document-viewer';
 import { PdfSignaturePlacer } from '@/components/documents/pdf-signature-placer';
 import { SignaturePad } from '@/components/documents/signature-pad';
 import type { SignatureCaptureMethod } from '@/components/documents/signature-pad';
@@ -26,11 +23,11 @@ import type { DocumentFileItem } from '@/types';
  *  - A PDF gets PdfSignaturePlacer, which draws the pages into canvases so a
  *    click has coordinates. That is the only way to know where somebody put
  *    their signature.
- *  - Anything else gets the plain viewer: a PNG or JPEG, or the HTML the
- *    server converts a .docx or .xlsx into (2026-09-20). All of them can be
- *    READ; none can be STAMPED, because the produced file has to be a PDF.
- *    They still sign, as a record bound to the file hash, which is what every
- *    signature was before stamping existed.
+ *  - SO DOES EVERYTHING ELSE, since 2026-09-21. A .docx, .xlsx, PNG or JPEG
+ *    is rendered to a PDF by the signable endpoint and placed on in exactly
+ *    the same way. For those the signed copy is a PDF RENDITION and the
+ *    original stays as its own version -- SignablePdf says why, and the
+ *    notice under the pad says so to the signer.
  *
  * `@container` rather than viewport breakpoints, the same way
  * document-tracking.tsx does it: this panel is rendered both full width and
@@ -90,12 +87,24 @@ export function SignWithDocument({
     children?: ReactNode;
 }) {
     const usable = file !== null && !file.is_purged;
-    const isPdf = usable && file.mime_type === 'application/pdf';
     const previewable = usable && file.is_previewable;
 
-    const source = usable
-        ? documents.files.preview.url({ document: documentId, file: file.id })
-        : null;
+    /*
+     * EVERY readable type can be signed ON, since 2026-09-21.
+     *
+     * It used to be PDFs only, because the placer needs pages to point at and
+     * a .docx has none a browser can address -- so Word and Excel could be
+     * read here and not signed, which is what the client reported. The
+     * signable endpoint answers with a PDF for all of them: the file itself
+     * when it already is one, a rendition when it is not.
+     */
+    const source =
+        previewable && file !== null
+            ? documents.files.signable.url({
+                  document: documentId,
+                  file: file.id,
+              })
+            : null;
 
     return (
         <div className="@container">
@@ -129,7 +138,7 @@ export function SignWithDocument({
                         )}
                     </div>
 
-                    {isPdf && source !== null ? (
+                    {source !== null ? (
                         <PdfSignaturePlacer
                             source={source}
                             signaturePng={signaturePng}
@@ -137,13 +146,6 @@ export function SignWithDocument({
                             onPlacementChange={onPlacementChange}
                             onBytes={onBytes}
                             disabled={disabled}
-                        />
-                    ) : previewable && file !== null ? (
-                        <DocumentViewer
-                            documentId={documentId}
-                            file={file}
-                            height="h-[26rem] @4xl:h-[32rem]"
-                            lazy
                         />
                     ) : (
                         <DocumentViewerNotice
@@ -167,7 +169,7 @@ export function SignWithDocument({
                         the panel. Everything else about signing is a button
                         with a label on it; "now click the page" is not.
                     */}
-                    {isPdf && (
+                    {source !== null && (
                         <p
                             aria-live="polite"
                             className="text-xs text-muted-foreground"

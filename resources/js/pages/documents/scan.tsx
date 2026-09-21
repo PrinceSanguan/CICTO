@@ -1,6 +1,12 @@
 import { Head, router } from '@inertiajs/react';
 import { Flashlight, Keyboard, Loader2, ScanLine } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+    useSyncExternalStore,
+} from 'react';
 import { ScanPhone } from '@/components/documents/scan-phone';
 import { Input } from '@/components/ui/input';
 import { cameraIsPossible, useQrScanner } from '@/hooks/use-qr-scanner';
@@ -20,14 +26,42 @@ import documents from '@/routes/documents';
  *     http://192.168.x.x it is simply unavailable -- a browser rule, not a
  *     setting. The page says so rather than offering a button that cannot work.
  */
+/**
+ * Camera support does not change while the page is open, so there is nothing
+ * to subscribe to. Defined once, outside the component: a new function on
+ * every render would make React resubscribe each time.
+ */
+const noSubscription = () => () => {};
+
 export default function ScanConsole({ miss }: { miss?: ScanMiss | null }) {
     const [token, setToken] = useState('');
     const [cameraRequested, setCameraRequested] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    // Read at render: this cannot change for the life of the page, so holding
-    // it in state would only buy a second render.
-    const cameraPossible = cameraIsPossible();
+    /*
+     * Whether this browser can open a camera -- read through
+     * useSyncExternalStore, NOT at render.
+     *
+     * It used to be read straight at render, on the reasoning that it cannot
+     * change for the life of the page and state would "only buy a second
+     * render". Under SSR that second render is the whole point. The server
+     * has no `window`, so cameraIsPossible() answers false there and true in
+     * any secure-context browser, and the line below renders a different
+     * button for each: React then logged "Hydration failed because the
+     * server rendered HTML didn't match the client" on EVERY load of this
+     * page and threw the server HTML away to rebuild the tree (found in QA,
+     * 2026-09-21; the read dates from 2026-08-10).
+     *
+     * The third argument is what the server -- and hydration -- see. React
+     * switches to the real answer immediately after, so the two renders
+     * agree and the camera button still appears on the first paint a user
+     * can actually see.
+     */
+    const cameraPossible = useSyncExternalStore(
+        noSubscription,
+        cameraIsPossible,
+        () => false,
+    );
 
     const resolve = useCallback((value: string) => {
         const trimmed = value.trim();

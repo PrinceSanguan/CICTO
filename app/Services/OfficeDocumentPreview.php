@@ -92,6 +92,32 @@ final class OfficeDocumentPreview
             );
         }
 
+        $body = $this->body($file);
+
+        return $body === null
+            ? $this->cannotShow($file, 'This file could not be shown on screen.')
+            : $this->page($file, $body);
+    }
+
+    /**
+     * Just the converted markup, with no page around it.
+     *
+     * Public since 2026-09-21 so SignablePdf can render the SAME content into
+     * a PDF for the signer to place a mark on. Both views having one renderer
+     * is not tidiness: if the signer puts their signature two thirds down page
+     * three, that has to be the page three they read, and two converters would
+     * eventually disagree about where page three ends.
+     *
+     * Null rather than an exception when the file cannot be opened -- both
+     * callers have something better to show than a stack trace, and neither
+     * can do anything about a .docx with a feature the reader does not know.
+     */
+    public function body(DocumentFile $file): ?string
+    {
+        if (! $this->supports($file->mime_type) || $file->size_bytes > self::MAX_BYTES) {
+            return null;
+        }
+
         $local = null;
 
         try {
@@ -99,22 +125,16 @@ final class OfficeDocumentPreview
             // and the documents disk may be S3.
             $local = $this->copyToTempFile($file);
 
-            $body = self::TYPES[(string) $file->mime_type] === 'word'
+            return self::TYPES[(string) $file->mime_type] === 'word'
                 ? $this->word($local)
                 : $this->excel($local);
-
-            return $this->page($file, $body);
         } catch (Throwable) {
             /*
-             * Deliberately swallowed, and deliberately not reported to the
-             * user as an error. A file this cannot parse is not broken -- it
-             * is a file with a feature the converter does not know -- and the
-             * signer's next step is the same either way.
+             * Deliberately swallowed. A file this cannot parse is not broken
+             * -- it is a file with a feature the converter does not know --
+             * and the caller's next step is the same either way.
              */
-            return $this->cannotShow(
-                $file,
-                'This file could not be shown on screen.',
-            );
+            return null;
         } finally {
             if ($local !== null && is_file($local)) {
                 @unlink($local);

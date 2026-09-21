@@ -359,4 +359,143 @@ class OfficeDocumentPreviewTest extends TestCase
 
         return $path;
     }
+
+    /**
+     * EVERY readable type can be signed ON, client request 2026-09-21.
+     *
+     * §15 stamping needs pages to point at, and a .docx has none a browser
+     * can address -- so Word and Excel could be read in the signing panel and
+     * not signed on. The signable endpoint answers with a PDF for all of
+     * them.
+     */
+    public function test_a_word_document_is_offered_as_a_pdf_to_sign_on(): void
+    {
+        $document = $this->documentWith($this->wordFile('Approved for procurement.'));
+        $file = $document->currentFile()->first();
+
+        $response = $this->actingAs($this->admin($document->originatingOffice))
+            ->get(route('documents.files.signable', [$document, $file]))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
+
+        $bytes = $response->getContent();
+
+        $this->assertStringStartsWith('%PDF', (string) $bytes, 'That is not a PDF.');
+        $this->assertGreaterThan(1000, strlen((string) $bytes));
+    }
+
+    public function test_a_spreadsheet_is_offered_as_a_pdf_to_sign_on(): void
+    {
+        $document = $this->documentWith($this->excelFile());
+        $file = $document->currentFile()->first();
+
+        $bytes = $this->actingAs($this->admin($document->originatingOffice))
+            ->get(route('documents.files.signable', [$document, $file]))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringStartsWith('%PDF', (string) $bytes);
+    }
+
+    /**
+     * A PDF is handed back UNCHANGED. Re-rendering one would throw away its
+     * fonts and layout to gain nothing, and the signature would then bind to
+     * a version nobody had read.
+     */
+    public function test_a_pdf_version_is_passed_through_untouched(): void
+    {
+        $original = '%PDF-1.4 the original bytes';
+
+        $document = $this->documentWith(
+            UploadedFile::fake()->createWithContent('memo.pdf', $original),
+        );
+
+        $file = $document->currentFile()->first();
+
+        $bytes = $this->actingAs($this->admin($document->originatingOffice))
+            ->get(route('documents.files.signable', [$document, $file]))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertSame($original, $bytes);
+    }
+
+    /** A scan is a page too: one page, fitted, not stretched. */
+    public function test_an_image_is_offered_as_a_one_page_pdf(): void
+    {
+        $document = $this->documentWith(
+            UploadedFile::fake()->image('scan.png', 400, 300),
+        );
+
+        $file = $document->currentFile()->first();
+
+        $bytes = $this->actingAs($this->admin($document->originatingOffice))
+            ->get(route('documents.files.signable', [$document, $file]))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringStartsWith('%PDF', (string) $bytes);
+    }
+
+    /** The types with no viewer have no page to sign on either. */
+    public function test_a_legacy_office_format_cannot_be_signed_on(): void
+    {
+        $document = $this->documentWith($this->wordFile());
+        $file = $document->currentFile()->first();
+
+        $file->forceFill(['mime_type' => 'application/msword'])->save();
+
+        $this->actingAs($this->admin($document->originatingOffice))
+            ->get(route('documents.files.signable', [$document, $file->fresh()]))
+            ->assertStatus(415);
+    }
+
+    /** It is a read of the document's contents, so it is audited as one. */
+    public function test_opening_a_version_to_sign_on_is_audited(): void
+    {
+        $document = $this->documentWith($this->wordFile());
+        $file = $document->currentFile()->first();
+
+        $this->actingAs($this->admin($document->originatingOffice))
+            ->get(route('documents.files.signable', [$document, $file]))
+            ->assertOk();
+
+        $event = SecurityEvent::query()
+            ->where('type', SecurityEventType::FilePreviewed)
+            ->latest('id')
+            ->first();
+
+        $this->assertNotNull($event);
+        $this->assertStringContainsString('place a signature', (string) $event->summary);
+    }
+
+    /** And it is not a way past the policy. */
+    public function test_another_office_cannot_open_a_version_to_sign_on(): void
+    {
+        $document = $this->documentWith($this->wordFile());
+        $file = $document->currentFile()->first();
+
+        $stranger = $this->admin($this->office('HRMO', 'Human Resource Office'));
+
+        $this->actingAs($stranger)
+            ->get(route('documents.files.signable', [$document, $file]))
+            ->assertForbidden();
+    }
+
+    /**
+     * A version purged under the retention policy is GONE, not forbidden --
+     * 410, the same answer the preview and download paths give. Found
+     * untested in QA on 2026-09-21.
+     */
+    public function test_a_purged_version_cannot_be_opened_to_sign_on(): void
+    {
+        $document = $this->documentWith($this->wordFile());
+        $file = $document->currentFile()->first();
+
+        $file->forceFill(['purged_at' => now()])->save();
+
+        $this->actingAs($this->admin($document->originatingOffice))
+            ->get(route('documents.files.signable', [$document, $file->fresh()]))
+            ->assertStatus(410);
+    }
 }
