@@ -1,7 +1,8 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Archive, RotateCcw, Search } from 'lucide-react';
+import { Archive, ChevronLeft, RotateCcw, Search } from 'lucide-react';
 import { useState } from 'react';
 import { StatusPill } from '@/components/documents/status-pill';
+import { panelHomeFor } from '@/lib/nav';
 import archive from '@/routes/archive';
 import documents from '@/routes/documents';
 import type { DocumentListItem, Paginated } from '@/types';
@@ -32,6 +33,21 @@ export default function DocumentArchive({ documents: page, filters }: Props) {
      * rows had no way to tell a quiet month from a filtered list. Now that
      * both panels link here (2026-09-23), it has to say which one it is.
      */
+    /*
+     * The way back, to wherever this page was opened from.
+     *
+     * Both panels link here (2026-09-23) but the page renders in the clerk
+     * shell, not the panel one -- app.tsx routes every `documents/` page to
+     * AppTopLayout -- so an Admin who clicks Archive loses the sidebar they
+     * came from and had nothing but the browser's own Back. This points at
+     * their panel by name; a clerk, who has no panel, gets Track Document, the
+     * same destination the other document screens use.
+     */
+    const back = panelHomeFor(auth?.role) ?? {
+        title: 'Track Document',
+        href: documents.index(),
+    };
+
     const scope =
         auth?.role === 'super_admin'
             ? 'Every office’s filed documents.'
@@ -43,7 +59,15 @@ export default function DocumentArchive({ documents: page, filters }: Props) {
         <>
             <Head title="Archive" />
 
-            <h1 className="flex items-center gap-3 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
+            <Link
+                href={back.href}
+                className="inline-flex items-center gap-1 text-sm font-bold text-white/90 transition hover:text-white"
+            >
+                <ChevronLeft className="size-4" />
+                Back to {back.title}
+            </Link>
+
+            <h1 className="mt-4 flex items-center gap-3 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
                 <Archive aria-hidden="true" className="size-8" />
                 Archive
             </h1>
