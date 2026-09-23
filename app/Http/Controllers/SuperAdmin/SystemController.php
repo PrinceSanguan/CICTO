@@ -234,10 +234,37 @@ class SystemController extends Controller
         ]);
     }
 
-    /** Verify every signature on demand, rather than waiting for the sweep. */
+    /**
+     * Seconds the manual run may spend re-reading files from storage.
+     *
+     * Not a performance tweak -- the thing that keeps this button working at
+     * all. See below.
+     */
+    private const VERIFY_BUDGET_SECONDS = 15;
+
+    /**
+     * Verify every signature on demand, rather than waiting for the sweep.
+     *
+     * BOUNDED, since 2026-09-23. This called the command with no limit, and
+     * the command re-reads every signed file from storage to catch swapped
+     * bytes -- a HEAD and a GET each, and on the Cloud host `documents` is
+     * object storage, so that is two network round trips per signature inside
+     * one HTTP request. The register only grows, so the button eventually ran
+     * past Cloudflare's limit and answered a 504 Gateway time-out instead of a
+     * result. The Super Admin reported exactly that.
+     *
+     * The budget does NOT weaken what the button checks in the database: every
+     * signature still has its own hash recomputed and its file checksum
+     * compared, which is what catches an altered record. Only the byte re-read
+     * is capped, newest first, and the toast says how many got one -- while the
+     * 02:30 sweep, which has no HTTP client waiting on it, still re-reads them
+     * all.
+     */
     public function verifySignatures(Request $request): RedirectResponse
     {
-        $exit = Artisan::call('cicto:verify-signatures');
+        $exit = Artisan::call('cicto:verify-signatures', [
+            '--max-seconds' => self::VERIFY_BUDGET_SECONDS,
+        ]);
 
         SecurityEvent::log(
             SecurityEventType::SettingChanged,
@@ -248,8 +275,19 @@ class SystemController extends Controller
         return back()->with('toast', [
             'type' => $exit === 0 ? 'success' : 'error',
             'message' => $exit === 0
-                ? 'All signatures match their recorded fingerprints.'
+                ? ($this->lastLine(Artisan::output()) ?? 'All signatures match their recorded fingerprints.')
                 : 'One or more signatures FAILED verification. See the security log.',
         ]);
+    }
+
+    /** The command's closing summary, for the toast. */
+    private function lastLine(string $output): ?string
+    {
+        $lines = array_values(array_filter(
+            array_map(trim(...), explode("\n", $output)),
+            static fn (string $line): bool => $line !== '',
+        ));
+
+        return $lines === [] ? null : end($lines);
     }
 }
