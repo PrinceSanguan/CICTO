@@ -1,4 +1,4 @@
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Archive, RotateCcw, Search } from 'lucide-react';
 import { useState } from 'react';
 import { StatusPill } from '@/components/documents/status-pill';
@@ -21,6 +21,23 @@ type Props = {
 /** §16 Archive: filed documents, and the way back out. */
 export default function DocumentArchive({ documents: page, filters }: Props) {
     const [q, setQ] = useState(filters.q ?? '');
+    const { auth } = usePage().props;
+
+    /*
+     * WHOSE archive this is, said on the page.
+     *
+     * The list has always been scoped by DocumentBuilder::visibleTo -- an
+     * office sees its own filed documents, a Super Admin sees every office's --
+     * but the screen looked identical either way, so an Admin finding four
+     * rows had no way to tell a quiet month from a filtered list. Now that
+     * both panels link here (2026-09-23), it has to say which one it is.
+     */
+    const scope =
+        auth?.role === 'super_admin'
+            ? 'Every office’s filed documents.'
+            : auth?.office
+              ? `Filed documents of ${auth.office.name}.`
+              : null;
 
     return (
         <>
@@ -31,9 +48,10 @@ export default function DocumentArchive({ documents: page, filters }: Props) {
                 Archive
             </h1>
             <p className="mt-1 max-w-2xl text-[15px] font-medium text-white/90">
-                Documents that have been filed away. Nothing here is deleted —
-                every file, signature and history entry is intact, and an
-                administrator can restore any of them to the active list.
+                {scope && <span className="font-bold">{scope} </span>}
+                Nothing here is deleted — every file, signature and history
+                entry is intact, and an administrator can restore any of them to
+                the active list.
             </p>
 
             <form

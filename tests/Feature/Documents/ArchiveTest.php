@@ -182,4 +182,41 @@ class ArchiveTest extends TestCase
         $this->assertCount(1, $mine);
         $this->assertCount(0, $theirs);
     }
+
+    /**
+     * The other half of the scoping rule, and the reason both panels can link
+     * to one page: an Admin's Archive is their office's, a Super Admin's is
+     * every office's. Only the first half was covered until 2026-09-23.
+     */
+    public function test_a_super_admin_sees_the_archive_of_every_office(): void
+    {
+        [$mineDocument, $admin] = $this->completed();
+        app(ArchiveDocument::class)->archive($mineDocument, $admin);
+
+        $elsewhere = $this->office('HRMO', 'Human Resource Office');
+        $otherAdmin = $this->admin($elsewhere);
+        $otherDocument = $this->registerDocument($elsewhere, $this->staff($elsewhere));
+
+        foreach ([MovementAction::Received, MovementAction::Completed] as $action) {
+            $otherDocument->refresh();
+            app(TransitionDocument::class)->handle(
+                document: $otherDocument,
+                action: $action,
+                actor: $otherAdmin,
+                expectedMovementId: $otherDocument->openMovement?->id,
+            );
+        }
+
+        app(ArchiveDocument::class)->archive($otherDocument->fresh(), $otherAdmin);
+
+        $all = $this->actingAs($this->superAdmin())
+            ->get(route('archive.index'))
+            ->assertOk()
+            ->viewData('page')['props']['documents']['data'];
+
+        $this->assertEqualsCanonicalizing(
+            [$mineDocument->control_number, $otherDocument->control_number],
+            array_column($all, 'control_number'),
+        );
+    }
 }

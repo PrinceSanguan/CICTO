@@ -195,6 +195,14 @@ const PANEL_NAV: Record<Role, NavItem[]> = {
             icon: FolderOpen,
         },
         { title: 'Users', href: admin.users.index(), icon: Users },
+        /*
+            §16's archive, added to both panels on 2026-09-23 because it had no
+            way in at all: the page has existed since Phase 4 and the only entry
+            was typing /archive. The list is office-scoped by
+            DocumentBuilder::visibleTo, so this one item shows an Admin their
+            own office's filed documents and a Super Admin every office's.
+        */
+        { title: 'Archive', href: archive.index(), icon: ArchiveIcon },
         { title: 'Reports', href: admin.reports.index(), icon: BarChart3 },
         { title: 'Settings', href: admin.settings.edit(), icon: Settings },
     ],
@@ -206,6 +214,7 @@ const PANEL_NAV: Record<Role, NavItem[]> = {
             icon: UserCog,
         },
         { title: 'All Documents', href: superAdmin.dashboard(), icon: Files },
+        { title: 'Archive', href: archive.index(), icon: ArchiveIcon },
         {
             title: 'Reports & Analytics',
             href: reports.index(),
