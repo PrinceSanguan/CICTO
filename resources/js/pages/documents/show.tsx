@@ -1,13 +1,18 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { ChevronDown, ChevronLeft, Download, Eye } from 'lucide-react';
+import { ChevronDown, ChevronLeft, Download, Eye, Printer } from 'lucide-react';
 import { useState } from 'react';
 import DocumentCommentController from '@/actions/App/Http/Controllers/DocumentCommentController';
 import DocumentFileController from '@/actions/App/Http/Controllers/DocumentFileController';
 import DocumentSignatureController from '@/actions/App/Http/Controllers/DocumentSignatureController';
 import DocumentWorkflowController from '@/actions/App/Http/Controllers/DocumentWorkflowController';
 import {
+    AccessNotice,
+    BroadcastPanel,
+} from '@/components/documents/broadcast-panel';
+import {
     DocumentFacts,
     DocumentMark,
+    PrintMasthead,
     ProgressTimeline,
     StageStepper,
     TrackingMetrics,
@@ -101,6 +106,18 @@ export default function ShowDocument({
         document.available_actions.length === 1 &&
         document.available_actions[0].value === 'resubmitted';
 
+    /*
+        Where Return may send it: the offices it has already been at
+        (client request, 2026-09-25 -- not only the one that filed it). The
+        originating office is chosen until somebody picks another, because
+        that is where a return always went before.
+    */
+    const returnOptions = document.return_options;
+    const defaultReturnTo =
+        returnOptions.find((option) => option.is_originating) ??
+        returnOptions[0] ??
+        null;
+
     const action = useForm<{
         action: string;
         to_office_ids: number[];
@@ -110,9 +127,12 @@ export default function ShowDocument({
         // The corrected document, attached to a Return or a Resubmit.
         file: File | null;
         replace_reason: string;
+        // Where a Return goes back to; '' means the default below.
+        return_to_office_id: number | '';
     }>({
         action: onlyResubmit ? 'resubmitted' : '',
         to_office_ids: [],
+        return_to_office_id: '',
         remarks: '',
         // Mirrors App\Enums\SignatureMethod. The pad reports `drawn` or
         // `uploaded` with every mark; a typed name has no canvas to come from.
@@ -243,6 +263,14 @@ export default function ShowDocument({
                 (value === 'resubmitted' || value === 'returned') &&
                 data.file !== null;
 
+            // A return names where it goes (2026-09-25). Read at submit time,
+            // like expected_movement_id, so the default always comes from the
+            // current props rather than a copy taken at first render.
+            const returnTo =
+                value === 'returned'
+                    ? data.return_to_office_id || defaultReturnTo?.id
+                    : undefined;
+
             // Only a forward that was actually signed carries the block. The
             // server reads a PRESENT signature_method as "this submit signs",
             // and asks the policy about it — so posting an empty one would
@@ -262,6 +290,7 @@ export default function ShowDocument({
                     nothing is simply the honest payload.
                 */
                 to_office_ids: forwarding ? data.to_office_ids : [],
+                ...(returnTo ? { return_to_office_id: returnTo } : {}),
                 ...(signing
                     ? {
                           signature_method: data.signature_method,
@@ -311,6 +340,12 @@ export default function ShowDocument({
     // Sends the folder back to the office that filed it, so it is the one
     // action on this panel that says what it will do before it is confirmed.
     const isReturn = action.data.action === 'returned';
+    const chosenReturn =
+        returnOptions.find(
+            (option) =>
+                option.id ===
+                (action.data.return_to_office_id || defaultReturnTo?.id),
+        ) ?? null;
 
     // A returned document's only way on, and the one that carries the fix.
     const isResubmit = action.data.action === 'resubmitted';
@@ -332,12 +367,16 @@ export default function ShowDocument({
     // A returned document reads "Pending" in lists, and "currently pending by"
     // would hide the one thing a reader needs: that it is waiting on a fix.
     const processingSummary = returnNotice
-        ? `The document was returned to ${document.originating_office ?? 'its originating office'} for correction, and is waiting to be resubmitted to ${returnNotice.returned_by_office ?? 'the office that returned it'}.`
+        ? `The document was returned to ${returnNotice.returned_to_office ?? document.originating_office ?? 'its originating office'} for correction, and is waiting to be resubmitted to ${returnNotice.returned_by_office ?? 'the office that returned it'}.`
         : !document.tracking.resting_office
           ? `The document is ${document.status_label.toLowerCase()}.`
           : document.tracking.is_open
             ? `The document is currently ${document.status_label.toLowerCase()} by ${document.tracking.resting_office}.`
-            : `The document was ${document.status_label.toLowerCase()} at ${document.tracking.resting_office}.`;
+            : `The document was ${document.status_label.toLowerCase()} at ${document.tracking.resting_office}.${
+                  document.tracking.turnaround
+                      ? ` Turnaround time: ${document.tracking.turnaround}.`
+                      : ''
+              }`;
 
     return (
         <>
@@ -358,15 +397,28 @@ export default function ShowDocument({
 
             <Link
                 href={documents.index()}
-                className="inline-flex items-center gap-1 text-sm font-bold text-white/90 transition hover:text-white"
+                className="inline-flex items-center gap-1 text-sm font-bold text-white/90 transition hover:text-white print:hidden"
             >
                 <ChevronLeft className="size-4" />
                 Back to Track Document
             </Link>
 
-            <div className="mt-4 flex flex-col gap-4">
-                {/* §10 Status Tracking, in the client's "View Documents" shape. */}
-                <section className="rounded-xl bg-white p-6 shadow-xl sm:p-8">
+            <div className="mt-4 flex flex-col gap-4 print:mt-0">
+                {/*
+                    §10 Status Tracking, in the client's "View Documents" shape.
+
+                    Printable as of 2026-09-24. The Print button uses the
+                    browser's own dialog, so "Save as PDF" comes free. Every
+                    `print:` class on this page serves that: the nav, the
+                    backdrop and the folded section below are dropped (the
+                    layout hides its own chrome), and this sheet prints edge to
+                    edge in its screen colours -- `print-color-adjust: exact`,
+                    or the browser strips the fills and the white-on-blue stage
+                    banner and the orange status pill print as blank boxes.
+                */}
+                <section className="rounded-xl bg-white p-6 shadow-xl sm:p-8 print:rounded-none print:p-0 print:shadow-none print:[print-color-adjust:exact]">
+                    <PrintMasthead />
+
                     {/*
                         The mark hangs in the gutter beside the rail, not inline
                         with the heading -- `mt-9` is what drops it off the
@@ -381,9 +433,22 @@ export default function ShowDocument({
                         <DocumentMark className="mt-9 hidden w-8 shrink-0 sm:block" />
 
                         <div className="min-w-0 flex-1">
-                            <h1 className="text-2xl font-bold text-navy">
-                                View Documents
-                            </h1>
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <h1 className="text-2xl font-bold text-navy">
+                                    View Documents
+                                </h1>
+
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => window.print()}
+                                    className="print:hidden"
+                                >
+                                    <Printer aria-hidden="true" />
+                                    Print
+                                </Button>
+                            </div>
 
                             {/*
                                 The rail starts further in than the heading
@@ -410,10 +475,12 @@ export default function ShowDocument({
                         because the reason is the first thing anybody opening
                         it needs -- including the office that returned it.
                     */}
+                    <AccessNotice document={document} />
+
                     {returnNotice && (
                         <div
                             role="status"
-                            className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 sm:mx-6 lg:mx-8 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200"
+                            className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 sm:mx-6 lg:mx-8 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200 print:mx-0"
                         >
                             <p className="font-bold">
                                 Returned for correction
@@ -433,13 +500,13 @@ export default function ShowDocument({
                             <p className="mt-2 text-xs">
                                 {canResubmit
                                     ? 'Under Actions below, attach the corrected document and press Resubmit.'
-                                    : `Waiting for ${document.originating_office ?? 'the originating office'} to correct and resubmit it.`}{' '}
+                                    : `Waiting for ${returnNotice.returned_to_office ?? document.originating_office ?? 'the office it was returned to'} to correct and resubmit it.`}{' '}
                                 It keeps the same control number and QR code.
                             </p>
                         </div>
                     )}
 
-                    <div className="mt-8 grid gap-6 rounded-lg border border-[#E4EAF2] p-6 sm:mx-6 lg:mx-8 lg:grid-cols-[minmax(0,4fr)_minmax(0,5fr)]">
+                    <div className="mt-8 grid gap-6 rounded-lg border border-[#E4EAF2] p-6 sm:mx-6 lg:mx-8 lg:grid-cols-[minmax(0,4fr)_minmax(0,5fr)] print:mx-0 print:break-inside-avoid">
                         <DocumentFacts document={document} />
 
                         <div className="lg:border-l lg:border-[#E4EAF2] lg:pl-4">
@@ -462,7 +529,7 @@ export default function ShowDocument({
                         places it on a @2xl CONTAINER query, and a half-width
                         column never fires it.
                     */}
-                    <div className="mt-6 rounded-lg border border-[#E4EAF2] p-6 sm:mx-6 lg:mx-8">
+                    <div className="mt-6 rounded-lg border border-[#E4EAF2] p-6 sm:mx-6 lg:mx-8 print:mx-0">
                         <ProgressTimeline
                             timeline={timeline}
                             summary={processingSummary}
@@ -482,7 +549,7 @@ export default function ShowDocument({
                     the QR label, routing, archiving, versions, signatures
                     and comments are all one click inside this.
                 */}
-                <details className="group" open={detailsOpen}>
+                <details className="group print:hidden" open={detailsOpen}>
                     <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-xl bg-white px-6 py-4 text-[15px] font-bold text-navy shadow-xl">
                         Actions, files, signatures and comments
                         <ChevronDown
@@ -687,6 +754,8 @@ export default function ShowDocument({
                             </section>
                         )}
 
+                        <BroadcastPanel document={document} />
+
                         {/* §9 Approval and routing */}
                         {/*
                     §16. Archiving is not a workflow action -- it applies once a
@@ -815,21 +884,95 @@ export default function ShowDocument({
                                             )}
 
                                         {isReturn && (
-                                            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200">
-                                                Returning sends this document
-                                                back to{' '}
-                                                {document.originating_office ??
-                                                    'the office that filed it'}{' '}
-                                                for correction. Say what needs
-                                                fixing below — the reason is
-                                                recorded on the document and the
-                                                submitter is notified. Offices
-                                                still queued on its route wait,
-                                                and it comes back to your office
-                                                once it is resubmitted, under
-                                                the same control number and QR
-                                                code.
-                                            </p>
+                                            <div className="grid gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200">
+                                                {/*
+                                                    Where it goes back to: any
+                                                    office it has already been
+                                                    at (2026-09-25), not only
+                                                    the one that filed it.
+                                                */}
+                                                <label
+                                                    htmlFor="return-to-office"
+                                                    className="text-sm font-medium"
+                                                >
+                                                    Return to
+                                                </label>
+                                                <select
+                                                    id="return-to-office"
+                                                    value={
+                                                        action.data
+                                                            .return_to_office_id ||
+                                                        defaultReturnTo?.id ||
+                                                        ''
+                                                    }
+                                                    disabled={action.processing}
+                                                    onChange={(event) =>
+                                                        action.setData(
+                                                            'return_to_office_id',
+                                                            Number(
+                                                                event.target
+                                                                    .value,
+                                                            ),
+                                                        )
+                                                    }
+                                                    className="h-9 w-full rounded-md border border-amber-300 bg-white px-3 text-sm text-navy"
+                                                >
+                                                    {returnOptions.map(
+                                                        (option) => (
+                                                            <option
+                                                                key={option.id}
+                                                                value={
+                                                                    option.id
+                                                                }
+                                                            >
+                                                                {option.name}
+                                                                {option.is_originating
+                                                                    ? ' (filed it)'
+                                                                    : ''}
+                                                                {option.has_staff
+                                                                    ? ''
+                                                                    : ' — no active accounts'}
+                                                            </option>
+                                                        ),
+                                                    )}
+                                                </select>
+                                                <InputError
+                                                    message={
+                                                        action.errors
+                                                            .return_to_office_id
+                                                    }
+                                                />
+                                                {chosenReturn &&
+                                                    !chosenReturn.has_staff && (
+                                                        <p className="text-xs font-medium">
+                                                            Nobody at this
+                                                            office has an active
+                                                            account, so nobody
+                                                            there could resubmit
+                                                            it.
+                                                        </p>
+                                                    )}
+                                                <p className="text-xs">
+                                                    Returning sends this
+                                                    document back to{' '}
+                                                    <span className="font-bold">
+                                                        {chosenReturn?.name ??
+                                                            'the office you choose'}
+                                                    </span>{' '}
+                                                    for correction — only
+                                                    offices it has already
+                                                    passed through are listed.
+                                                    Say what needs fixing below;
+                                                    the reason is recorded on
+                                                    the document and that office
+                                                    is notified. Offices still
+                                                    queued on its route wait,
+                                                    and it comes back to your
+                                                    office once it is
+                                                    resubmitted, under the same
+                                                    control number and QR code.
+                                                </p>
+                                            </div>
                                         )}
 
                                         {/*
@@ -868,7 +1011,8 @@ export default function ShowDocument({
                                                             attach it here. It
                                                             goes back to{' '}
                                                             <span className="font-medium text-navy">
-                                                                {document.originating_office ??
+                                                                {chosenReturn?.name ??
+                                                                    document.originating_office ??
                                                                     'the office that filed it'}
                                                             </span>{' '}
                                                             as the current

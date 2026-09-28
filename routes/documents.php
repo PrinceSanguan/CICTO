@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ArchiveController;
+use App\Http\Controllers\DocumentBroadcastController;
 use App\Http\Controllers\DocumentCommentController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\DocumentFileController;
@@ -9,6 +10,8 @@ use App\Http\Controllers\DocumentSignatureController;
 use App\Http\Controllers\DocumentWorkflowController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ScanController;
+use App\Http\Controllers\SecurityPinController;
+use App\Http\Middleware\RequireSecurityPin;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -47,7 +50,36 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('documents', [DocumentController::class, 'index'])->name('documents.index');
     Route::get('documents/create', [DocumentController::class, 'create'])->name('documents.create');
     Route::post('documents', [DocumentController::class, 'store'])->name('documents.store');
-    Route::get('documents/{document}', [DocumentController::class, 'show'])->name('documents.show');
+    // Asks for the Security PIN itself when the session is locked -- see
+    // DocumentController::show. The routes below that act on an open document
+    // carry RequireSecurityPin instead, so none of them work around the prompt.
+    Route::get('documents/{document}', [DocumentController::class, 'show'])
+        ->middleware('cache.headers:no_store;private')
+        ->name('documents.show');
+
+    /*
+    | The Security PIN (client request, 2026-09-25): each person's own 4-digit
+    | PIN, asked for before a document is shown. Throttled on top of the
+    | five-tries sign-out in verify(), and each with its OWN bucket (the third
+    | throttle argument): a bare `throttle:N,1` is keyed on the user alone, so
+    | every such route shares one counter -- the page's heartbeat would spend
+    | the same allowance as "Forgot PIN?" and Settings' password change.
+    */
+    Route::post('security-pin', [SecurityPinController::class, 'store'])
+        ->middleware('throttle:10,1,security-pin-store')
+        ->name('security-pin.store');
+    Route::post('security-pin/verify', [SecurityPinController::class, 'verify'])
+        ->middleware('throttle:10,1,security-pin-verify')
+        ->name('security-pin.verify');
+    Route::put('security-pin', [SecurityPinController::class, 'update'])
+        ->middleware('throttle:6,1,security-pin-update')
+        ->name('security-pin.update');
+    Route::post('security-pin/lock', [SecurityPinController::class, 'lock'])
+        ->name('security-pin.lock');
+    Route::post('security-pin/heartbeat', [SecurityPinController::class, 'heartbeat'])
+        // One a minute per open tab; the allowance leaves room for several.
+        ->middleware('throttle:30,1,security-pin-heartbeat')
+        ->name('security-pin.heartbeat');
 
     // Renamed from qr.svg, which was served `immutable` for a year: browsers
     // never re-request a URL cached that way, so only a new path evicts the
@@ -56,15 +88,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // §9 approve / reject / return / forward / complete
     Route::post('documents/{document}/transitions', [DocumentWorkflowController::class, 'store'])
+        ->middleware(RequireSecurityPin::class)
         ->name('documents.transitions.store');
 
     // scopeBindings() is load-bearing: without it {file} resolves globally and
     // an attacker can pair a visible document with an invisible file id, so the
     // policy would authorise against the wrong parent document.
     Route::post('documents/{document}/files', [DocumentFileController::class, 'store'])
+        ->middleware(RequireSecurityPin::class)
         ->name('documents.files.store');
     Route::get('documents/{document}/files/{file}/download', [DocumentFileController::class, 'download'])
         ->scopeBindings()
+        ->middleware(RequireSecurityPin::class)
         ->name('documents.files.download');
 
     // Reading a version on screen rather than taking a copy away. Same
@@ -72,6 +107,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // for why serving an upload INLINE needs more than the download path does.
     Route::get('documents/{document}/files/{file}/preview', [DocumentFileController::class, 'preview'])
         ->scopeBindings()
+        ->middleware(RequireSecurityPin::class)
         ->name('documents.files.preview');
 
     /*
@@ -84,6 +120,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
      */
     Route::get('documents/{document}/files/{file}/signable.pdf', [DocumentFileController::class, 'signable'])
         ->scopeBindings()
+        ->middleware(RequireSecurityPin::class)
         ->name('documents.files.signable');
 
     // §15 digital signatures.
@@ -94,6 +131,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // drawn mark away -- stalled that. The signed-in session is the identity
     // check; SignDocument still snapshots signer, office and IP address.
     Route::post('documents/{document}/signatures', [DocumentSignatureController::class, 'store'])
+        ->middleware(RequireSecurityPin::class)
         ->name('documents.signatures.store');
 
     /*
@@ -103,19 +141,30 @@ Route::middleware(['auth', 'verified'])->group(function () {
      */
     Route::delete('documents/{document}/signatures/{signature}', [DocumentSignatureController::class, 'destroy'])
         ->scopeBindings()
+        ->middleware(RequireSecurityPin::class)
         ->name('documents.signatures.destroy');
 
     Route::get('documents/{document}/signatures/{signature}/certificate', [DocumentSignatureController::class, 'certificate'])
         ->scopeBindings()
+        ->middleware(RequireSecurityPin::class)
         ->name('documents.signatures.certificate');
 
+    // "Broadcast to ALL offices" (client, 2026-09-25): every office is told
+    // and may read it; the folder does not move. Once per document.
+    Route::post('documents/{document}/broadcast', [DocumentBroadcastController::class, 'store'])
+        ->middleware([RequireSecurityPin::class, 'throttle:6,1,document-broadcast'])
+        ->name('documents.broadcast');
+
     Route::post('documents/{document}/comments', [DocumentCommentController::class, 'store'])
+        ->middleware(RequireSecurityPin::class)
         ->name('documents.comments.store');
     Route::patch('documents/{document}/comments/{comment}', [DocumentCommentController::class, 'update'])
         ->scopeBindings()
+        ->middleware(RequireSecurityPin::class)
         ->name('documents.comments.update');
     Route::delete('documents/{document}/comments/{comment}', [DocumentCommentController::class, 'destroy'])
         ->scopeBindings()
+        ->middleware(RequireSecurityPin::class)
         ->name('documents.comments.destroy');
 
     // §12 notifications
@@ -151,8 +200,10 @@ Route::get('s/{token}', [ScanController::class, 'show'])
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('archive', [ArchiveController::class, 'index'])->name('archive.index');
     Route::post('documents/{document}/archive', [ArchiveController::class, 'store'])
+        ->middleware(RequireSecurityPin::class)
         ->name('documents.archive');
     Route::delete('documents/{document}/archive', [ArchiveController::class, 'destroy'])
+        ->middleware(RequireSecurityPin::class)
         ->name('documents.restore');
 });
 

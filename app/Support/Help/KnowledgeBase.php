@@ -100,7 +100,7 @@ final class KnowledgeBase
                     ],
                     [
                         'title' => 'Returned',
-                        'body' => 'An office sent the document back to the office that filed it, to be corrected. The reason is required, so it is always in the document history, and the originating office and the person who submitted it are notified. In the document list it reads **Returned**, and the Status filter on Track Documents finds it under that name. To fix it, open the document, attach the corrected file, and press **Resubmit**: it goes straight back to the office that returned it, and any offices still queued on its route carry on after that. It stays the same document throughout -- the same control number, the same QR label and one unbroken history. Only an office Admin can return a document, and only while it is with their office. The office returning it can also attach a corrected copy in the same step; it becomes the current version, and the originating office only needs to check it and press **Resubmit**. Documents refused under the old Reject button also read **Returned** in the list, but that refusal was final: they cannot be resubmitted, so file the corrected document again.',
+                        'body' => 'An office sent the document back to be corrected -- to the office that filed it, or to another office it had already passed through, whichever the returning office chose under **Return to**. The reason is required, so it is always in the document history, and the office it was sent back to is notified (and the person who submitted it, when it went back to the office that filed it). In the document list it reads **Returned**, and the Status filter on Track Documents finds it under that name. To fix it, open the document, attach the corrected file, and press **Resubmit**: it goes straight back to the office that returned it, and any offices still queued on its route carry on after that. It stays the same document throughout -- the same control number, the same QR label and one unbroken history. Only an office Admin can return a document, and only while it is with their office. The office returning it can also attach a corrected copy in the same step; it becomes the current version, and the office it was sent back to only needs to check it and press **Resubmit**. Documents refused under the old Reject button also read **Returned** in the list, but that refusal was final: they cannot be resubmitted, so file the corrected document again.',
                     ],
                     [
                         // The design's fifth status is "Released". No screen in
@@ -114,6 +114,48 @@ final class KnowledgeBase
                 'closing' => [
                     'label' => null,
                     'text' => 'Always check the status regularly for updates. The colour on a status pill always matches its wording, so two documents reading Pending will always look the same.',
+                ],
+            ],
+            [
+                // The route templates, client request of 2026-09-25.
+                'slug' => 'where-your-document-goes',
+                'title' => 'Where Your Document Goes',
+                'summary' => 'Automatic and Manual Routes',
+                'category' => 'tracking',
+                'icon' => 'file-text',
+                'featured' => false,
+                'intro' => 'When you submit a document, the system suggests the offices it should pass through, based on its document type. You can use the suggestion as it is, adjust it, or choose the offices yourself.',
+                'steps' => [
+                    'On **Submit Document**, choose the **Document Type**. With **Automatic** selected (the default), the suggested route appears under **Department**, numbered in the order the document will travel. Your own office is always number 1, because the document is registered under it.',
+                    'Some steps ask you to choose — for example the concerned office for a Memorandum. Pick the office from the list on that step.',
+                    'Steps that only apply sometimes, such as the City Accountant on a Travel Order with allowance, have an **Include** box. Tick it when the step applies.',
+                    'The suggested route can be changed right there: press **✕** to take an office off, the arrows to move it earlier or later, and **Add an office to the route** to add one. **Reset to suggested** puts the type\'s route back. To build a route from nothing instead, switch to **Manual**.',
+                ],
+                'sections' => [
+                    [
+                        'title' => 'The same office twice',
+                        'body' => 'A route can come back to an office — a Disbursement Voucher goes to the Treasury before BAC and again at the end for final release. What a route cannot do is list the same office twice in a row, because the document would already be there; the form marks such a step **Already there** and skips it.',
+                    ],
+                    [
+                        'title' => 'The BAC and its members',
+                        'body' => 'On a Disbursement Voucher the route goes to the Bids and Awards Committee and then to each member of the committee in turn — the City Accountant, City Planning, the Civil Registrar, CENRO and the City Assessor — before the City Mayor. Each member has its own **Include** box; untick one that does not take part.',
+                    ],
+                    [
+                        'title' => 'Confidential documents',
+                        'body' => 'A **Confidential** document goes straight to the City Mayor or HRMO — choose which — the moment it is submitted. Nobody else at your office has to receive it, and nobody else can see it: only you and the people of the office it was sent to. Not even a Super Admin. From there it can only be sent between the City Mayor and HRMO. Its title is also hidden on the public QR page.',
+                    ],
+                    [
+                        'title' => 'Sending to all offices (Broadcast)',
+                        'body' => 'An **Executive Order** or a **Memorandum Circular** has a **Broadcast** step. When the document reaches that point, an Admin of the office holding it (or of the office that issued it) opens the document, goes to **Broadcast to all offices** and presses **Broadcast**. Every office gets a notification and can open and download it, while the folder carries on along its route. Offices that only received the broadcast can read it but cannot receive, sign, comment on or archive it. A document is broadcast once, and it cannot be undone.',
+                    ],
+                    [
+                        'title' => 'Steps the system does not do',
+                        'body' => 'A few routes include a step shown in italics, such as releasing a clearance to the person who asked for it or sending a reply out. Those happen outside the system.',
+                    ],
+                ],
+                'closing' => [
+                    'label' => 'Tip',
+                    'text' => 'An office marked **No account yet** has nobody who can receive the document. It can still be on the route, but the document will wait there until an administrator creates an account for that office.',
                 ],
             ],
             [
@@ -219,6 +261,65 @@ final class KnowledgeBase
                  * not a workaround for the absence of one.
                  */
                 'unavailable_without_mail' => 'This server cannot send email yet, so the steps below will not work: no reset link can be sent. Ask a Super Admin to set a new password for you instead — they can do it from Manage Users while you wait — then change it yourself under Settings > Security once you are signed in.',
+            ],
+            [
+                // The emailed sign-in code, client request of 2026-09-25.
+                'slug' => 'your-sign-in-code',
+                'title' => 'Your Sign-In Code',
+                'summary' => 'The 6-Digit Code Emailed When You Log In',
+                'category' => 'login',
+                'icon' => 'lock',
+                'featured' => false,
+                'intro' => 'After you enter your email and password, the system emails you a 6-digit code. Your account opens only after you enter it, so a password alone is not enough to get in.',
+                'steps' => [
+                    'Enter your email and password on the Login page and press **Login**.',
+                    'Open your email and find the message **[CICTO] Your sign-in code**.',
+                    'Type the 6-digit code on the **Enter your sign-in code** screen. It signs you in as soon as the last digit is typed.',
+                ],
+                'sections' => [
+                    [
+                        'title' => 'If the code does not arrive',
+                        'body' => 'Check your Spam folder, then press **Send a new code** (it becomes available after a minute). Only the newest code works. A code expires after 10 minutes.',
+                    ],
+                    [
+                        'title' => 'Wrong code',
+                        'body' => 'After five wrong codes the sign-in is cancelled and you start again from your password. If you never asked for a code, somebody else knows your password — change it under **Settings > Security**.',
+                    ],
+                ],
+                'closing' => [
+                    'label' => 'Tip',
+                    'text' => 'Never share the code with anyone, not even staff who say they are from CICTO. Nobody from the office will ever ask for it.',
+                ],
+            ],
+            [
+                // The Security PIN, client request of 2026-09-25.
+                'slug' => 'your-security-pin',
+                'title' => 'Your Security PIN',
+                'summary' => 'The 4-Digit PIN for Opening Documents',
+                'category' => 'login',
+                'icon' => 'lock',
+                'featured' => false,
+                'intro' => 'Every document is protected by a 4-digit Security PIN that only you know. It stops anybody else from reading your documents on a computer you left signed in.',
+                'steps' => [
+                    'The first time you open a document, a **Create your Security PIN** window appears. Choose four digits, type them again to confirm, and press **Save PIN and open**.',
+                    'From then on, enter your PIN whenever you open a document. The document opens as soon as the fourth digit is typed.',
+                    'If nobody touches the computer for a few minutes, the document locks itself and asks for the PIN again.',
+                    'To change your PIN, open **Settings > Security**, enter your password, and choose a new PIN.',
+                ],
+                'sections' => [
+                    [
+                        'title' => 'If you forget your PIN',
+                        'body' => 'Press **Forgot PIN?** in the PIN window, enter the password you sign in with, and choose a new PIN. If you have forgotten your password too, ask a Super Admin to reset your PIN from Manage Users; you will be asked to create a new one the next time you open a document.',
+                    ],
+                    [
+                        'title' => 'Wrong PIN',
+                        'body' => 'After five wrong PINs in a row you are signed out, so nobody can simply try every number. Sign in again with your password and carry on, or use **Forgot PIN?**.',
+                    ],
+                ],
+                'closing' => [
+                    'label' => 'Tip',
+                    'text' => 'Avoid easy PINs such as 1234 or 1111 — the system will not accept them. Never share your PIN, not even with your office mates; the PIN is what shows that it was you who opened a document.',
+                ],
             ],
             [
                 'slug' => 'common-errors',

@@ -189,10 +189,10 @@ class DemoDataCommandTest extends TestCase
     {
         app()->detectEnvironment(fn () => 'production');
 
-        // The seeder object directly, not $this->seed(): db:seed asks for
-        // confirmation in production, and the prompt is not what is under test
-        // here -- the guard inside DatabaseSeeder::run() is.
-        $this->app->make(DatabaseSeeder::class)->run();
+        // --force, as a deploy hook runs it: db:seed asks for confirmation in
+        // production, and the prompt is not what is under test here -- the
+        // guard inside DatabaseSeeder::run() is.
+        $this->artisan('db:seed', ['--class' => DatabaseSeeder::class, '--force' => true])->assertSuccessful();
 
         $this->assertSame(0, User::query()->count());
         $this->assertGreaterThan(0, Office::query()->count());

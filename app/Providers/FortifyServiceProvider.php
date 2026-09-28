@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Actions\Fortify\CreateNewUser;
+use App\Actions\Fortify\RedirectToLoginOtp;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Http\Responses\LogoutResponse;
 use App\Http\Responses\RoleAwareLoginResponse;
@@ -15,8 +16,13 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
+use Laravel\Fortify\Actions\AttemptToAuthenticate;
+use Laravel\Fortify\Actions\CanonicalizeUsername;
+use Laravel\Fortify\Actions\EnsureLoginIsNotThrottled;
+use Laravel\Fortify\Actions\PrepareAuthenticatedSession;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
 use Laravel\Fortify\Contracts\LogoutResponse as LogoutResponseContract;
+use Laravel\Fortify\Contracts\RedirectsIfTwoFactorAuthenticatable;
 use Laravel\Fortify\Contracts\RegisterResponse as RegisterResponseContract;
 use Laravel\Fortify\Contracts\TwoFactorLoginResponse as TwoFactorLoginResponseContract;
 use Laravel\Fortify\Features;
@@ -61,6 +67,21 @@ class FortifyServiceProvider extends ServiceProvider
     {
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
         Fortify::createUsersUsing(CreateNewUser::class);
+
+        /*
+         * Fortify's own login pipeline, restated with ONE step added: the
+         * emailed sign-in code (client request, 2026-09-25). Everything else
+         * is Fortify's default in Fortify's order, so a wrong password, the
+         * throttle and the authenticator-app challenge behave as before.
+         */
+        Fortify::authenticateThrough(fn (Request $request) => array_filter([
+            config('fortify.limiters.login') ? null : EnsureLoginIsNotThrottled::class,
+            config('fortify.lowercase_usernames') ? CanonicalizeUsername::class : null,
+            Features::enabled(Features::twoFactorAuthentication()) ? RedirectsIfTwoFactorAuthenticatable::class : null,
+            RedirectToLoginOtp::class,
+            AttemptToAuthenticate::class,
+            PrepareAuthenticatedSession::class,
+        ]));
 
         // §4's design ends the session on a confirmation screen rather than the
         // landing page, which looks identical whether or not sign-out worked.
@@ -131,6 +152,11 @@ class FortifyServiceProvider extends ServiceProvider
     {
         RateLimiter::for('two-factor', function (Request $request) {
             return Limit::perMinute(5)->by($request->session()->get('login.id'));
+        });
+
+        // Per browser session, not per IP -- see routes/web.php.
+        RateLimiter::for('login-otp', function (Request $request) {
+            return Limit::perMinute(10)->by($request->session()->getId());
         });
 
         RateLimiter::for('login', function (Request $request) {

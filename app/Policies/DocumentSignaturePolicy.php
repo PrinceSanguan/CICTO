@@ -54,7 +54,7 @@ class DocumentSignaturePolicy
             return false;
         }
 
-        if (! $this->documents->view($user, $document)) {
+        if (! $this->documents->involved($user, $document)) {
             return false;
         }
 

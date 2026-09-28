@@ -12,7 +12,7 @@ import type { IdNameOption } from '@/types';
  * on `!office.can_receive` would paint every office in every caller that does
  * not ship the flag, which is the fastest way to teach people to ignore it.
  */
-const unstaffed = (office: IdNameOption): boolean =>
+export const unstaffed = (office: IdNameOption): boolean =>
     office.can_receive === false;
 
 const SELECT =
@@ -49,6 +49,7 @@ export function OfficeRoutePicker({
     hint = defaultHint,
     ordered = true,
     lockFirst = false,
+    allowRepeats = false,
 }: {
     offices: IdNameOption[];
     /** Office ids in visiting order. */
@@ -82,12 +83,28 @@ export function OfficeRoutePicker({
      * the server; this only stops the form offering it.
      */
     lockFirst?: boolean;
+    /**
+     * An office may come round again, just not straight after itself.
+     *
+     * §5's Department field since the route templates (client request,
+     * 2026-09-25): a Disbursement Voucher visits Treasury at step 4 and again
+     * at step 9, and a route built by hand may come back to an office too.
+     * "Send to Another Office" leaves it off -- a re-route names each office
+     * once.
+     */
+    allowRepeats?: boolean;
 }) {
     const chosen = value
         .map((id) => offices.find((office) => office.id === id))
         .filter((office): office is IdNameOption => office !== undefined);
 
-    const remaining = offices.filter((office) => !value.includes(office.id));
+    const last = chosen.at(-1);
+
+    // With repeats, everything but the office the list already ends on: the
+    // folder cannot be sent on to the desk it would already be at.
+    const remaining = allowRepeats
+        ? offices.filter((office) => office.id !== last?.id)
+        : offices.filter((office) => !value.includes(office.id));
 
     /*
      * THE ROUTE IS WHAT IS ON SCREEN.
@@ -106,7 +123,7 @@ export function OfficeRoutePicker({
      * any interaction the submitted ids are exactly the rows on screen.
      */
     const commit = (next: IdNameOption[]) =>
-        onChange(next.map((office) => office.id));
+        onChange(collapse(next).map((office) => office.id));
 
     /*
      * And close the window where the user changes nothing: reconcile as soon as
@@ -138,17 +155,41 @@ export function OfficeRoutePicker({
     // The lowest index a row may move up to.
     const top = firstIsLocked ? 1 : 0;
 
-    const move = (from: number, to: number) => {
+    const moved = (from: number, to: number): IdNameOption[] | null => {
         if (to < top || from < top || to >= chosen.length) {
-            return;
+            return null;
         }
 
         const next = [...chosen];
-        const [moved] = next.splice(from, 1);
+        const [row] = next.splice(from, 1);
 
-        next.splice(to, 0, moved);
-        commit(next);
+        next.splice(to, 0, row);
+
+        // A move that would put an office straight after itself is not
+        // offered, rather than performed and then silently merged away.
+        return collapse(next).length === next.length ? next : null;
     };
+
+    const move = (from: number, to: number) => {
+        const next = moved(from, to);
+
+        if (next !== null) {
+            commit(next);
+        }
+    };
+
+    /*
+     * Keys that survive a repeat: the second Treasury on a route is
+     * "Treasury, 2nd time", not a clash with the first.
+     */
+    const seen = new Map<number, number>();
+    const rowKeys = chosen.map((office) => {
+        const nth = (seen.get(office.id) ?? 0) + 1;
+
+        seen.set(office.id, nth);
+
+        return `${office.id}:${nth}`;
+    });
 
     /*
      * min-w-0 ON EVERY BOX DOWN TO THE SELECT, and it is load-bearing.
@@ -211,6 +252,10 @@ export function OfficeRoutePicker({
                         <option key={office.id} value={office.id}>
                             {office.name}
                             {unstaffed(office) ? ' — no account yet' : ''}
+                            {/* A repeat is allowed, so it has to be deliberate. */}
+                            {allowRepeats && value.includes(office.id)
+                                ? ' — again'
+                                : ''}
                         </option>
                     ))}
                 </select>
@@ -220,7 +265,7 @@ export function OfficeRoutePicker({
                 <ListTag className="grid min-w-0 gap-2">
                     {chosen.map((office, index) => (
                         <li
-                            key={office.id}
+                            key={rowKeys[index]}
                             className="flex min-w-0 items-center gap-2 rounded-md border border-[#E4EAF2] bg-[#F7FAFF] px-3 py-2"
                         >
                             <span
@@ -290,7 +335,9 @@ export function OfficeRoutePicker({
                                                 // Row 2 cannot climb over a
                                                 // locked row 1 either.
                                                 disabled={
-                                                    disabled || index <= top
+                                                    disabled ||
+                                                    moved(index, index - 1) ===
+                                                        null
                                                 }
                                                 aria-label={`Move ${office.name} earlier`}
                                                 onClick={() =>
@@ -307,7 +354,8 @@ export function OfficeRoutePicker({
                                                 className="size-7 shrink-0"
                                                 disabled={
                                                     disabled ||
-                                                    index === chosen.length - 1
+                                                    moved(index, index + 1) ===
+                                                        null
                                                 }
                                                 aria-label={`Move ${office.name} later`}
                                                 onClick={() =>
@@ -326,11 +374,13 @@ export function OfficeRoutePicker({
                                         className="size-7 shrink-0"
                                         disabled={disabled}
                                         aria-label={`Remove ${office.name}`}
+                                        // By position, not by id: with
+                                        // repeats, removing the second
+                                        // Treasury must leave the first.
                                         onClick={() =>
                                             commit(
                                                 chosen.filter(
-                                                    (row) =>
-                                                        row.id !== office.id,
+                                                    (_, row) => row !== index,
                                                 ),
                                             )
                                         }
@@ -370,28 +420,56 @@ export function OfficeRoutePicker({
                 made in a minute. What is not allowed any more is finding out
                 three hops later.
             */}
-            {chosen.some(unstaffed) && (
-                <p
-                    role="status"
-                    className="flex items-start gap-1.5 rounded-md border border-[#F0D7B6] bg-[#FDF7EF] px-3 py-2 text-xs text-[#8A5219]"
-                >
-                    <TriangleAlert
-                        className="mt-0.5 size-3.5 shrink-0"
-                        aria-hidden="true"
-                    />
-                    <span>
-                        {formatList(
-                            chosen.filter(unstaffed).map((o) => o.name),
-                        )}{' '}
-                        {chosen.filter(unstaffed).length === 1
-                            ? 'has no account yet, so nobody there can receive the document'
-                            : 'have no accounts yet, so nobody there can receive the document'}
-                        . It will arrive and wait until an administrator creates
-                        one — anything queued behind it waits too.
-                    </span>
-                </p>
-            )}
+            <UnstaffedWarning offices={chosen} />
         </div>
+    );
+}
+
+/**
+ * Stated before the send, for every office on the route nobody can receive
+ * for. Nothing when there are none.
+ */
+export function UnstaffedWarning({ offices }: { offices: IdNameOption[] }) {
+    // Each office once, however many times the route comes back to it.
+    const names = [
+        ...new Set(offices.filter(unstaffed).map((office) => office.name)),
+    ];
+
+    if (names.length === 0) {
+        return null;
+    }
+
+    return (
+        <p
+            role="status"
+            className="flex items-start gap-1.5 rounded-md border border-[#F0D7B6] bg-[#FDF7EF] px-3 py-2 text-xs text-[#8A5219]"
+        >
+            <TriangleAlert
+                className="mt-0.5 size-3.5 shrink-0"
+                aria-hidden="true"
+            />
+            <span>
+                {formatList(names)}{' '}
+                {names.length === 1
+                    ? 'has no account yet, so nobody there can receive the document'
+                    : 'have no accounts yet, so nobody there can receive the document'}
+                . It will arrive and wait until an administrator creates one —
+                anything queued behind it waits too.
+            </span>
+        </p>
+    );
+}
+
+/**
+ * An office straight after itself is one stop -- the folder is already on
+ * that desk. Mirrors RoutePlan::collapse on the server.
+ */
+export function collapse<T extends number | { id: number }>(route: T[]): T[] {
+    const id = (entry: T): number =>
+        typeof entry === 'number' ? entry : entry.id;
+
+    return route.filter(
+        (entry, index) => index === 0 || id(entry) !== id(route[index - 1]),
     );
 }
 

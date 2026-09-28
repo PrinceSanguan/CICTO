@@ -3,6 +3,9 @@
 namespace Tests;
 
 use App\Models\AppSetting;
+use App\Models\User;
+use App\Support\SecurityPin;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Laravel\Fortify\Features;
 
@@ -22,6 +25,38 @@ abstract class TestCase extends BaseTestCase
         parent::setUp();
 
         AppSetting::flushMemo();
+    }
+
+    /**
+     * Sign in AND unlock the Security PIN, as a person who has just entered it.
+     *
+     * The PIN (2026-09-25) stands in front of every document page, so without
+     * this every test that opens a document would be testing the prompt
+     * instead. Tests OF the prompt start from a locked session with
+     * actingAsLocked().
+     */
+    public function be(Authenticatable $user, $guard = null)
+    {
+        parent::be($user, $guard);
+
+        if ($user instanceof User) {
+            $this->withSession([SecurityPin::SESSION_KEY => [
+                'user_id' => $user->id,
+                'at' => now()->getTimestamp(),
+            ]]);
+        }
+
+        return $this;
+    }
+
+    /** Signed in, Security PIN not yet entered in this session. */
+    protected function actingAsLocked(User $user): static
+    {
+        parent::be($user);
+
+        $this->app['session']->forget(SecurityPin::SESSION_KEY);
+
+        return $this;
     }
 
     protected function skipUnlessFortifyHas(string $feature, ?string $message = null): void

@@ -15,6 +15,12 @@ class DocumentCommentPolicy
             return false;
         }
 
+        // Nor between every office a document was broadcast to: reading an
+        // Executive Order is not a seat in the discussion behind it.
+        if ($comment->is_internal && ! $this->documents->involved($user, $comment->document)) {
+            return false;
+        }
+
         // Internal notes stay between staff -- the submitter must not read the
         // office's private deliberation about their own document.
         if ($comment->is_internal && $comment->document->created_by_id === $user->id && ! $user->isAdmin() && ! $user->isSuperAdmin()) {

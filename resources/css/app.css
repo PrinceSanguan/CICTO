@@ -325,3 +325,27 @@ html.cicto-landing {
 html[data-force-light]:has(.cicto-auth) {
     background-color: #2d6fcb; /* --color-brand */
 }
+
+/* ==========================================================================
+   Printing (added 2026-09-24, for the View Documents sheet)
+
+   The layout and the page hide their own chrome with `print:` utilities. What
+   is here is what no page owns: the page box, and the toast stack, which is
+   fixed to the viewport and would otherwise print over the sheet if a toast
+   happened to be up when somebody pressed Print.
+   ========================================================================== */
+@page {
+    margin: 12mm;
+}
+
+@media print {
+    [data-sonner-toaster] {
+        display: none !important;
+    }
+
+    /* A chart tooltip left open by the mouse (Reports) is a hover state, not
+       part of the figure -- it printed as a stray box over the pie. */
+    .recharts-tooltip-wrapper {
+        display: none !important;
+    }
+}

@@ -94,8 +94,11 @@ class AppServiceProvider extends ServiceProvider
     {
         Date::use(CarbonImmutable::class);
 
+        // migrate:fresh and friends wipe every document; production refuses
+        // them unless CICTO_ALLOW_DATABASE_WIPE is set for that one run. See
+        // config/cicto.php.
         DB::prohibitDestructiveCommands(
-            app()->isProduction(),
+            app()->isProduction() && ! config('cicto.allow_database_wipe'),
         );
 
         Password::defaults(fn (): ?Password => app()->isProduction()

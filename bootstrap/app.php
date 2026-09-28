@@ -29,6 +29,14 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    /*
+     * Listener auto-discovery OFF. AppServiceProvider registers every listener
+     * explicitly, and discovery was registering DispatchDocumentNotifications a
+     * SECOND time, so it ran twice per transition. The bell hid that -- its
+     * unique dedupe key swallowed the second insert -- but notification emails
+     * (2026-09-24) went out in pairs. `php artisan event:list` shows it once now.
+     */
+    ->withEvents(discover: false)
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 

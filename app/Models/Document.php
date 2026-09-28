@@ -40,6 +40,9 @@ use Illuminate\Support\Carbon;
  * @property string|null $submission_group_id
  * @property DocumentStatus $status
  * @property DocumentPriority $priority
+ * @property bool $is_confidential
+ * @property Carbon|null $broadcast_at
+ * @property int|null $broadcast_by_id
  * @property Carbon|null $due_at
  * @property Carbon|null $completed_at
  * @property Carbon|null $deadline_warned_at
@@ -73,6 +76,8 @@ class Document extends Model
             'deadline_warned_at' => 'datetime',
             'overdue_notified_at' => 'datetime',
             'archived_at' => 'datetime',
+            'is_confidential' => 'boolean',
+            'broadcast_at' => 'datetime',
         ];
     }
 
@@ -105,6 +110,12 @@ class Document extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_id');
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function broadcastBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'broadcast_by_id');
     }
 
     /** @return BelongsTo<User, $this> */
@@ -245,6 +256,23 @@ class Document extends Model
         return (int) $leg->arrived_at->diffInMinutes(Deadlines::now());
     }
 
+    /**
+     * Turnaround time: filed to completed, in whole minutes. Null until the
+     * document is completed.
+     *
+     * Measured from created_at, not from the first leg's arrival, so it is the
+     * same span §19's "average processing time" report averages (see
+     * DocumentStats) and a single document never disagrees with the chart.
+     */
+    public function turnaroundMinutes(): ?int
+    {
+        if ($this->completed_at === null || $this->created_at === null) {
+            return null;
+        }
+
+        return (int) $this->created_at->diffInMinutes($this->completed_at);
+    }
+
     public function isArchived(): bool
     {
         return $this->archived_at !== null;
@@ -298,6 +326,56 @@ class Document extends Model
         $holder = $this->openMovement?->to_office_id;
 
         return $last !== null && $holder !== null && $holder === $last->office_id;
+    }
+
+    /**
+     * Where RETURN may send this document (client request, 2026-09-25).
+     *
+     * It used to go to the originating office and nowhere else. Now the office
+     * returning it chooses, from the offices the document has actually been at
+     * -- "naka depende sa mga office na nadaanan na ng document". Every leg's
+     * destination is an office that held the folder, the genesis leg's being
+     * the originating office, so that column is the whole history.
+     *
+     * In the order the document first reached them, the originating office
+     * first -- it is the default, and where a return always went before. Never
+     * the office holding it now (returning to your own desk parks it in
+     * `returned` with its resubmit pointing back at the same desk), and never a
+     * deactivated office, which nobody could resubmit from.
+     *
+     * @return Collection<int, Office>
+     */
+    public function returnDestinations(): Collection
+    {
+        $legs = $this->relationLoaded('movements')
+            ? $this->movements->sortBy('sequence')
+            : $this->movements()->orderBy('sequence')->get(['id', 'sequence', 'to_office_id']);
+
+        $holder = $this->openMovement?->to_office_id;
+
+        $ids = collect([$this->originating_office_id])
+            ->merge($legs->pluck('to_office_id'))
+            ->filter()
+            ->map(static fn ($id): int => (int) $id)
+            ->unique()
+            ->reject(static fn (int $id): bool => $id === $holder)
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return new Collection;
+        }
+
+        $offices = Office::query()
+            ->whereKey($ids->all())
+            ->where('is_active', true)
+            ->get()
+            ->keyBy('id');
+
+        return new Collection($ids
+            ->map(static fn (int $id): ?Office => $offices->get($id))
+            ->filter()
+            ->values()
+            ->all());
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Listeners;
 use App\Enums\MovementAction;
 use App\Enums\NotificationType;
 use App\Events\DocumentTransitioned;
+use App\Services\DocumentMailer;
 use App\Services\NotificationWriter;
 use Illuminate\Contracts\Events\ShouldHandleEventsAfterCommit;
 use Illuminate\Support\Facades\Log;
@@ -24,7 +25,10 @@ use Illuminate\Support\Facades\Log;
  */
 class DispatchDocumentNotifications implements ShouldHandleEventsAfterCommit
 {
-    public function __construct(private readonly NotificationWriter $writer) {}
+    public function __construct(
+        private readonly NotificationWriter $writer,
+        private readonly DocumentMailer $mailer,
+    ) {}
 
     public function handle(DocumentTransitioned $event): void
     {
@@ -85,13 +89,30 @@ class DispatchDocumentNotifications implements ShouldHandleEventsAfterCommit
             movement: $movement,
             except: $event->actor,
         );
+
+        // The same arrival, by email (2026-09-24). After the bell, so a mail
+        // problem can never cost anybody their in-app notification.
+        $this->mailer->send(
+            type: $type,
+            document: $event->document,
+            movement: $movement,
+            actor: $event->actor,
+            officeId: $movement->to_office_id,
+        );
     }
 
     /**
      * A return (and, on older documents, a rejection) notifies the people who
-     * FILED the document, not merely the office the folder lands at.
+     * have to act on it.
      *
-     * A return moves the folder to the originating office, so the arrival rule
+     * SINCE 2026-09-25 a return goes to whichever office the returning office
+     * chose, from the offices the document has been at. That office is the one
+     * to tell: it holds the folder and it resubmits. The submitter is told as
+     * well only when it came back to the ORIGINATING office -- the case this
+     * was written for, below -- because then they are the one who fixes it; a
+     * return to an office in the middle of the trip is that office's to handle.
+     *
+     * A return to the originating office moves the folder there, so the arrival rule
      * would reach that office anyway -- but the person who has to upload the
      * correction is the submitter, and a clerk can file against an office they
      * do not belong to. So it goes to the ORIGINATING office plus the submitter
@@ -109,15 +130,22 @@ class DispatchDocumentNotifications implements ShouldHandleEventsAfterCommit
      */
     private function dispatchToOriginator(DocumentTransitioned $event, NotificationType $type): void
     {
+        // A rejection moves nothing, so it still goes to the originating office.
+        $officeId = $event->action === MovementAction::Returned
+            ? (int) $event->movement->to_office_id
+            : $event->document->originating_office_id;
+
+        $toOriginator = $officeId === $event->document->originating_office_id;
+
         $this->writer->fanOutToOffice(
             type: $type,
             document: $event->document,
-            officeId: $event->document->originating_office_id,
+            officeId: $officeId,
             movement: $event->movement,
             except: $event->actor,
         );
 
-        $submitter = $event->document->creator;
+        $submitter = $toOriginator ? $event->document->creator : null;
 
         if ($submitter !== null && $submitter->id !== $event->actor->id && $submitter->is_active) {
             $this->writer->toUser(
@@ -127,5 +155,18 @@ class DispatchDocumentNotifications implements ShouldHandleEventsAfterCommit
                 movement: $event->movement,
             );
         }
+
+        // By email as well: the same office and (when it is the originating
+        // one) the submitter, once each -- DocumentMailer drops the submitter
+        // if they are already one of the office's members, as the dedupe key
+        // does for the bell.
+        $this->mailer->send(
+            type: $type,
+            document: $event->document,
+            movement: $event->movement,
+            actor: $event->actor,
+            officeId: $officeId,
+            submitter: $submitter,
+        );
     }
 }

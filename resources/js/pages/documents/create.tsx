@@ -2,6 +2,7 @@ import { Form, Head, Link } from '@inertiajs/react';
 import { ChevronLeft, UploadCloud } from 'lucide-react';
 import { useRef, useState } from 'react';
 import DocumentController from '@/actions/App/Http/Controllers/DocumentController';
+import { AutomaticRoute } from '@/components/documents/automatic-route';
 import {
     OfficeRoutePicker,
     routeError,
@@ -10,14 +11,22 @@ import { UploadErrorDialog } from '@/components/documents/upload-error-dialog';
 import InputError from '@/components/input-error';
 import { useUploadGuard } from '@/hooks/use-upload-guard';
 import documents from '@/routes/documents';
-import type { IdNameOption, SelectOption } from '@/types';
+import type { IdNameOption, RouteTemplate, SelectOption } from '@/types';
 
 type Props = {
     offices: IdNameOption[];
     documentTypes: IdNameOption[];
+    /**
+     * The suggested route per document type id. An object keyed by id --
+     * except when it is empty, which PHP sends as `[]`; indexing either one
+     * by id is the same.
+     */
+    routeTemplates: Record<number, RouteTemplate>;
     priorities: SelectOption[];
     defaultOfficeId: number | null;
 };
+
+type RouteMode = 'auto' | 'manual';
 
 /*
  * min-w-0 is not cosmetic here. Three of the controls wearing this class are
@@ -42,6 +51,7 @@ const FIELD =
 export default function CreateDocument({
     offices,
     documentTypes,
+    routeTemplates,
     priorities,
     defaultOfficeId,
 }: Props) {
@@ -58,6 +68,34 @@ export default function CreateDocument({
     const [departmentIds, setDepartmentIds] = useState<number[]>(
         defaultOfficeId === null ? [] : [defaultOfficeId],
     );
+
+    /*
+     * How the route is chosen (client request, 2026-09-25). AUTOMATIC by
+     * default -- "eto po yung magiging default mode" -- where the document
+     * type fills it in; MANUAL is the picker above, as it always was.
+     */
+    const [chosenMode, setMode] = useState<RouteMode>('auto');
+    const [typeId, setTypeId] = useState<number | null>(null);
+
+    const template = typeId === null ? undefined : routeTemplates[typeId];
+
+    /*
+     * A Confidential document is "City Mayor / HRMO only" (client,
+     * 2026-09-25): its route is the automatic one's single choice, and the
+     * server refuses anything else. So manual is not offered for it -- the
+     * choice made before picking the type is kept for the next type.
+     */
+    const lockedToAuto = template?.confidential === true;
+    const mode: RouteMode = lockedToAuto ? 'auto' : chosenMode;
+
+    // The office filing it, in automatic mode. Fixed for everyone with an
+    // office; a Super Admin picks it, as they pick row 1 in manual mode.
+    const [autoOriginId, setAutoOriginId] = useState<number | null>(
+        defaultOfficeId,
+    );
+
+    const typeName =
+        documentTypes.find((type) => type.id === typeId)?.name ?? null;
 
     const upload = useUploadGuard();
 
@@ -123,7 +161,12 @@ export default function CreateDocument({
                                     id="document_type_id"
                                     name="document_type_id"
                                     required
-                                    defaultValue=""
+                                    value={typeId ?? ''}
+                                    onChange={(event) =>
+                                        setTypeId(
+                                            Number(event.target.value) || null,
+                                        )
+                                    }
                                     className={FIELD}
                                 >
                                     <option value="" disabled>
@@ -137,31 +180,69 @@ export default function CreateDocument({
                                 </select>
                             </Field>
 
-                            <Field
-                                label="Department"
-                                htmlFor="office_ids"
+                            <FieldSet
+                                legend="Department"
                                 required
                                 error={
                                     routeError(errors, 'office_ids') ??
                                     errors.originating_office_id
                                 }
                             >
-                                <OfficeRoutePicker
-                                    offices={offices}
-                                    value={departmentIds}
-                                    onChange={setDepartmentIds}
+                                <ModeToggle
+                                    mode={mode}
                                     disabled={processing}
-                                    id="office_ids"
-                                    // The Field above already labels this
-                                    // control, with the asterisk and the
-                                    // screen-reader "(required)" the rest of
-                                    // the form uses. A second label would name
-                                    // the same input twice.
-                                    label={null}
-                                    noun="department"
-                                    className="grid gap-3"
-                                    selectClassName={`${FIELD} disabled:opacity-60`}
-                                    /*
+                                    manualUnavailable={
+                                        lockedToAuto
+                                            ? 'Not for a Confidential document'
+                                            : null
+                                    }
+                                    onChange={setMode}
+                                />
+
+                                {/*
+                                    Keyed by type: a new type is a new
+                                    suggestion, and the choices made on the
+                                    last one do not carry over.
+                                */}
+                                <AutomaticRoute
+                                    key={typeId ?? 'none'}
+                                    template={template}
+                                    typeName={typeName}
+                                    offices={offices}
+                                    originId={autoOriginId}
+                                    onOriginChange={setAutoOriginId}
+                                    originLocked={defaultOfficeId !== null}
+                                    hidden={mode !== 'auto'}
+                                    disabled={processing}
+                                    fieldClassName={`${FIELD} disabled:opacity-60`}
+
+                                    onManual={() => setMode('manual')}
+                                />
+
+                                {mode === 'manual' && (
+                                    <>
+                                        <label
+                                            htmlFor="office_ids"
+                                            className="sr-only"
+                                        >
+                                            Add a department
+                                        </label>
+                                        <OfficeRoutePicker
+                                            offices={offices}
+                                            value={departmentIds}
+                                            onChange={setDepartmentIds}
+                                            disabled={processing}
+                                            id="office_ids"
+                                            // The Field above already labels this
+                                            // control, with the asterisk and the
+                                            // screen-reader "(required)" the rest of
+                                            // the form uses. A second label would name
+                                            // the same input twice.
+                                            label={null}
+                                            noun="department"
+                                            className="grid gap-3"
+                                            selectClassName={`${FIELD} disabled:opacity-60`}
+                                            /*
                                         Row 1 is the submitter's own office
                                         and stays there (client, 2026-09-19).
                                         Only when the server named one: a
@@ -169,17 +250,21 @@ export default function CreateDocument({
                                         empty list, and StoreDocumentRequest
                                         refuses whatever they put first.
                                     */
-                                    lockFirst={defaultOfficeId !== null}
-                                    hint={(first) => (
-                                        <>
-                                            The document is registered under{' '}
-                                            {first.name} and moves to the next
-                                            department each time it is received.
-                                        </>
-                                    )}
-                                />
+                                            lockFirst={defaultOfficeId !== null}
+                                            // An office may come round again, as a
+                                            // route template's can.
+                                            allowRepeats
+                                            hint={(first) => (
+                                                <>
+                                                    The document is registered
+                                                    under {first.name} and moves
+                                                    to the next department each
+                                                    time it is received.
+                                                </>
+                                            )}
+                                        />
 
-                                {/*
+                                        {/*
                                     No "How should they get it?" any more. The
                                     client removed "All at the same time" on
                                     2026-09-19 -- "mag stick na po sa one after
@@ -188,7 +273,7 @@ export default function CreateDocument({
                                     listed, and there is no choice to post.
                                 */}
 
-                                {/*
+                                        {/*
                                     What the form actually posts.
 
                                     <Form> serialises the DOM, so the picker's
@@ -202,15 +287,17 @@ export default function CreateDocument({
                                     control blocks the submit silently), so the
                                     check that matters is the one on the server.
                                 */}
-                                {departmentIds.map((id) => (
-                                    <input
-                                        key={id}
-                                        type="hidden"
-                                        name="office_ids[]"
-                                        value={id}
-                                    />
-                                ))}
-                            </Field>
+                                        {departmentIds.map((id, index) => (
+                                            <input
+                                                key={index}
+                                                type="hidden"
+                                                name="office_ids[]"
+                                                value={id}
+                                            />
+                                        ))}
+                                    </>
+                                )}
+                            </FieldSet>
 
                             {/*
                                 Required, with nothing pre-selected, and that
@@ -303,6 +390,105 @@ export default function CreateDocument({
 
             <UploadErrorDialog {...upload.dialog} />
         </>
+    );
+}
+
+/**
+ * Automatic or manual. Two pressed-state buttons rather than radios: the
+ * choice is how the form behaves, not a value the server is sent.
+ */
+function ModeToggle({
+    mode,
+    disabled,
+    manualUnavailable,
+    onChange,
+}: {
+    mode: RouteMode;
+    disabled: boolean;
+    /** Why Manual cannot be chosen for this document; null when it can. */
+    manualUnavailable: string | null;
+    onChange: (mode: RouteMode) => void;
+}) {
+    const options: {
+        value: RouteMode;
+        label: string;
+        detail: string;
+        off: boolean;
+    }[] = [
+        {
+            value: 'auto',
+            label: 'Automatic',
+            detail: 'Suggested by document type',
+            off: false,
+        },
+        {
+            value: 'manual',
+            label: 'Manual',
+            detail: manualUnavailable ?? 'Choose the offices yourself',
+            off: manualUnavailable !== null,
+        },
+    ];
+
+    return (
+        <div
+            role="group"
+            aria-label="How the route is chosen"
+            className="mb-3 grid grid-cols-2 gap-1 rounded-md bg-[#EEF2F8] p-1"
+        >
+            {options.map((option) => (
+                <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={mode === option.value}
+                    disabled={disabled || option.off}
+                    onClick={() => onChange(option.value)}
+                    className={`min-w-0 rounded px-3 py-1.5 text-left transition disabled:opacity-60 ${
+                        mode === option.value
+                            ? 'bg-white shadow-sm'
+                            : 'hover:bg-white/60'
+                    }`}
+                >
+                    <span className="block text-sm font-bold text-navy">
+                        {option.label}
+                    </span>
+                    <span className="block text-xs text-copy">
+                        {option.detail}
+                    </span>
+                </button>
+            ))}
+        </div>
+    );
+}
+
+/**
+ * Field, for a group of controls: the route is a toggle, a list and a
+ * dropdown, and no single one of them is "the Department field".
+ */
+function FieldSet({
+    legend,
+    required = false,
+    error,
+    children,
+}: {
+    legend: string;
+    required?: boolean;
+    error?: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <fieldset className="min-w-0">
+            <legend className="text-sm font-bold text-navy">
+                {legend}
+                {required && (
+                    <span className="text-danger" aria-hidden="true">
+                        *
+                    </span>
+                )}
+                {required && <span className="sr-only"> (required)</span>}
+            </legend>
+            <div className="mt-1.5">{children}</div>
+            <InputError message={error} className="mt-1" />
+        </fieldset>
     );
 }
 

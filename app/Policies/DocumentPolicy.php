@@ -11,6 +11,7 @@ use App\Models\DocumentRouteStop;
 use App\Models\DocumentSignature;
 use App\Models\Office;
 use App\Models\User;
+use App\Support\Confidential;
 use App\Support\DocumentWorkflow;
 use App\Support\SystemSettings;
 
@@ -30,12 +31,44 @@ class DocumentPolicy
     }
 
     /**
-     * Mirrors DocumentBuilder::visibleTo for a single record. The two must agree
-     * -- a document a user can find in a list must be one they can open.
+     * May this person READ the document?
+     *
+     * Everyone involved() with it, plus -- once it has been BROADCAST to every
+     * office (client, 2026-09-25) -- anybody who belongs to an office. That
+     * second group reads and nothing more: every ability that does something
+     * asks involved(), not this.
+     *
+     * Mirrors DocumentBuilder::readableBy. The two must agree -- a document a
+     * user can find in a list must be one they can open.
      */
     public function view(User $user, Document $document): bool
     {
+        if ($this->involved($user, $document)) {
+            return true;
+        }
+
+        return $user->is_active
+            && $user->office_id !== null
+            && $document->broadcast_at !== null
+            && ! $document->is_confidential;
+    }
+
+    /**
+     * Is this document part of this person's work -- filed by them, or at, from
+     * or through their office? What view() was before broadcasting, and what
+     * every ability that ACTS on a document still requires: an Executive Order
+     * broadcast to all 52 offices is readable by all of them, and archivable,
+     * commentable and signable by none of them that it did not pass through.
+     *
+     * Mirrors DocumentBuilder::visibleTo for a single record.
+     */
+    public function involved(User $user, Document $document): bool
+    {
         if (! $user->is_active) {
+            return false;
+        }
+
+        if (! $this->confidentialityAllows($user, $document)) {
             return false;
         }
 
@@ -83,6 +116,10 @@ class DocumentPolicy
             return false;
         }
 
+        if (! $this->confidentialityAllows($user, $document)) {
+            return false;
+        }
+
         if ($user->isSuperAdmin()) {
             return true;
         }
@@ -98,13 +135,17 @@ class DocumentPolicy
             return false;
         }
 
+        if (! $this->confidentialityAllows($user, $document)) {
+            return false;
+        }
+
         if ($user->isSuperAdmin()) {
             return true;
         }
 
         // Same rule as act(): holding the folder is not permission to read it,
         // so it cannot be permission to append a version to it either.
-        if (! $this->view($user, $document)) {
+        if (! $this->involved($user, $document)) {
             return false;
         }
 
@@ -132,8 +173,9 @@ class DocumentPolicy
 
         // You cannot act on what you cannot read. Without this, a clerk whose
         // office happens to hold a colleague's document could forward it
-        // onward -- moving a record they are not allowed to open.
-        if (! $this->view($user, $document)) {
+        // onward -- moving a record they are not allowed to open. involved(),
+        // not view(): reading a broadcast is not a part in its workflow.
+        if (! $this->involved($user, $document)) {
             return false;
         }
 
@@ -276,13 +318,16 @@ class DocumentPolicy
         }
 
         /*
-         * Return sends the document to its originating office. When that office
-         * is already holding it there is nowhere to send it -- they can upload a
-         * corrected version where it sits -- and a return-to-self would park it
-         * in `returned` with its resubmit pointing back at the same desk.
+         * Return sends the document back to an office it has already been at --
+         * the returning office's choice since 2026-09-25, the originating office
+         * before that (Document::returnDestinations). With nowhere else it has
+         * been, there is nowhere to send it: a document still at the office
+         * that filed it can simply be corrected where it sits, and a
+         * return-to-self would park it in `returned` with its resubmit pointing
+         * back at the same desk.
          */
         if ($action === MovementAction::Returned
-            && $document->openMovement?->to_office_id === $document->originating_office_id) {
+            && $document->returnDestinations()->isEmpty()) {
             return false;
         }
 
@@ -367,7 +412,7 @@ class DocumentPolicy
             return false;
         }
 
-        if (! $this->view($user, $document)) {
+        if (! $this->involved($user, $document)) {
             return false;
         }
 
@@ -440,7 +485,7 @@ class DocumentPolicy
             return false;
         }
 
-        if (! $this->view($user, $document)) {
+        if (! $this->involved($user, $document)) {
             return false;
         }
 
@@ -475,9 +520,14 @@ class DocumentPolicy
         return ! $signed;
     }
 
+    /**
+     * involved(), not view(): a broadcast is sent to be read. Fifty-two
+     * offices' worth of replies under an Executive Order is not a thread
+     * anybody can work from.
+     */
     public function comment(User $user, Document $document): bool
     {
-        return $user->is_active && ! $document->isArchived() && $this->view($user, $document);
+        return $user->is_active && ! $document->isArchived() && $this->involved($user, $document);
     }
 
     /** §20: only completed or rejected documents can be filed away. */
@@ -487,7 +537,7 @@ class DocumentPolicy
             && $user->atLeast(Role::Admin)
             && ! $document->isArchived()
             && $document->status->isTerminal()
-            && $this->view($user, $document);
+            && $this->involved($user, $document);
     }
 
     public function restore(User $user, Document $document): bool
@@ -495,12 +545,68 @@ class DocumentPolicy
         return $user->is_active
             && $user->atLeast(Role::Admin)
             && $document->isArchived()
-            && $this->view($user, $document);
+            && $this->involved($user, $document);
     }
 
     public function delete(User $user, Document $document): bool
     {
-        return $user->is_active && $user->isSuperAdmin();
+        return $user->is_active
+            && $user->isSuperAdmin()
+            && $this->confidentialityAllows($user, $document);
+    }
+
+    /**
+     * "Broadcast to ALL offices" (client, DTS_Office_Routing_Paths.pdf,
+     * 2026-09-25): an Executive Order or a Memorandum Circular told to every
+     * office and readable by all of them, while the folder itself carries on.
+     *
+     * Once per document, by an Admin of the office holding it or of the office
+     * that issued it -- after it has been completed and nobody holds it, the
+     * issuing office still may -- or by a Super Admin. Only for the types the
+     * seeder marks, never for a Confidential one, and not while it is out for
+     * correction.
+     */
+    public function broadcast(User $user, Document $document): bool
+    {
+        if (! $user->is_active
+            || $document->isArchived()
+            || $document->is_confidential
+            || $document->broadcast_at !== null
+            || in_array($document->status, [DocumentStatus::Returned, DocumentStatus::Rejected], true)) {
+            return false;
+        }
+
+        $type = $document->relationLoaded('documentType')
+            ? $document->documentType
+            : $document->documentType()->first(['id', 'allows_broadcast']);
+
+        if ($type === null || ! $type->allows_broadcast) {
+            return false;
+        }
+
+        if (! $this->involved($user, $document)) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        return $user->atLeast(Role::Admin)
+            && ($this->holdsDocument($user, $document) || $user->actsForOffice($document->originating_office_id));
+    }
+
+    /**
+     * A Confidential document is for the person who filed it and for the City
+     * Mayor's and HRMO's people -- nobody else, a Super Admin included. Asked
+     * first by every ability, including the Super Admin escapes, so no grant
+     * below reaches past it. See App\Support\Confidential.
+     */
+    private function confidentialityAllows(User $user, Document $document): bool
+    {
+        return ! $document->is_confidential
+            || $document->created_by_id === $user->id
+            || Confidential::trustsUser($user);
     }
 
     /**

@@ -69,7 +69,13 @@ class DocumentWorkflowController extends Controller
                     action: $action,
                     actor: $request->user(),
                     remarks: $request->input('remarks'),
-                    toOfficeId: null,
+                    // A return goes where the returning office chose (an office
+                    // the document has been at); a resubmit goes back to the
+                    // office that returned it, which TransitionDocument reads
+                    // off the returned leg.
+                    toOfficeId: $action === MovementAction::Returned
+                        ? ($request->integer('return_to_office_id') ?: null)
+                        : null,
                     expectedMovementId: $request->integer('expected_movement_id') ?: null,
                     request: $request,
                 );
@@ -112,8 +118,11 @@ class DocumentWorkflowController extends Controller
             });
 
             $office = $this->officeNames(array_filter([$moved->to_office_id]))[0] ?? 'the office that returned it';
+            // Named from the leg just written: since 2026-09-25 a return goes
+            // wherever the returning office chose, not always the originating
+            // office.
             $message = $action === MovementAction::Returned
-                ? $this->confirmation($action, $document)
+                ? "{$document->control_number} returned to {$office} for correction."
                 : "{$document->control_number} resubmitted to {$office}.";
 
             if ($file !== null) {
@@ -275,11 +284,6 @@ class DocumentWorkflowController extends Controller
         return implode(', ', $names).' and '.$last;
     }
 
-    private function originatingOfficeName(Document $document): string
-    {
-        return $this->officeNames([$document->originating_office_id])[0] ?? 'the originating office';
-    }
-
     private function confirmation(MovementAction $action, Document $document): string
     {
         return match ($action) {
@@ -288,7 +292,6 @@ class DocumentWorkflowController extends Controller
             MovementAction::Received => "{$document->control_number} received. It stays with your office until you send it on.",
             MovementAction::Approved => "{$document->control_number} approved. You can now send it to another office.",
             MovementAction::Rejected => "{$document->control_number} rejected.",
-            MovementAction::Returned => "{$document->control_number} returned to {$this->originatingOfficeName($document)} for correction.",
             MovementAction::Forwarded => "{$document->control_number} forwarded.",
             MovementAction::Completed => "{$document->control_number} marked complete.",
             default => "{$document->control_number} updated.",

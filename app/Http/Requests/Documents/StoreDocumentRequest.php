@@ -4,6 +4,8 @@ namespace App\Http\Requests\Documents;
 
 use App\Enums\DocumentPriority;
 use App\Models\Document;
+use App\Models\DocumentType;
+use App\Support\Confidential;
 use App\Support\DocumentUpload;
 use App\Support\RoutePlan;
 use Illuminate\Foundation\Http\FormRequest;
@@ -102,12 +104,13 @@ class StoreDocumentRequest extends FormRequest
              */
             // No practical ceiling: the client routes to every department.
             // RoutePlan says why there is still a number here at all.
-            'office_ids' => ['required', 'array', 'max:'.RoutePlan::maxOffices()],
+            'office_ids' => ['required', 'array', 'max:'.RoutePlan::maxStops()],
             'office_ids.*' => [
                 'integer',
-                // A department twice in one route is a typo, not a round trip:
-                // the picker never offers one it has already added.
-                'distinct',
+                // NOT `distinct` any more. The route templates (2026-09-25)
+                // come back to an office -- Treasury twice on a Disbursement
+                // Voucher, BPLO again for a permit's release. The same office
+                // twice IN A ROW is still refused, in withValidator().
                 Rule::exists('offices', 'id')->where('is_active', true),
             ],
 
@@ -223,10 +226,34 @@ class StoreDocumentRequest extends FormRequest
                 return;
             }
 
-            $first = ((array) $this->input('office_ids', []))[0] ?? null;
+            $ids = array_values(array_map('intval', (array) $this->input('office_ids', [])));
+            $first = $ids[0] ?? null;
 
-            if ($first !== null && ! ($this->user()?->actsForOffice((int) $first) ?? false)) {
+            if ($first !== null && ! ($this->user()?->actsForOffice($first) ?? false)) {
                 $validator->errors()->add('office_ids', $this->originMessage());
+
+                return;
+            }
+
+            // A folder cannot be sent to the desk it is already on. The form
+            // merges such neighbours before posting, in either mode, so only
+            // a hand-built request gets here.
+            if (count(RoutePlan::collapse($ids)) !== count($ids)) {
+                $validator->errors()->add('office_ids', 'The same department is listed twice in a row. A department can come round again, but not straight after itself.');
+
+                return;
+            }
+
+            /*
+             * CONFIDENTIAL: "City Mayor / HRMO only" (client, 2026-09-25).
+             * Your own office, then ONE of those two -- or just your own when
+             * it is one of them. RegisterDocument sends it on at once.
+             */
+            $type = DocumentType::query()->find($this->integer('document_type_id'));
+
+            if ($type?->is_confidential
+                && (count($ids) > 2 || ! Confidential::trusts($ids[count($ids) - 1] ?? null))) {
+                $validator->errors()->add('office_ids', 'A Confidential document goes only to '.Confidential::officeNames().'. Choose one of them.');
             }
         });
 

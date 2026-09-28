@@ -345,6 +345,20 @@ Password form, which is what the throttle below exists to stop. If it happens
 anyway there is nothing to configure: wait out the 24 hours, and use Manage
 Users → **Set password** meanwhile (§4).
 
+**Document notification emails change that arithmetic (2026-09-24).** Every
+time a document is filed with, forwarded to, returned to or resubmitted to an
+office, each active, verified account at that office is emailed — the same
+people the in-app bell tells. That is ordinary traffic, and it counts against
+the same ~500. Roughly: one email per account at the receiving office, per
+step, so a document routed through five offices with three accounts each (two
+Admins and a clerk, as `OfficeAccountSeeder` creates them) costs about fifteen.
+Thirty such documents in a day is the whole quota. Watch the log
+for `Document notification email failed`; if the cap is being reached, set
+`CICTO_EMAIL_NOTIFICATIONS=false` and re-run `php artisan config:cache` — the
+bell keeps working, and password resets get their quota back. These emails are
+sent just after the page responds (Laravel's `defer`), in the same process, so
+they still need no queue worker.
+
 **Mail is sent inline, not queued. No `queue:work` process is required, and do
 not add one expecting mail to travel through it.** This is a decision rather than
 an oversight. Nothing in this deployment runs a queue worker: the VPS crontab in
@@ -525,9 +539,22 @@ can read — it sits as the open leg, counts as overdue on every report, and onl
 its submitter and a Super Admin can see it. Nothing in the UI says so.
 
 `OfficeAccountSeeder` closes that gap in one pass. It gives each of the 52 active
-offices two accounts — one **Admin** (`{code}.admin@baliwag.gov.ph`, receives and
-decides) and one **User** (`{code}.clerk@baliwag.gov.ph`, files and tracks) — so
-104 in all.
+offices three accounts — two **Admins** (`{code}.admin@baliwag.gov.ph` and
+`{code}.admin2@baliwag.gov.ph`, both receive and decide) and one **User**
+(`{code}.clerk@baliwag.gov.ph`, files and tracks) — so 156 in all.
+
+The two Admins are identical: same office, same rights. They are two accounts,
+not one, so that when either of them approves a document the audit trail on
+View Documents names which one it was (client request, 2026-09-24). They start
+out named `OCM Admin` and `OCM Admin 2`; each should put their own name in
+**Settings → Profile** so the trail shows a person, not a slot.
+
+**Upgrading an installation seeded before 2026-09-24:** run the same command
+again. It finds the existing `.admin` and `.clerk` accounts, leaves them and
+their passwords alone, and creates only the 52 `.admin2` accounts. The new
+accounts get whatever `CICTO_OFFICE_ACCOUNT_PASSWORD` is set to **now** — if it
+has changed since the first rollout, the sheet handed out then will not open
+them. Use the fresh sheet the run writes.
 
 ```bash
 # The office list must be the client's real one FIRST. The seeder refuses to
@@ -537,7 +564,7 @@ php artisan db:seed --class=OfficeSeeder --force
 php artisan db:seed --class="Database\Seeders\OfficeAccountSeeder" --force
 ```
 
-**All 104 accounts share one password**, `password`, so there is no slip to lose
+**All 156 accounts share one password**, `password`, so there is no slip to lose
 and no per-office secret to mistype on rollout day. Override it before seeding a
 real installation:
 
@@ -553,10 +580,12 @@ though nothing in it is unrecoverable, since the addresses follow the office
 codes and the password is in your environment.
 
 > **This is the one thing on this page that must not stay true.** One password
-> opens 52 office **Admin** accounts, each of which can read, forward, approve
+> opens 104 office **Admin** accounts, each of which can read, forward, approve
 > and reject that office's documents. The movement ledger keeps working — every
 > leg still names the account that made it — but it stops answering *who*,
-> because the whole office shares the login. It is a rollout convenience, not a
+> because the whole office shares the login. That goes for the two Admins of an
+> office too: the trail tells them apart only once each has changed their own
+> password under Settings › Security. It is a rollout convenience, not a
 > configuration, and §21's audit trail is only worth what this is worth.
 
 Five things to know before running it:
@@ -586,9 +615,9 @@ Five things to know before running it:
   at login, so the accounts work; but the moment somebody changes theirs under
   Settings › Security they must meet `min:12` with letters and numbers. Expect
   the question.
-- **It writes an audit line per account.** 104 `user.created` rows land in the
+- **It writes an audit line per account.** 156 `user.created` rows land in the
   §21 security log with `system` as the actor. That is a one-time flood of the
-  Security Log screen and it is deliberate — 104 accounts appearing with no
+  Security Log screen and it is deliberate — 156 accounts appearing with no
   record would be the worse outcome.
 
 After it runs it re-checks its own work and warns about any active office still
@@ -683,6 +712,178 @@ for e in super@cicto.test admin@cicto.test mto@cicto.test sb@cicto.test \
   php artisan cicto:user "$e" --deactivate
 done
 ```
+
+#### The sign-in code (2026-09-25)
+
+Signing in used to go straight from the password to the dashboard. Now a
+correct password emails a **6-digit code** to the account's address, and the
+dashboard opens only once it is entered on the "Enter your sign-in code"
+screen. Every account, every sign-in — except an account that has set up an
+authenticator app under Settings › Security, which answers that challenge
+instead (one second step per sign-in, not two).
+
+**Before switching it on, every account needs a real inbox.** The
+`{code}.admin@` / `{code}.admin2@` / `{code}.clerk@baliwag.gov.ph` accounts from
+`OfficeAccountSeeder` are login names, not mailboxes: with the code on, **nobody
+can sign in to them.** Switch it on in this order:
+
+1. Deploy with `CICTO_LOGIN_OTP=false`.
+2. Each person signs in and puts their real address under **Settings ›
+   Profile**, then clicks the verification link that arrives. (Or, from the
+   server, one account at a time:
+   `php artisan cicto:user ocm.admin@baliwag.gov.ph --email=maria.santos@gmail.com`
+   — this also marks the new address verified.)
+3. Check the Super Admin's own address is one you are sure of.
+4. Set `CICTO_LOGIN_OTP=true` and run `php artisan config:cache`.
+
+**One account already has a real inbox (2026-09-28):** the CICTO office's
+**CICTO Admin** is `cictobaliwagcity@gmail.com`, the office's own Gmail, so the
+code can be tested on the live site straight away. `OfficeAccountSeeder` creates
+it there on a fresh install, and on an install that already has
+`cicto.admin@baliwag.gov.ph` it **moves that account** onto the Gmail address —
+same account, same password, marked verified. Re-running it changes nothing
+more. Either of these does it:
+
+```bash
+php artisan db:seed --class="Database\Seeders\OfficeAccountSeeder" --force
+# or, without deploying this change:
+php artisan cicto:user cicto.admin@baliwag.gov.ph --email=cictobaliwagcity@gmail.com
+```
+
+**Recovery for a wrong address** (a typo under Profile, a mailbox that was
+closed): nobody can fix it from a screen, because the account cannot sign in to
+reach one. From the server:
+`php artisan cicto:user <current-address> --email=<correct-address>`. It refuses
+an address another account already uses, never creates an account, and writes
+*Email address changed by an administrator* to the Security Log.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `CICTO_LOGIN_OTP` | `true` | `false` goes back to password-only sign-in. |
+| `CICTO_LOGIN_OTP_TTL_MINUTES` | `10` | How long a code works. |
+
+What to know:
+
+- **If mail stops, nobody can sign in** — the Super Admin included. That is the
+  price of a code by email. The way back in is on the server, not the screen:
+  set `CICTO_LOGIN_OTP=false`, run `php artisan config:cache`, fix mail, turn
+  it back on.
+- **It uses the same Gmail allowance** (~500 a day) as the document
+  notifications: one email per sign-in. A hundred staff signing in twice a day
+  is 200. If the notifications and sign-ins together approach the limit, turn
+  the notifications off first (`CICTO_EMAIL_NOTIFICATIONS=false`).
+- **Limits:** a code works once and for 10 minutes; five wrong codes cancel the
+  sign-in (logged as *Too many wrong sign-in codes*, flagged as alarming);
+  "Send a new code" waits 60 seconds; one account is sent at most five codes in
+  15 minutes. Codes are checked per browser session, so a whole office signing
+  in from one public IP at 8 AM does not trip a shared limit.
+- **"Remember me"** still works: it is carried through the code step, and a
+  remembered browser is not asked again until the remember cookie expires.
+- **On a local machine**, the code needs somewhere to go: either
+  `CICTO_LOGIN_OTP=false`, or `MAIL_MAILER=log` and read the code from
+  `storage/logs/mail-<date>.log`.
+
+#### The Security PIN (2026-09-25)
+
+Every user sets their own 4-digit **Security PIN**, and the View Documents page
+asks for it before it shows anything — details, timeline, files, signing,
+comments. The client's scenario was a computer left signed in with a document
+open, so the PIN is asked for **again after 5 minutes without activity**, not
+only once per sign-in. The document list, Submit Document and every other page
+are not affected.
+
+**It needs the migration.** The PIN adds two columns to `users`:
+
+```bash
+php artisan migrate --force
+```
+
+Nothing else is required: no one is given a PIN in advance. Each person is asked
+to create one the first time they open a document after the deploy.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `CICTO_SECURITY_PIN` | `true` | `false` switches the whole feature off. No PIN is deleted. |
+| `CICTO_SECURITY_PIN_IDLE_MINUTES` | `5` | Minutes without activity before an open document locks again. |
+
+What to know before the client asks:
+
+- **Only a hash is stored.** Nobody — not a Super Admin, not the database —
+  can read a PIN back.
+- **Five wrong PINs in a row sign the session out.** Four digits is only 10,000
+  combinations; this is what stops somebody at an unattended desk from trying
+  them. It is logged as *Signed out after wrong PINs* in the Security Log, which
+  flags it as alarming.
+- **Forgot PIN?** is in the PIN window: the person enters their account
+  password and chooses a new PIN. No administrator is needed.
+- **Forgot the PIN and the password:** a Super Admin resets the password as in
+  "When somebody forgets their password" above, and presses **Reset** in the
+  Security PIN column of Manage Users. Reset only *clears* the PIN — the person
+  chooses a new one the next time they open a document, so no administrator
+  ever knows it. From the server console:
+
+  ```bash
+  php artisan cicto:user maria@baliwag.gov.ph --reset-pin
+  ```
+
+- **Shared office logins share a PIN.** On the `{code}.admin@` accounts from
+  `OfficeAccountSeeder`, whoever creates the PIN first chooses it for everybody
+  who uses that login. The PIN proves *which account*, not *which person* —
+  like the password on those accounts.
+- **Creating, changing and resetting a PIN** are each written to the Security
+  Log (`pin.created`, `pin.changed`, `pin.reset`).
+
+#### Routes by document type, Confidential and Broadcast (2026-09-25)
+
+From the client's `DTS_Office_Routing_Paths.pdf`. **It needs the migration**
+(four columns, on `document_types` and `documents`) and the usual seeder run,
+which marks Confidential, Executive Order and Memorandum Circular:
+
+```bash
+php artisan migrate --force
+php artisan db:seed --class=DocumentTypeSeeder --force
+```
+
+- **Submit Document fills the route in by type** (Automatic, the default);
+  Manual is the old picker. The routes live in `app/Support/RouteTemplates.php`
+  — changing one is an edit there and a deploy.
+- **Confidential** goes straight to the City Mayor or HRMO when filed, and only
+  the person who filed it and the people of those offices can see it — **not a
+  Super Admin**, and not the rest of the filing office. Its title is hidden on
+  the public QR page. Only documents filed after the deploy are restricted;
+  older ones stay as they were, so none is left on a desk nobody can see.
+- **Broadcast** (Executive Order, Memorandum Circular): a button on the
+  document page. Every office is notified in the app — not by email, to spare
+  the Gmail allowance — and may read it; the folder carries on along its route.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `CICTO_CONFIDENTIAL_OFFICES` | `OCM,HRMO` | Office codes that may receive and read a Confidential document. |
+
+#### Starting the live database again (2026-09-28)
+
+`php artisan migrate:fresh --seed --force` **deletes every document, account,
+signature and log.** Production refuses it unless `CICTO_ALLOW_DATABASE_WIPE`
+is `true`, so it cannot happen by accident. Uploaded files already in the bucket
+are not deleted; they are left with no record pointing at them.
+
+1. Take a database backup or snapshot in Laravel Cloud.
+2. Set in the environment, then redeploy (the config is cached at build):
+   ```dotenv
+   CICTO_ALLOW_DATABASE_WIPE=true
+   CICTO_SUPER_ADMIN_NAME="Super Admin"
+   CICTO_SUPER_ADMIN_EMAIL=<a real inbox>
+   CICTO_SUPER_ADMIN_PASSWORD=<12+ chars, upper, lower, number, symbol>
+   CICTO_OFFICE_ACCOUNT_PASSWORD=<not "password">
+   ```
+3. Run `php artisan migrate:fresh --seed --force`. An empty database is seeded
+   ready to use: offices, document types, every office's three accounts (the
+   CICTO Admin on `cictobaliwagcity@gmail.com`) and that one Super Admin. The
+   console says so for each — and says what it skipped, and why, when a
+   password or address is missing or weak.
+4. Set `CICTO_ALLOW_DATABASE_WIPE=false` and redeploy. You may also remove
+   `CICTO_SUPER_ADMIN_PASSWORD`; the seed never touches a database that already
+   has accounts, so every later deploy's `db:seed` adds nobody.
 
 ---
 

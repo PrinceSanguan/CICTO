@@ -102,7 +102,7 @@ class DocumentPresenter
      * destination before the button is pressed, from the same column the
      * action will read.
      *
-     * @return array{returned_by: string|null, returned_by_office: string|null, returned_at: string|null, remarks: string|null}|null
+     * @return array{returned_by: string|null, returned_by_office: string|null, returned_to_office: string|null, returned_at: string|null, remarks: string|null}|null
      */
     private function returnNotice(Document $document, ?DocumentMovement $leg): ?array
     {
@@ -115,9 +115,47 @@ class DocumentPresenter
         return [
             'returned_by' => $leg->actor?->name,
             'returned_by_office' => $leg->fromOffice?->name,
+            // Since 2026-09-25 not necessarily the originating office: the
+            // returning office chose it.
+            'returned_to_office' => $leg->toOffice?->name,
             'returned_at' => $leg->arrived_at?->toIso8601String(),
             'remarks' => $leg->remarks,
         ];
+    }
+
+    /**
+     * The choices under Return: Document::returnDestinations(), with what the
+     * picker needs to say about each.
+     *
+     * `has_staff`: whether anybody at that office could resubmit it. Labelled,
+     * not hidden, for the reason the forward picker labels an office with no
+     * receiver -- it is still a real department, and a Super Admin can act for
+     * it -- but nobody should send a correction there without being told.
+     *
+     * @return list<array{id: int, name: string, is_originating: bool, has_staff: bool}>
+     */
+    private function returnOptions(Document $document): array
+    {
+        if (! DocumentWorkflow::allows($document->status, MovementAction::Returned)) {
+            return [];
+        }
+
+        $offices = $document->returnDestinations();
+
+        $staffed = User::query()
+            ->whereIn('office_id', $offices->pluck('id')->all())
+            ->where('is_active', true)
+            ->distinct()
+            ->pluck('office_id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+
+        return array_values($offices->map(static fn ($office): array => [
+            'id' => $office->id,
+            'name' => $office->name,
+            'is_originating' => $office->id === $document->originating_office_id,
+            'has_staff' => in_array($office->id, $staffed, true),
+        ])->all());
     }
 
     /**
@@ -208,6 +246,8 @@ class DocumentPresenter
             'due_state_label' => $document->dueState()->label(),
             'due_state_tone' => $document->dueState()->tone(),
             'is_archived' => $document->isArchived(),
+            'is_confidential' => $document->is_confidential,
+            'is_broadcast' => $document->broadcast_at !== null,
             'created_at' => $document->created_at?->toIso8601String(),
         ];
     }
@@ -222,6 +262,7 @@ class DocumentPresenter
     {
         $leg = $document->openMovement;
         $minutesHere = $document->minutesAtCurrentOffice();
+        $turnaround = $document->turnaroundMinutes();
 
         return [
             ...$this->listItem($document),
@@ -241,6 +282,11 @@ class DocumentPresenter
                 'time_at_current_office' => $this->humanMinutes($minutesHere),
                 'leg_due_at' => $leg?->due_at?->toIso8601String(),
                 'expected_completion_at' => $document->due_at?->toIso8601String(),
+
+                // Asked for on 2026-09-24: "yung turn around time ng document
+                // after completion". Null until it is completed.
+                'turnaround_minutes' => $turnaround,
+                'turnaround' => $this->humanMinutes($turnaround),
             ],
 
             // The action set comes from the same const map that guards the
@@ -285,10 +331,17 @@ class DocumentPresenter
             'route_origin' => $this->routeOrigin($document),
 
             /*
-             * Why a returned document is back at its originating office, and
+             * Why a returned document was sent back, to which office, and
              * where Resubmit will send it. Null for every other document.
              */
             'return_notice' => $this->returnNotice($document, $leg),
+
+            /*
+             * Where Return may send it (2026-09-25): the offices the document
+             * has already been at, originating office first. Empty when Return
+             * is not possible from this stage at all.
+             */
+            'return_options' => $this->returnOptions($document),
 
             /*
              * The rest of the same submit, when it went to several departments
@@ -310,6 +363,23 @@ class DocumentPresenter
              */
             'release_signature' => $this->releaseSignature($document, $leg),
 
+            /*
+             * "Broadcast to ALL offices" (2026-09-25): when and by whom, once
+             * it has happened. Whether it CAN is `can.broadcast`; whether this
+             * type ever can is `allows_broadcast`, so the page can say which.
+             */
+            'broadcast' => $document->broadcast_at === null ? null : [
+                'at' => $document->broadcast_at->toIso8601String(),
+                'by' => $document->broadcastBy?->name,
+                'office' => $document->broadcastBy?->office?->name,
+            ],
+            'allows_broadcast' => (bool) $document->documentType?->allows_broadcast,
+
+            // Read-only: here because the document was broadcast, not because
+            // it is this person's work. The page says so instead of showing
+            // an empty Actions panel with no reason.
+            'read_only_broadcast' => ! $viewer->can('involved', $document),
+
             'can' => [
                 'update' => $viewer->can('update', $document),
                 'uploadVersion' => $viewer->can('uploadVersion', $document),
@@ -318,6 +388,7 @@ class DocumentPresenter
                 'signRelease' => $viewer->can('signRelease', $document),
                 'archive' => $viewer->can('archive', $document),
                 'restore' => $viewer->can('restore', $document),
+                'broadcast' => $viewer->can('broadcast', $document),
             ],
         ];
     }
@@ -344,6 +415,7 @@ class DocumentPresenter
                 'action_label' => $movement->action->label(),
                 'verb' => $movement->action->verb(),
                 'actor' => $movement->actor?->name,
+                'actor_office' => $this->actorOffice($movement),
                 'from_office' => $movement->fromOffice?->name,
                 'to_office' => $movement->toOffice?->name,
                 'remarks' => $movement->remarks,
@@ -358,6 +430,30 @@ class DocumentPresenter
         }
 
         return $rows;
+    }
+
+    /**
+     * The office to name in brackets beside the person on a timeline step, or
+     * null for none.
+     *
+     * Only on a step that MOVED the folder (forward, return, resubmit): there
+     * the office on the row is the destination, and the person who sent it
+     * sits at the office it came from -- without the bracket a sender reads as
+     * a member of the office they sent it to. A Super Admin belongs to no
+     * office, so bracketing the one the folder left would claim a membership
+     * they do not have; their name stands alone.
+     */
+    private function actorOffice(DocumentMovement $movement): ?string
+    {
+        if ($movement->actor === null || $movement->actor->isSuperAdmin()) {
+            return null;
+        }
+
+        if ($movement->from_office_id === null || $movement->from_office_id === $movement->to_office_id) {
+            return null;
+        }
+
+        return $movement->fromOffice?->name;
     }
 
     /**

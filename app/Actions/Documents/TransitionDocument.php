@@ -28,7 +28,10 @@ final class TransitionDocument
 {
     /**
      * @param  int|null  $expectedMovementId  the open leg the form was rendered from
-     * @param  int|null  $toOfficeId  required when forwarding
+     * @param  int|null  $toOfficeId  required when forwarding; on a return, the
+     *                                office to send it back to (one it has
+     *                                already been at), the originating office
+     *                                when null
      */
     public function handle(
         Document $document,
@@ -68,6 +71,10 @@ final class TransitionDocument
                 throw new \InvalidArgumentException('Forwarding requires a destination office.');
             }
 
+            $returnTo = $action === MovementAction::Returned
+                ? $this->returnDestination($locked, $toOfficeId, $from, $action)
+                : null;
+
             // A resubmit goes back to whoever returned it, and the returned leg
             // is the only record of who that was. A `returned` document always
             // sits on that leg -- nothing else leaves it in the stage -- so this
@@ -100,14 +107,13 @@ final class TransitionDocument
                 MovementAction::Forwarded => $toOfficeId,
 
                 // §9 "return a document with remarks" sends it BACK for
-                // correction -- to the ORIGINATING office, not merely the office
-                // before this one. That is the client's request of 2026-09-15,
-                // which replaced Reject with Return: the office that filed the
-                // document is the one that can upload the corrected version, and
-                // it must be able to do that on the same document, so the trail
-                // and the printed QR label carry on instead of starting over
-                // under a new control number.
-                MovementAction::Returned => $locked->originating_office_id,
+                // correction, on the same document, so the trail and the
+                // printed QR label carry on instead of starting over under a new
+                // control number (client, 2026-09-15). WHERE it goes back to is
+                // the returning office's choice since 2026-09-25 -- any office
+                // the document has already been at, not only the one that filed
+                // it -- and the originating office when nobody chose.
+                MovementAction::Returned => $returnTo,
 
                 // Back to the office that returned it, which is where the
                 // returned leg came FROM. Guarded non-null above.
@@ -170,6 +176,35 @@ final class TransitionDocument
 
             return $new;
         }, 3); // retries deadlocks: MySQL 1213, PostgreSQL 40P01
+    }
+
+    /**
+     * The office a return goes back to: the one asked for, or the originating
+     * office when none was -- and either way, one the document has actually
+     * been at and that is not holding it now (Document::returnDestinations).
+     * Checked here, where the leg is written, and not only in the form request:
+     * this class is the only writer of movements, so a caller that skips the
+     * request cannot send a document somewhere it has never been.
+     */
+    private function returnDestination(Document $document, ?int $toOfficeId, DocumentStatus $from, MovementAction $action): int
+    {
+        $allowed = $document->returnDestinations()->pluck('id')->all();
+
+        if ($toOfficeId !== null) {
+            if (! in_array($toOfficeId, $allowed, true)) {
+                throw new \InvalidArgumentException('A document can only be returned to an office it has already passed through.');
+            }
+
+            return $toOfficeId;
+        }
+
+        if (in_array($document->originating_office_id, $allowed, true)) {
+            return $document->originating_office_id;
+        }
+
+        // The originating office is holding it (or was deactivated): the next
+        // office it had been at, rather than a return to the same desk.
+        return $allowed[0] ?? throw new IllegalTransitionException($from, $action);
     }
 
     /**

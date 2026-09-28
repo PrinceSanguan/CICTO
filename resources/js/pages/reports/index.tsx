@@ -1,4 +1,4 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import {
     AlertTriangle,
     BarChart3,
@@ -6,9 +6,12 @@ import {
     FileSpreadsheet,
     Files,
     FileText,
+    Printer,
     ShieldCheck,
 } from 'lucide-react';
 import { lazy, Suspense } from 'react';
+import { PrintMasthead } from '@/components/documents/document-tracking';
+import { ActivityCard } from '@/components/reports/activity-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
     Table,
@@ -19,6 +22,7 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import reports from '@/routes/reports';
+import type { Auth } from '@/types';
 
 // Recharts is ~95 KB gzipped. Split it out so the rest of the app does not pay
 // for a page most users open occasionally.
@@ -36,12 +40,6 @@ type MonthByStatus = {
 };
 type TrendPoint = { month: string; label: string; days: number | null };
 type StatusSlice = { status: string; count: number };
-type ActivityRow = {
-    user: string;
-    office: string | null;
-    actions: number;
-    approvals: number;
-};
 type OfficeRow = {
     id: number;
     office: string;
@@ -60,7 +58,8 @@ type Props = {
     monthlyByStatus: MonthByStatus[];
     statusDistribution: StatusSlice[];
     processingTrend: TrendPoint[];
-    userActivity: ActivityRow[];
+    /** Admin and up: the "User activity" card loads its own lists. */
+    showActivity: boolean;
     officePerformance: OfficeRow[];
     months: number;
     canExport: boolean;
@@ -84,7 +83,7 @@ export default function ReportsIndex({
     monthlyByStatus,
     statusDistribution,
     processingTrend,
-    userActivity,
+    showActivity,
     officePerformance,
     months,
     canExport,
@@ -100,22 +99,56 @@ export default function ReportsIndex({
      */
     const exportLinks = <ExportLinks />;
 
+    // Whose figures these are, for the printed sheet: a page handed to a
+    // department head has to say which office it covers.
+    const { auth } = usePage<{ auth: Auth }>().props;
+    const scope =
+        auth.role === 'super_admin'
+            ? 'All offices'
+            : auth.role === 'admin'
+              ? (auth.office?.name ?? 'Your office')
+              : 'Documents you submitted';
+
     return (
         <>
             <Head title="Reports" />
 
-            <div className="flex flex-col gap-4">
+            {/*
+                Printable on one or two sheets of bond paper (client request,
+                2026-09-25). Every `print:` class on this page serves that: the
+                layout drops its own chrome, the cards lose their shadows for a
+                thin border, the four figures share one row, the charts are
+                redrawn at paper size (see ChartBox), and controls that mean
+                nothing on paper -- the period picker, exports, search, paging
+                buttons -- are left off. What prints is what is on screen: the
+                activity list as it stands, with any trail that is open.
+            */}
+            <PrintMasthead />
+
+            <div className="flex flex-col gap-4 print:gap-3 print:[print-color-adjust:exact]">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>
-                        <h1 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
+                        <h1 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl print:text-xl print:text-navy">
                             Reports &amp; Analytics
                         </h1>
-                        <p className="mt-1 text-sm font-medium text-white/90">
+                        <p className="mt-1 text-sm font-medium text-white/90 print:mt-0 print:text-xs print:text-copy">
                             Document activity over the last {months} months.
+                            <span className="hidden print:inline">
+                                {' '}
+                                Covering: {scope}.
+                            </span>
                         </p>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 print:hidden">
+                        <button
+                            type="button"
+                            onClick={() => window.print()}
+                            className="inline-flex h-9 items-center gap-2 rounded-md bg-white px-3 text-sm font-bold text-navy shadow-sm transition hover:bg-[#F2F6FC]"
+                        >
+                            <Printer aria-hidden="true" className="size-4" />
+                            Print
+                        </button>
                         <select
                             value={months}
                             onChange={(event) =>
@@ -138,7 +171,7 @@ export default function ReportsIndex({
                 </div>
 
                 {/* §18 headline numbers, as the design's icon tiles. */}
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 print:grid-cols-4 print:gap-2">
                     <Tile
                         icon={Files}
                         tint="#E8B84B"
@@ -178,7 +211,9 @@ export default function ReportsIndex({
                     cluster hard to read.
                 */}
                 {canExport && (
-                    <div className="flex flex-wrap gap-3">{exportLinks}</div>
+                    <div className="flex flex-wrap gap-3 print:hidden">
+                        {exportLinks}
+                    </div>
                 )}
 
                 <Suspense
@@ -195,59 +230,52 @@ export default function ReportsIndex({
                     />
                 </Suspense>
 
-                <div className="grid gap-4 lg:grid-cols-2">
-                    {/* §19 artifact 4 — the one that is easy to forget */}
-                    <section className="overflow-hidden rounded-xl bg-white shadow-xl">
-                        <h3 className="border-b p-4 text-sm font-semibold">
-                            User activity
-                        </h3>
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Staff</TableHead>
-                                    <TableHead>Office</TableHead>
-                                    <TableHead className="text-right">
-                                        Actions
-                                    </TableHead>
-                                    <TableHead className="text-right">
-                                        Approvals
-                                    </TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {userActivity.length === 0 && (
-                                    <TableRow>
-                                        <TableCell
-                                            colSpan={4}
-                                            className="py-8 text-center text-muted-foreground"
-                                        >
-                                            No activity yet.
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                                {userActivity.map((row) => (
-                                    <TableRow key={`${row.user}-${row.office}`}>
-                                        <TableCell>{row.user}</TableCell>
-                                        <TableCell className="text-muted-foreground">
-                                            {row.office ?? '—'}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            {row.actions}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            {row.approvals}
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </section>
+                {/*
+                    §19 artifact 4 -- the one that is easy to forget. Full
+                    width, by document or by person, folded until clicked
+                    (client request, 2026-09-25): the old half-width table of
+                    every person scrolled sideways and said nothing about what
+                    anybody did.
+                */}
+                {showActivity && <ActivityCard months={months} />}
 
-                    <section className="overflow-hidden rounded-xl bg-white shadow-xl">
-                        <h3 className="border-b p-4 text-sm font-semibold">
+                {showActivity && (
+                    // Allowed to run onto the next sheet: kept whole, a Super
+                    // Admin's forty-odd offices jumped a page and left the one
+                    // before it half empty. The rows themselves never split.
+                    <section className="overflow-hidden rounded-xl bg-white shadow-xl print:rounded-lg print:border print:border-[#D8E3F2] print:shadow-none">
+                        <h3 className="border-b p-4 text-sm font-semibold print:px-3 print:py-2">
                             Average time at each office
+                            {/* What the two figures on each printed row are. */}
+                            <span className="hidden font-normal text-copy print:inline">
+                                {' '}
+                                — documents handled · average time there
+                            </span>
                         </h3>
-                        <Table>
+
+                        {/*
+                            On paper, two columns of plain rows instead of the
+                            table: a Super Admin's list runs to every office,
+                            and one row per line would take a sheet by itself.
+                        */}
+                        <ol className="hidden columns-2 gap-6 px-3 py-1.5 text-[9px] leading-tight print:block">
+                            {officePerformance.map((row) => (
+                                <li
+                                    key={row.id}
+                                    className="flex break-inside-avoid justify-between gap-2 border-b border-[#EEF2F7] py-px"
+                                >
+                                    <span className="text-navy">
+                                        {row.office}
+                                    </span>
+                                    <span className="shrink-0 text-copy tabular-nums">
+                                        {row.legs} ·{' '}
+                                        {humanMinutes(row.average_minutes)}
+                                    </span>
+                                </li>
+                            ))}
+                        </ol>
+
+                        <Table className="print:hidden">
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Office</TableHead>
@@ -284,12 +312,12 @@ export default function ReportsIndex({
                             </TableBody>
                         </Table>
                     </section>
-                </div>
+                )}
 
                 {/* In its own card: the page is tall enough that this note
                     lands on the pale ground band, where white is unreadable. */}
                 {canExport && (
-                    <p className="rounded-xl bg-white p-4 text-xs text-copy shadow-xl">
+                    <p className="rounded-xl bg-white p-4 text-xs text-copy shadow-xl print:hidden">
                         Exports run immediately rather than in the background,
                         so they are capped at {limits.pdf.toLocaleString()} rows
                         for PDF and {limits.xlsx.toLocaleString()} for Excel.
@@ -379,16 +407,18 @@ function Tile({
     value: number | string;
 }) {
     return (
-        <div className="flex items-center gap-3 rounded-xl bg-white p-5 shadow-xl">
+        <div className="flex items-center gap-3 rounded-xl bg-white p-5 shadow-xl print:gap-2 print:rounded-lg print:border print:border-[#D8E3F2] print:p-2.5 print:shadow-none">
             <Icon
                 aria-hidden="true"
-                className="size-9 shrink-0"
+                className="size-9 shrink-0 print:size-6"
                 style={{ color: tint }}
                 strokeWidth={1.75}
             />
             <div className="min-w-0">
-                <p className="text-[15px] font-bold text-navy">{label}</p>
-                <p className="text-2xl font-extrabold text-navy tabular-nums">
+                <p className="text-[15px] font-bold text-navy print:text-[10px]">
+                    {label}
+                </p>
+                <p className="text-2xl font-extrabold text-navy tabular-nums print:text-base">
                     {value}
                 </p>
             </div>

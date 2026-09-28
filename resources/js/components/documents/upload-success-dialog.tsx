@@ -25,6 +25,13 @@ import type { FlashUpload } from '@/types/ui';
  * listens on router.on('flash') rather than calling usePage() (see
  * useFlashToast).
  */
+/**
+ * Fired when this dialog closes. Filing a document lands on that document --
+ * which, without the Security PIN entered, is the PIN prompt (2026-09-25). The
+ * prompt waits for this instead of opening a second dialog on top.
+ */
+export const UPLOAD_DIALOG_CLOSED = 'cicto:upload-dialog-closed';
+
 export function UploadSuccessDialog() {
     const [upload, setUpload] = useState<FlashUpload | null>(null);
 
@@ -46,8 +53,16 @@ export function UploadSuccessDialog() {
         });
     }, []);
 
+    const onOpenChange = (next: boolean) => {
+        setOpen(next);
+
+        if (!next) {
+            window.dispatchEvent(new Event(UPLOAD_DIALOG_CLOSED));
+        }
+    };
+
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-emerald-700">
@@ -63,7 +78,7 @@ export function UploadSuccessDialog() {
                 </DialogHeader>
 
                 <DialogFooter>
-                    <Button onClick={() => setOpen(false)}>OK</Button>
+                    <Button onClick={() => onOpenChange(false)}>OK</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

@@ -292,9 +292,10 @@ class RoutingTest extends TestCase
      * behind it are still queued -- so since 2026-09-20 it has Received and
      * nothing else.
      *
-     * Return is absent for a different reason that predates all of this: a
-     * return goes to the originating office, and this IS the originating
-     * office, so there is nowhere to send it.
+     * Return is absent for a different reason: a return goes back to an office
+     * the document has already been at (2026-09-25; the originating office
+     * only, before that), and a routed document still at the office that
+     * filed it has been nowhere else yet.
      */
     public function test_the_originating_office_of_a_routed_document_keeps_only_receive(): void
     {

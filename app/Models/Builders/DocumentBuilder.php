@@ -6,6 +6,7 @@ use App\Enums\DocumentStatus;
 use App\Enums\Role;
 use App\Models\Document;
 use App\Models\User;
+use App\Support\Confidential;
 use App\Support\Deadlines;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -34,7 +35,7 @@ class DocumentBuilder extends Builder
         }
 
         if ($user->role === Role::SuperAdmin) {
-            return $this;
+            return $this->confidentialFor($user);
         }
 
         /*
@@ -84,13 +85,60 @@ class DocumentBuilder extends Builder
                     })
                     ->orWhere('documents.originating_office_id', $officeId)
                     ->orWhere('documents.created_by_id', $user->id);
-            });
+            })->confidentialFor($user);
         }
 
         // Anyone with no office at all -- a self-registered account before an
         // administrator assigns one -- has no office whose work could be shown
         // to them, so they see only what they submitted.
         return $this->where('documents.created_by_id', $user->id);
+    }
+
+    /**
+     * visibleTo, plus what has been BROADCAST to every office.
+     *
+     * For the lists people READ from -- Track Documents -- and nothing else.
+     * Reports and dashboards stay on visibleTo: an Executive Order broadcast to
+     * all 52 offices is not work each of them handled, and counting it in
+     * every office's figures would say it was.
+     */
+    public function readableBy(?User $user): self
+    {
+        if (! $user instanceof User) {
+            return $this->whereRaw('1 = 0');
+        }
+
+        return $this->where(function (self $query) use ($user): void {
+            $query->where(function (self $own) use ($user): void {
+                $own->visibleTo($user);
+            });
+
+            // To every office -- so to anybody who belongs to one.
+            if ($user->office_id !== null) {
+                $query->orWhere(function (self $broadcast): void {
+                    $broadcast->whereNotNull('documents.broadcast_at')
+                        ->where('documents.is_confidential', false);
+                });
+            }
+        });
+    }
+
+    /**
+     * Confidential documents only for whoever filed one and for the City
+     * Mayor's and HRMO's people -- whose ordinary office rule above already
+     * limits them to documents that have been at their office. Everybody else,
+     * a Super Admin included, does not see them at all. DocumentPolicy::view
+     * is the same rule for one document; see App\Support\Confidential.
+     */
+    private function confidentialFor(User $user): self
+    {
+        if (Confidential::trustsUser($user)) {
+            return $this;
+        }
+
+        return $this->where(fn (self $query) => $query
+            ->where('documents.is_confidential', false)
+            ->orWhere('documents.created_by_id', $user->id));
     }
 
     /** Documents an office is holding right now -- the open leg points at it. */

@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Controllers\Auth\LoginOtpController;
 use App\Http\Controllers\CspReportController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HelpController;
+use App\Http\Controllers\ReportActivityController;
 use App\Http\Controllers\ReportController;
 use App\Http\Middleware\EnsureAccountIsActive;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -70,6 +72,19 @@ Route::redirect('login/admin', '/login')->name('login.admin');
 Route::redirect('login/super-admin', '/login')->name('login.super-admin');
 
 /*
+| The emailed sign-in code (client request, 2026-09-25): the step between a
+| right password and the dashboard. Guest routes -- the person is not signed in
+| until the code is right. The `login-otp` limiter counts per browser session,
+| not per IP: a whole office signs in from one public address at 8 AM.
+*/
+Route::middleware(['guest', 'throttle:login-otp'])->group(function () {
+    Route::get('login/code', [LoginOtpController::class, 'show'])->name('login.otp');
+    Route::post('login/code', [LoginOtpController::class, 'verify'])->name('login.otp.verify');
+    Route::post('login/code/resend', [LoginOtpController::class, 'resend'])->name('login.otp.resend');
+    Route::post('login/code/cancel', [LoginOtpController::class, 'cancel'])->name('login.otp.cancel');
+});
+
+/*
 | §23 Help & Support, the READING half -- and it is public.
 |
 | The landing page's main navigation points Help at this route (see NAV in
@@ -101,6 +116,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // §19 Reports and Analytics
     Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
     Route::get('reports/export', [ReportController::class, 'export'])->name('reports.export');
+
+    // The "User activity" card's lists and trails (2026-09-25), loaded when
+    // the card is opened or a row is clicked -- see ReportActivityController.
+    Route::get('reports/activity/documents', [ReportActivityController::class, 'documents'])
+        ->name('reports.activity.documents');
+    Route::get('reports/activity/documents/{document}', [ReportActivityController::class, 'document'])
+        ->name('reports.activity.document');
+    Route::get('reports/activity/users', [ReportActivityController::class, 'users'])
+        ->name('reports.activity.users');
+    Route::get('reports/activity/users/{user}', [ReportActivityController::class, 'user'])
+        ->name('reports.activity.user');
 
     // The one Help route that has to know who you are.
     Route::get('help/ticket', [HelpController::class, 'ticket'])->name('help.ticket');

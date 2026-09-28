@@ -1,3 +1,5 @@
+import { cloneElement } from 'react';
+import type { ReactElement } from 'react';
 import {
     Bar,
     BarChart,
@@ -13,6 +15,7 @@ import {
     XAxis,
     YAxis,
 } from 'recharts';
+import { usePrinting } from '@/hooks/use-printing';
 
 /**
  * §19 charts.
@@ -46,6 +49,45 @@ const TOOLTIP_STYLE = {
     background: 'var(--color-popover, #fff)',
     color: 'var(--color-popover-foreground, #111)',
 } as const;
+
+/**
+ * A chart's frame: fluid on screen, fixed on paper (2026-09-25).
+ *
+ * ResponsiveContainer measures the window it was drawn in, and a sheet of bond
+ * paper is not that window -- a chart sized for a 1280px screen prints clipped.
+ * While the page prints, the chart is drawn at a width that fits the sheet
+ * instead (A4 and short or long bond all leave ~700px inside 12mm margins).
+ */
+function ChartBox({
+    height,
+    printWidth,
+    printHeight,
+    children,
+}: {
+    height: number;
+    printWidth: number;
+    printHeight: number;
+    children: ReactElement<{ width?: number; height?: number }>;
+}) {
+    const printing = usePrinting();
+
+    if (printing) {
+        return (
+            <div className="flex justify-center">
+                {cloneElement(children, {
+                    width: printWidth,
+                    height: printHeight,
+                })}
+            </div>
+        );
+    }
+
+    return (
+        <ResponsiveContainer width="100%" height={height}>
+            {children}
+        </ResponsiveContainer>
+    );
+}
 
 export function MonthlyProcessedChart({ data }: { data: MonthPoint[] }) {
     return (
@@ -136,8 +178,10 @@ export function StatusDistributionChart({ data }: { data: StatusSlice[] }) {
 }
 
 export function ProcessingTrendChart({ data }: { data: TrendPoint[] }) {
+    const printing = usePrinting();
+
     return (
-        <ResponsiveContainer width="100%" height={240}>
+        <ChartBox height={240} printWidth={690} printHeight={120}>
             <LineChart
                 data={data}
                 margin={{ top: 8, right: 8, bottom: 0, left: -20 }}
@@ -175,9 +219,11 @@ export function ProcessingTrendChart({ data }: { data: TrendPoint[] }) {
                     // Months with no completions are gaps, not zeros. Plotting
                     // them as zero would claim same-day turnaround.
                     connectNulls={false}
+                    // A print snapshot taken mid-animation shows a half-drawn line.
+                    isAnimationActive={!printing}
                 />
             </LineChart>
-        </ResponsiveContainer>
+        </ChartBox>
     );
 }
 
@@ -197,8 +243,10 @@ export const REPORT_SERIES = [
 ] as const;
 
 export function MonthlyByStatusChart({ data }: { data: MonthByStatus[] }) {
+    const printing = usePrinting();
+
     return (
-        <ResponsiveContainer width="100%" height={300}>
+        <ChartBox height={300} printWidth={330} printHeight={180}>
             <BarChart
                 data={data}
                 margin={{ top: 8, right: 8, bottom: 0, left: -20 }}
@@ -237,10 +285,11 @@ export function MonthlyByStatusChart({ data }: { data: MonthByStatus[] }) {
                         name={series.name}
                         fill={series.colour}
                         radius={[3, 3, 0, 0]}
+                        isAnimationActive={!printing}
                     />
                 ))}
             </BarChart>
-        </ResponsiveContainer>
+        </ChartBox>
     );
 }
 
@@ -255,19 +304,23 @@ export function StatusPieChart({ data }: { data: StatusSlice[] }) {
     };
 
     const total = data.reduce((sum, slice) => sum + slice.count, 0);
+    const printing = usePrinting();
+    const counts = Object.fromEntries(
+        data.map((slice) => [slice.status, slice.count]),
+    );
 
     // A pie of nothing renders as an invisible dot with a legend, which reads
     // as a broken chart rather than an empty one.
     if (total === 0) {
         return (
-            <p className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
+            <p className="flex h-[300px] items-center justify-center text-sm text-muted-foreground print:h-[120px]">
                 No documents in this period.
             </p>
         );
     }
 
     return (
-        <ResponsiveContainer width="100%" height={300}>
+        <ChartBox height={300} printWidth={330} printHeight={180}>
             <PieChart>
                 <Tooltip contentStyle={TOOLTIP_STYLE} />
                 <Legend
@@ -276,15 +329,21 @@ export function StatusPieChart({ data }: { data: StatusSlice[] }) {
                     verticalAlign="middle"
                     iconType="circle"
                     wrapperStyle={{ fontSize: 12 }}
+                    // Paper has no hover: the count a tooltip would show goes
+                    // beside each name instead.
+                    formatter={(value: string) =>
+                        printing ? `${value} (${counts[value] ?? 0})` : value
+                    }
                 />
                 <Pie
                     data={data}
                     dataKey="count"
                     nameKey="status"
                     innerRadius={0}
-                    outerRadius={110}
+                    outerRadius={printing ? 75 : 110}
                     stroke="#FFFFFF"
                     strokeWidth={2}
+                    isAnimationActive={!printing}
                 >
                     {data.map((slice) => (
                         <Cell
@@ -294,6 +353,6 @@ export function StatusPieChart({ data }: { data: StatusSlice[] }) {
                     ))}
                 </Pie>
             </PieChart>
-        </ResponsiveContainer>
+        </ChartBox>
     );
 }

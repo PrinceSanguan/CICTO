@@ -108,6 +108,106 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Email notifications
+    |--------------------------------------------------------------------------
+    |
+    | Asked for on 2026-09-24: when a document is sent to an office, its staff
+    | are told by email as well as by the bell. See App\Services\DocumentMailer.
+    |
+    | Nothing is sent while MAIL_MAILER is `log` (see App\Support\OutgoingMail),
+    | whatever this says. The switch exists for the other direction: every email
+    | leaves through the one Gmail account, whose ~500 recipients a day are
+    | shared with password resets and support tickets. If the notifications
+    | ever start eating that quota, set CICTO_EMAIL_NOTIFICATIONS=false and the
+    | bell carries on alone -- no deploy needed.
+    |
+    */
+
+    'notifications' => [
+        'email' => (bool) env('CICTO_EMAIL_NOTIFICATIONS', true),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Security PIN
+    |--------------------------------------------------------------------------
+    |
+    | Client request, 2026-09-25: a 4-digit PIN, chosen by each person, asked
+    | for before a document is shown. The adviser's scenario was a computer
+    | left signed in with a document open -- so the PIN is asked for again
+    | after `idle_minutes` without activity, not only once per sign-in.
+    |
+    | It gates VIEWING a document (the View Documents page, its files and the
+    | actions on it). The list of documents, filing a new one and every other
+    | page are untouched -- "the pin will pop up only when viewing documents".
+    |
+    | `max_attempts` wrong PINs in a row sign the session out. Four digits is
+    | ten thousand combinations; without a ceiling, somebody at an unattended
+    | desk could simply try them. Signing out puts the account password -- the
+    | stronger secret -- back in front of them.
+    |
+    | `enabled` is the off switch for the whole feature, e.g. for a training
+    | host. Turning it off never deletes anybody's PIN.
+    |
+    */
+
+    /*
+    |--------------------------------------------------------------------------
+    | Sign-in code (login OTP)
+    |--------------------------------------------------------------------------
+    |
+    | Client request, 2026-09-25: signing in went "rekta dashboard" on a
+    | password alone. Now a correct password emails a 6-digit code, and the
+    | dashboard opens only after it is typed. Every account, every sign-in --
+    | except one that already uses an authenticator app, which answers that
+    | challenge instead.
+    |
+    | IT DEPENDS ON EMAIL. An account whose address is not a real inbox cannot
+    | sign in while this is on -- which includes the {code}.admin@ / .clerk@
+    | accounts OfficeAccountSeeder creates. Give each person a real address
+    | first. Every sign-in is one email from the same ~500-a-day Gmail allowance
+    | as notifications; if mail stops, nobody can sign in, and `enabled=false`
+    | (CICTO_LOGIN_OTP=false, then config:cache) is the way back in.
+    |
+    */
+
+    'login_otp' => [
+        'enabled' => (bool) env('CICTO_LOGIN_OTP', true),
+        'ttl_minutes' => (int) env('CICTO_LOGIN_OTP_TTL_MINUTES', 10),
+        'max_attempts' => 5,
+        'resend_seconds' => 60,
+        // Codes one account may be sent in 15 minutes: protects the daily
+        // Gmail allowance from somebody who knows a password.
+        'max_sends' => 5,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Confidential documents
+    |--------------------------------------------------------------------------
+    |
+    | The client's routing paths (2026-09-25): Confidential is "City Mayor /
+    | HRMO only". The offices, by code, that may receive and read one. Nobody
+    | else sees it -- not the rest of the office that filed it, and not a Super
+    | Admin -- except the person who filed it. See App\Support\Confidential.
+    |
+    */
+
+    'confidential' => [
+        'offices' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('CICTO_CONFIDENTIAL_OFFICES', 'OCM,HRMO')),
+        ))),
+    ],
+
+    'security_pin' => [
+        'enabled' => (bool) env('CICTO_SECURITY_PIN', true),
+        'idle_minutes' => (int) env('CICTO_SECURITY_PIN_IDLE_MINUTES', 5),
+        'max_attempts' => 5,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Uploads
     |--------------------------------------------------------------------------
     |
@@ -316,17 +416,20 @@ return [
     | Per-office accounts
     |--------------------------------------------------------------------------
     |
-    | Database\Seeders\OfficeAccountSeeder mints one Admin and one User for
+    | Database\Seeders\OfficeAccountSeeder mints two Admins and one User for
     | every ACTIVE office, because §5's "send to" dropdown offers every active
     | office whether or not anybody works there -- and a document forwarded to
     | an office with no Admin is a document nobody can open. DocumentPolicy
     | grants office-scoped read and workflow rights to Role::Admin only, so the
-    | Admin of the pair is the one who receives; the User is the one who files.
+    | Admins are the ones who receive; the User is the one who files. The two
+    | Admins have identical rights and exist as separate accounts so the audit
+    | trail can say which of them approved a document (asked for 2026-09-24).
     |
-    | Addresses are {code}.admin@{domain} and {code}.clerk@{domain}, lower-cased
-    | -- ocm.admin@baliwag.gov.ph, gso-ms.clerk@baliwag.gov.ph. Derived from the
-    | office CODE rather than a counter so re-running the seeder lands on the
-    | same address and creates nothing twice.
+    | Addresses are {code}.admin@, {code}.admin2@ and {code}.clerk@{domain},
+    | lower-cased -- ocm.admin@baliwag.gov.ph, ocm.admin2@baliwag.gov.ph,
+    | gso-ms.clerk@baliwag.gov.ph. Derived from the office CODE rather than a
+    | counter so re-running the seeder lands on the same address and creates
+    | nothing twice.
     |
     | THESE ARE LOGIN IDENTIFIERS FIRST AND MAILBOXES SECOND. The city mail
     | server has no ocm.clerk@ box, so anything the app sends one of them -- a
@@ -339,16 +442,44 @@ return [
     | training instance can mint accounts under a domain that is not the city's.
     |
     */
+    /*
+    |--------------------------------------------------------------------------
+    | Starting the live database again
+    |--------------------------------------------------------------------------
+    |
+    | `migrate:fresh` DELETES EVERY DOCUMENT, ACCOUNT AND LOG, so production
+    | refuses it (AppServiceProvider). CICTO_ALLOW_DATABASE_WIPE=true lifts that
+    | for as long as it is set: set it, redeploy, run
+    | `php artisan migrate:fresh --seed --force`, set it back to false, redeploy.
+    |
+    | A database with nobody in it is then seeded ready to use (DatabaseSeeder):
+    | the offices and types, every office's accounts, and ONE Super Admin from
+    | the three settings below -- a real inbox, because the sign-in code is
+    | emailed. Nothing here touches a database that already has accounts.
+    |
+    */
+
+    'allow_database_wipe' => (bool) env('CICTO_ALLOW_DATABASE_WIPE', false),
+
+    'super_admin' => [
+        'name' => env('CICTO_SUPER_ADMIN_NAME', 'Super Admin'),
+        'email' => env('CICTO_SUPER_ADMIN_EMAIL'),
+        'password' => env('CICTO_SUPER_ADMIN_PASSWORD'),
+    ],
+
     'office_accounts' => [
         'domain' => env('CICTO_OFFICE_ACCOUNT_DOMAIN', 'baliwag.gov.ph'),
 
         /*
-         * ONE PASSWORD, SHARED BY ALL 104 ACCOUNTS. Say plainly what that
+         * ONE PASSWORD, SHARED BY ALL 156 ACCOUNTS. Say plainly what that
          * means: anybody who can reach the login page can sign in as any
          * office Admin, and an office Admin can read, forward, approve and
          * reject that office's documents. The register's audit trail stays
          * intact -- every movement still names the account that made it -- but
          * it stops being evidence of WHO, because everybody shares the login.
+         * That includes the two Admins of one office: the trail can only tell
+         * them apart if each keeps their own account to themselves, which on
+         * a shared password they cannot.
          *
          * It ships this way on purpose. Handing 52 offices a distinct
          * 14-character string on rollout day means 52 chances to mistype one
@@ -366,7 +497,7 @@ return [
          *   - As each office names a real person, create that person with
          *     `cicto:user` against their own address and deactivate the shared
          *     account. `cicto:user <email> --reset-password` rotates one
-         *     without touching the other 103.
+         *     without touching the other 155.
          *
          * The seeder never re-writes a password it did not just create, so
          * changing this value later affects only accounts made after the

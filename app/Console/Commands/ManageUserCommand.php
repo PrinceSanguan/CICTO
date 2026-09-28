@@ -2,14 +2,18 @@
 
 namespace App\Console\Commands;
 
+use App\Actions\Users\ManageSecurityPin;
 use App\Actions\Users\ResetAccountPassword;
 use App\Enums\Role;
+use App\Enums\SecurityEventType;
 use App\Models\Office;
+use App\Models\SecurityEvent;
 use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
 /**
@@ -40,11 +44,13 @@ class ManageUserCommand extends Command
                             {--activate : Re-enable a closed account}
                             {--deactivate : Close the account without deleting it}
                             {--reset-password : Generate a new password, print it once, and sign the account out everywhere}
-                            {--revoke-second-factors : With --reset-password, also remove two-factor and passkeys}';
+                            {--revoke-second-factors : With --reset-password, also remove two-factor and passkeys}
+                            {--reset-pin : Clear the Security PIN so they create a new one the next time they open a document}
+                            {--email= : Move the account to a new address -- where its sign-in codes will go -- and mark it verified}';
 
     protected $description = 'Create a user, or change their role, office, password or active state';
 
-    public function handle(ResetAccountPassword $reset): int
+    public function handle(ResetAccountPassword $reset, ManageSecurityPin $pins): int
     {
         $email = mb_strtolower(trim((string) $this->argument('email')));
         $user = User::firstWhere('email', $email);
@@ -62,7 +68,7 @@ class ManageUserCommand extends Command
              * operator holding working credentials for an account that is not
              * the one they meant, and the real one still locked.
              */
-            if ($this->option('reset-password')) {
+            if ($this->option('reset-password') || $this->option('reset-pin') || $this->option('email') !== null) {
                 $this->error("No account with the address {$email}. Nothing was changed.");
                 $this->line('Check the spelling -- this command will not create an account for a password reset.');
 
@@ -96,6 +102,19 @@ class ManageUserCommand extends Command
 
         if ($this->option('reset-password')) {
             $this->resetPassword($reset, $user);
+        }
+
+        if ($this->option('email') !== null && ! $this->changeEmail($user)) {
+            return self::FAILURE;
+        }
+
+        if ($this->option('reset-pin')) {
+            if ($user->hasSecurityPin()) {
+                $pins->resetFromConsole($user);
+                $this->line('  Security PIN cleared. They create a new one the next time they open a document.');
+            } else {
+                $this->line('  This account has no Security PIN, so there was nothing to clear.');
+            }
         }
 
         $user->refresh();
@@ -273,6 +292,56 @@ class ManageUserCommand extends Command
         }
 
         $this->newLine();
+    }
+
+    /**
+     * `--email=`: the recovery for an account whose address is wrong.
+     *
+     * Since the emailed sign-in code (2026-09-25) an address nobody can read is
+     * an account nobody can enter -- a typo made under Settings > Profile, or a
+     * seeded {code}.admin@ login that was never a mailbox -- and neither Manage
+     * Users nor the person themselves can fix it from outside. This can.
+     *
+     * Marked verified on the operator's word: `verified` gates every page, and
+     * the verification link would go to an address the operator has just
+     * vouched for anyway.
+     */
+    private function changeEmail(User $user): bool
+    {
+        $new = mb_strtolower(trim((string) $this->option('email')));
+
+        $validator = Validator::make(['email' => $new], [
+            'email' => ['required', 'string', 'email', 'max:255', Rule::unique(User::class, 'email')->ignore($user->id)],
+        ]);
+
+        if ($validator->fails()) {
+            $this->error('Nothing was changed: '.$validator->errors()->first('email'));
+
+            return false;
+        }
+
+        if ($new === $user->email) {
+            $this->line('  That is already the address on this account.');
+
+            return true;
+        }
+
+        $old = $user->email;
+
+        $user->forceFill([
+            'email' => $new,
+            'email_verified_at' => now(),
+        ])->save();
+
+        SecurityEvent::log(
+            type: SecurityEventType::EmailChangedByAdmin,
+            summary: "The address of {$old} was changed to {$new} from the server console",
+            subjectLabel: $new,
+        );
+
+        $this->line("  Address changed from {$old} to {$new}. Sign-in codes now go there.");
+
+        return true;
     }
 
     private function applyRole(User $user): bool

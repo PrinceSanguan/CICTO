@@ -2,6 +2,7 @@ import { usePage } from '@inertiajs/react';
 import { AppTopNav } from '@/components/app-top-nav';
 import { DocumentMotifs } from '@/components/documents/document-motifs';
 import { Skyline } from '@/components/landing/skyline';
+import { SecurityPinIdleLock } from '@/components/security-pin/security-pin-idle-lock';
 
 /**
  * The staff-facing shell: white nav bar, blue gradient body, city skyline.
@@ -38,8 +39,19 @@ export default function AppTopLayout({
     const { component } = usePage();
 
     return (
-        <div className="flex min-h-svh flex-col bg-surface">
-            <AppTopNav />
+        /*
+            The `print:` classes throughout: on paper this shell is only the
+            page's content. The nav, the backdrop artwork and the blue ground
+            are dropped, and <main> loses its floor and gutters so a printed
+            sheet starts at the top of the page -- see documents/show, the
+            screen they were added for (2026-09-24).
+        */
+        <div className="flex min-h-svh flex-col bg-surface print:min-h-0 print:bg-white">
+            <div className="print:hidden">
+                <AppTopNav />
+            </div>
+
+            <SecurityPinIdleLock />
 
             {/*
                 `overflow-x-clip`, NOT `overflow-x-hidden`. They clip
@@ -63,8 +75,10 @@ export default function AppTopLayout({
                 which is the one `html { overflow-y: scroll }` in app.css keeps
                 reserved.
             */}
-            <div className="relative flex flex-1 flex-col overflow-x-clip bg-linear-to-b/srgb from-brand to-brand-soft">
-                <DocumentMotifs />
+            <div className="relative flex flex-1 flex-col overflow-x-clip bg-linear-to-b/srgb from-brand to-brand-soft print:bg-none">
+                <div className="print:hidden">
+                    <DocumentMotifs />
+                </div>
 
                 {/*
                     Two rules here, both from the client dropping "the pages
@@ -98,7 +112,7 @@ export default function AppTopLayout({
                 */}
                 <main
                     key={component}
-                    className="relative z-10 mx-auto min-h-[calc(100svh-3rem)] w-full max-w-7xl flex-1 px-4 py-8 duration-500 ease-out motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-3 lg:px-8"
+                    className="relative z-10 mx-auto min-h-[calc(100svh-3rem)] w-full max-w-7xl flex-1 px-4 py-8 duration-500 ease-out motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-3 lg:px-8 print:min-h-0 print:max-w-none print:p-0"
                 >
                     {children}
                 </main>
@@ -120,7 +134,7 @@ export default function AppTopLayout({
                     the content. A long document list still scrolls past the
                     rooflines rather than being pinned above them.
                 */}
-                <Skyline className="absolute inset-x-0 bottom-0" />
+                <Skyline className="absolute inset-x-0 bottom-0 print:hidden" />
             </div>
         </div>
     );

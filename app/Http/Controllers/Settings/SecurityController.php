@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Settings;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\PasswordUpdateRequest;
 use App\Http\Requests\Settings\TwoFactorAuthenticationRequest;
+use App\Support\SecurityPin;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
@@ -38,6 +39,13 @@ class SecurityController extends Controller
                     ->all()
                 : [],
             'passwordRules' => Password::defaults()->toPasswordRulesString(),
+
+            // The Security PIN section (2026-09-25): whether one is set and
+            // since when. Never the PIN.
+            'securityPin' => SecurityPin::enabled() ? [
+                'has_pin' => $request->user()->hasSecurityPin(),
+                'set_at' => $request->user()->security_pin_set_at?->toIso8601String(),
+            ] : null,
         ];
 
         if (Features::canManageTwoFactorAuthentication()) {

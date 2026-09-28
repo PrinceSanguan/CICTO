@@ -59,6 +59,13 @@ Route::middleware(['auth', 'verified', EnsureRole::using(Role::SuperAdmin)])
             ->middleware('throttle:6,1')
             ->name('users.password');
 
+        // Clears a user's Security PIN (2026-09-25) so they choose a new one
+        // the next time they open a document. Clearing only: an administrator
+        // who could SET a PIN would know it.
+        Route::delete('users/{user}/security-pin', [SuperAdminUserController::class, 'resetSecurityPin'])
+            ->middleware('throttle:6,1,security-pin-reset')
+            ->name('users.security-pin');
+
         Route::get('reports', [SuperAdminReportController::class, 'index'])->name('reports.index');
 
         // §2 system settings, §22 backup console, §21 security log.

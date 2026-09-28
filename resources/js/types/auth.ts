@@ -43,6 +43,18 @@ export type Auth = {
     role: Role | null;
     office: AuthOffice | null;
     can: Partial<Capabilities>;
+    /** App\Support\SecurityPin::forClient(). Null when signed out or switched off. */
+    securityPin: SecurityPinState | null;
+};
+
+/**
+ * The Security PIN, as far as the browser is told (2026-09-25): whether one
+ * exists and whether this session is unlocked -- never the PIN.
+ */
+export type SecurityPinState = {
+    has_pin: boolean;
+    unlocked: boolean;
+    idle_seconds: number;
 };
 
 export type Passkey = {

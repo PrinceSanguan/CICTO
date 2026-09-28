@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Actions\Documents\TransitionDocument;
 use App\Enums\MovementAction;
 use App\Enums\Role;
+use App\Enums\SecurityEventType;
 use App\Models\Office;
+use App\Models\SecurityEvent;
 use App\Models\User;
 use Database\Seeders\DocumentTypeSeeder;
 use Database\Seeders\OfficeAccountSeeder;
@@ -42,7 +44,7 @@ class OfficeAccountSeederTest extends TestCase
         $this->seed([OfficeSeeder::class, DocumentTypeSeeder::class]);
     }
 
-    public function test_every_active_office_gets_one_admin_and_one_clerk(): void
+    public function test_every_active_office_gets_two_admins_and_one_clerk(): void
     {
         $this->seed(OfficeAccountSeeder::class);
 
@@ -50,19 +52,30 @@ class OfficeAccountSeederTest extends TestCase
 
         // Guards against a seeder that "passes" by finding no offices at all.
         $this->assertGreaterThan(40, $offices->count());
-        $this->assertSame($offices->count() * 2, User::query()->count());
+        $this->assertSame($offices->count() * 3, User::query()->count());
 
         foreach ($offices as $office) {
             $accounts = User::query()->where('office_id', $office->id)->get();
 
-            $this->assertCount(2, $accounts, "{$office->code} did not get a pair.");
+            $this->assertCount(3, $accounts, "{$office->code} did not get its three accounts.");
+
+            $admins = $accounts->where('role', Role::Admin);
 
             $this->assertSame(
-                1,
-                $accounts->where('role', Role::Admin)->count(),
-                "{$office->code} has no single Admin, so nothing forwarded there can be opened.",
+                2,
+                $admins->count(),
+                "{$office->code} does not have two Admins.",
             );
             $this->assertSame(1, $accounts->where('role', Role::User)->count());
+
+            // The name is what the audit trail shows. Two Admins with the same
+            // name would be two accounts the trail still cannot tell apart,
+            // which is the one thing the second Admin is for.
+            $this->assertCount(
+                2,
+                $admins->pluck('name')->unique(),
+                "{$office->code}'s two Admins share a name, so the audit trail cannot tell them apart.",
+            );
 
             foreach ($accounts as $account) {
                 $this->assertTrue($account->is_active);
@@ -112,7 +125,7 @@ class OfficeAccountSeederTest extends TestCase
 
         foreach ($offered as $office) {
             $this->assertSame(
-                1,
+                2,
                 User::query()
                     ->where('office_id', $office['id'])
                     ->where('role', Role::Admin)
@@ -154,7 +167,7 @@ class OfficeAccountSeederTest extends TestCase
 
         foreach ($offered as $office) {
             $this->assertSame(
-                1,
+                2,
                 User::query()
                     ->where('office_id', $office['id'])
                     ->where('role', Role::Admin)
@@ -209,6 +222,95 @@ class OfficeAccountSeederTest extends TestCase
             ->assertForbidden();
     }
 
+    /**
+     * Asked for on 2026-09-24: two Admins per office with the same powers, so
+     * that the audit trail shows WHICH of them approved a document.
+     */
+    public function test_both_admins_can_act_and_the_trail_names_the_one_who_did(): void
+    {
+        $this->seed(OfficeAccountSeeder::class);
+
+        $ocm = Office::query()->where('code', 'OCM')->firstOrFail();
+        $treasury = Office::query()->where('code', 'TREA')->firstOrFail();
+
+        $document = $this->registerDocument($ocm, $this->seeded('ocm.clerk'));
+
+        app(TransitionDocument::class)->handle(
+            document: $document,
+            action: MovementAction::Forwarded,
+            actor: $this->seeded('ocm.admin'),
+            toOfficeId: $treasury->id,
+            expectedMovementId: $document->openMovement?->id,
+        );
+
+        $first = $this->seeded('trea.admin');
+        $second = $this->seeded('trea.admin2');
+
+        // Same rights: either of them can take the folder in.
+        foreach ([$first, $second] as $admin) {
+            $this->assertTrue(
+                $admin->can('act', [$document->refresh(), MovementAction::Received]),
+                "{$admin->email} cannot receive a document sent to their own office.",
+            );
+        }
+
+        // One receives, the OTHER completes -- neither is locked out by the
+        // step the other one took.
+        app(TransitionDocument::class)->handle(
+            document: $document->refresh(),
+            action: MovementAction::Received,
+            actor: $second,
+            expectedMovementId: $document->refresh()->openMovement?->id,
+        );
+
+        $this->assertTrue($first->can('act', [$document->refresh(), MovementAction::Completed]));
+
+        app(TransitionDocument::class)->handle(
+            document: $document->refresh(),
+            action: MovementAction::Completed,
+            actor: $first,
+            expectedMovementId: $document->refresh()->openMovement?->id,
+        );
+
+        $this->actingAs($first)
+            ->get(route('documents.show', $document))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('timeline.2.action', 'received')
+                ->where('timeline.2.actor', 'TREA Admin 2')
+                ->where('timeline.2.to_office', $treasury->name)
+                ->where('timeline.3.action', 'completed')
+                ->where('timeline.3.actor', 'TREA Admin')
+                ->where('timeline.3.to_office', $treasury->name));
+    }
+
+    /**
+     * The other thing a second Admin buys. With self-approval off (the
+     * default, client question A6), an Admin who FILES a document cannot also
+     * decide on it -- and in an office with one Admin, that document had
+     * nobody at home to decide on it. The second Admin can.
+     */
+    public function test_the_second_admin_can_decide_on_what_the_first_one_filed(): void
+    {
+        $this->seed(OfficeAccountSeeder::class);
+
+        $ocm = Office::query()->where('code', 'OCM')->firstOrFail();
+        $filer = $this->seeded('ocm.admin');
+        $other = $this->seeded('ocm.admin2');
+
+        $document = $this->registerDocument($ocm, $filer);
+
+        app(TransitionDocument::class)->handle(
+            document: $document,
+            action: MovementAction::Received,
+            actor: $other,
+            expectedMovementId: $document->openMovement?->id,
+        );
+
+        $this->assertFalse($filer->can('act', [$document->refresh(), MovementAction::Completed]));
+        $this->assertTrue($other->can('act', [$document->refresh(), MovementAction::Completed]));
+    }
+
     public function test_a_second_run_creates_nothing_and_never_rewrites_a_password(): void
     {
         $this->seed(OfficeAccountSeeder::class);
@@ -226,6 +328,31 @@ class OfficeAccountSeederTest extends TestCase
         $this->assertSame($hash, $this->seeded('ocm.admin')->password);
     }
 
+    /**
+     * The deployed database was seeded before the second Admin existed. The
+     * upgrade is running the seeder again, and it must add the `.admin2`
+     * accounts without touching the ones offices are already signing in with.
+     */
+    public function test_a_rerun_on_an_older_install_adds_only_the_second_admins(): void
+    {
+        $this->seed(OfficeAccountSeeder::class);
+
+        // Back to the pre-2026-09-24 shape: the pair, and no second Admin.
+        User::query()->where('email', 'like', '%.admin2@%')->delete();
+        $before = User::query()->count();
+        $hash = $this->seeded('ocm.admin')->password;
+
+        config()->set('cicto.office_accounts.password', 'Second-Admin-2026');
+
+        $this->seed(OfficeAccountSeeder::class);
+
+        $offices = Office::query()->active()->count();
+
+        $this->assertSame($before + $offices, User::query()->count());
+        $this->assertSame($hash, $this->seeded('ocm.admin')->password);
+        $this->assertTrue(Hash::check('Second-Admin-2026', $this->seeded('ocm.admin2')->password));
+    }
+
     public function test_it_staffs_an_office_added_after_the_first_run(): void
     {
         $this->seed(OfficeAccountSeeder::class);
@@ -234,8 +361,9 @@ class OfficeAccountSeederTest extends TestCase
 
         $this->seed(OfficeAccountSeeder::class);
 
-        $this->assertSame(2, User::query()->where('office_id', $latecomer->id)->count());
+        $this->assertSame(3, User::query()->where('office_id', $latecomer->id)->count());
         $this->assertNotNull(User::query()->where('email', 'newco.admin@baliwag.gov.ph')->first());
+        $this->assertNotNull(User::query()->where('email', 'newco.admin2@baliwag.gov.ph')->first());
     }
 
     public function test_it_writes_a_credential_sheet_for_everything_it_created(): void
@@ -351,6 +479,75 @@ class OfficeAccountSeederTest extends TestCase
         }
 
         $this->fail("The credential sheet has no line for {$email}.");
+    }
+
+    /**
+     * The CICTO office's own Gmail (client, 2026-09-28): the one account with
+     * a real inbox, so the emailed sign-in code can be tested on the live site.
+     */
+    public function test_the_cicto_admin_is_created_on_the_offices_real_inbox(): void
+    {
+        $this->seed(OfficeAccountSeeder::class);
+
+        $cicto = Office::query()->where('code', 'CICTO')->firstOrFail();
+        $account = User::query()->where('email', 'cictobaliwagcity@gmail.com')->firstOrFail();
+
+        $this->assertSame($cicto->id, $account->office_id);
+        $this->assertSame(Role::Admin, $account->role);
+        $this->assertSame('CICTO Admin', $account->name);
+        $this->assertTrue($account->hasVerifiedEmail());
+        $this->assertTrue(Hash::check((string) config('cicto.office_accounts.password'), $account->password));
+
+        // Instead of the placeholder, not beside it: still three accounts.
+        $this->assertFalse(User::query()->where('email', 'cicto.admin@baliwag.gov.ph')->exists());
+        $this->assertSame(3, User::query()->where('office_id', $cicto->id)->count());
+        $this->assertNotNull($this->seeded('cicto.admin2'));
+
+        $this->assertStringContainsString('"cictobaliwagcity@gmail.com"', $this->sheet());
+    }
+
+    /**
+     * The live site was seeded before the address was given: the existing
+     * CICTO Admin is moved onto it -- same account, password and history --
+     * rather than given a twin.
+     */
+    public function test_an_existing_cicto_admin_is_moved_onto_the_real_inbox(): void
+    {
+        $this->seed(OfficeAccountSeeder::class);
+
+        // Back to how an install seeded before 2026-09-28 looks.
+        $account = User::query()->where('email', 'cictobaliwagcity@gmail.com')->firstOrFail();
+        $account->forceFill(['email' => 'cicto.admin@baliwag.gov.ph', 'password' => 'Their-Own-Password'])->save();
+        $hash = $account->refresh()->password;
+        $before = User::query()->count();
+
+        $this->seed(OfficeAccountSeeder::class);
+
+        $moved = User::query()->where('email', 'cictobaliwagcity@gmail.com')->firstOrFail();
+
+        $this->assertSame($account->id, $moved->id, 'The same account, not a new one.');
+        $this->assertSame($hash, $moved->password, 'Its password is left alone.');
+        $this->assertTrue($moved->hasVerifiedEmail());
+        $this->assertSame($before, User::query()->count());
+        $this->assertFalse(User::query()->where('email', 'cicto.admin@baliwag.gov.ph')->exists());
+        $this->assertTrue(SecurityEvent::query()
+            ->where('type', SecurityEventType::EmailChangedByAdmin->value)
+            ->where('summary', 'like', '%cicto.admin@baliwag.gov.ph to its real inbox, cictobaliwagcity@gmail.com%')
+            ->exists());
+
+        // And a third run has nothing left to do.
+        $this->seed(OfficeAccountSeeder::class);
+        $this->assertSame($before, User::query()->count());
+        $this->assertSame($hash, $moved->refresh()->password);
+    }
+
+    private function sheet(): string
+    {
+        $files = Storage::disk('local')->files();
+
+        $this->assertNotEmpty($files, 'No credential sheet was written.');
+
+        return (string) Storage::disk('local')->get($files[0]);
     }
 
     private function seeded(string $localPart): User

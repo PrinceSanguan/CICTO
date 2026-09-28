@@ -24,13 +24,15 @@ use Illuminate\Support\Carbon;
  * @property string|null $description
  * @property int|null $turnaround_days
  * @property bool $requires_approval
+ * @property bool $is_confidential
+ * @property bool $allows_broadcast
  * @property bool $is_active
  * @property int $sort_order
  * @property Carbon|null $deleted_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['code', 'name', 'description', 'turnaround_days', 'requires_approval', 'is_active', 'sort_order'])]
+#[Fillable(['code', 'name', 'description', 'turnaround_days', 'requires_approval', 'is_confidential', 'allows_broadcast', 'is_active', 'sort_order'])]
 class DocumentType extends Model
 {
     /** @use HasFactory<DocumentTypeFactory> */
@@ -42,6 +44,8 @@ class DocumentType extends Model
         return [
             'turnaround_days' => 'integer',
             'requires_approval' => 'boolean',
+            'is_confidential' => 'boolean',
+            'allows_broadcast' => 'boolean',
             'is_active' => 'boolean',
         ];
     }

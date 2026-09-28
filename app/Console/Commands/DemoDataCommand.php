@@ -76,7 +76,10 @@ class DemoDataCommand extends Command
         ['title' => 'Water line repair', 'office' => 'OCM', 'by' => 'clerk@cicto.test', 'type' => 'REQUEST', 'priority' => DocumentPriority::High],
         ['title' => 'Business permit renewal', 'office' => 'TREA', 'by' => 'mto@cicto.test', 'type' => 'BUSINESS-PERMIT', 'priority' => DocumentPriority::Normal],
         ['title' => 'Statement of receipts', 'office' => 'TREA', 'by' => 'mto@cicto.test', 'type' => 'CERTIFICATION', 'priority' => DocumentPriority::Normal],
-        ['title' => 'Other office secret', 'office' => 'SP', 'by' => 'sb@cicto.test', 'type' => 'CONFIDENTIAL', 'priority' => DocumentPriority::Normal],
+        // RESOLUTION, not CONFIDENTIAL: since 2026-09-25 a Confidential
+        // document can only be filed to the City Mayor or HRMO, and this one
+        // exists to prove that an office's ordinary work stays in that office.
+        ['title' => 'Other office secret', 'office' => 'SP', 'by' => 'sb@cicto.test', 'type' => 'RESOLUTION', 'priority' => DocumentPriority::Normal],
     ];
 
     public function handle(RegisterDocument $register): int
@@ -103,6 +106,12 @@ class DemoDataCommand extends Command
 
             return self::FAILURE;
         }
+
+        // Practice documents are belled like real ones, but never emailed: on a
+        // host with working mail, the real staff of OCM, TREA and SP would get
+        // a message about every sample document, spent from the same daily
+        // quota as their password resets.
+        config(['cicto.notifications.email' => false]);
 
         $accounts = $this->createAccounts();
         $documents = $this->createDocuments($register);

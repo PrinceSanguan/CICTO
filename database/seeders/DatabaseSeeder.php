@@ -7,6 +7,8 @@ use App\Models\Office;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rules\Password;
 
 class DatabaseSeeder extends Seeder
 {
@@ -24,10 +26,82 @@ class DatabaseSeeder extends Seeder
         ]);
 
         if (app()->isProduction()) {
+            $this->seedAnEmptyProductionDatabase();
+
             return;
         }
 
         $this->seedDemoAccounts();
+    }
+
+    /**
+     * The accounts a live site needs to be usable, when it has none at all --
+     * after `migrate:fresh --seed`, or on a first install.
+     *
+     * Only then. On every other deploy the database already has people in it,
+     * and minting accounts stays the deliberate, by-name OfficeAccountSeeder
+     * run it always was. What an empty database gets:
+     *
+     *  - ONE Super Admin, from CICTO_SUPER_ADMIN_EMAIL / _PASSWORD / _NAME. A
+     *    real inbox, since the sign-in code is emailed; a password that passes
+     *    the production rules. Without both, none is made -- and the console
+     *    says how to make one.
+     *  - Every office's three accounts (OfficeAccountSeeder), the CICTO Admin
+     *    on the office's real Gmail. Not while the shared password is still the
+     *    shipped "password": 156 accounts behind it on a live site is worse
+     *    than none.
+     */
+    private function seedAnEmptyProductionDatabase(): void
+    {
+        if (User::query()->exists()) {
+            return;
+        }
+
+        $this->seedSuperAdmin();
+
+        if ((string) config('cicto.office_accounts.password') === 'password') {
+            $this->command->warn('  Office accounts were NOT created: CICTO_OFFICE_ACCOUNT_PASSWORD is still "password". '
+                .'Set a real one, then run: php artisan db:seed --class="Database\\Seeders\\OfficeAccountSeeder" --force',
+            );
+
+            return;
+        }
+
+        $this->call(OfficeAccountSeeder::class);
+    }
+
+    private function seedSuperAdmin(): void
+    {
+        $email = mb_strtolower(trim((string) config('cicto.super_admin.email')));
+        $password = (string) config('cicto.super_admin.password');
+
+        $validator = Validator::make(
+            ['email' => $email, 'password' => $password],
+            ['email' => ['required', 'email', 'max:255'], 'password' => ['required', Password::defaults()]],
+        );
+
+        if ($validator->fails()) {
+            $this->command->warn('  No Super Admin was created: '.$validator->errors()->first()
+                .' Set CICTO_SUPER_ADMIN_EMAIL and CICTO_SUPER_ADMIN_PASSWORD, or create one with: '
+                .'php artisan cicto:user <email> --name="Super Admin" --role=super_admin',
+            );
+
+            return;
+        }
+
+        (new User)->forceFill([
+            'name' => (string) config('cicto.super_admin.name') ?: 'Super Admin',
+            'email' => $email,
+            'password' => $password,
+            'role' => Role::SuperAdmin->value,
+            'office_id' => null,
+            'is_active' => true,
+            // The address came from whoever set up the server, which is a
+            // stronger assurance than a click-through -- as with cicto:user.
+            'email_verified_at' => now(),
+        ])->save();
+
+        $this->command->line("  Super Admin created: {$email}. Its sign-in codes go to that inbox.");
     }
 
     /**

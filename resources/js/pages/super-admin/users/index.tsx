@@ -20,6 +20,8 @@ type UserRow = {
     /** Whether a password reset alone would still leave them locked out. */
     has_two_factor: boolean;
     passkeys: number;
+    /** Whether they have chosen their Security PIN (never the PIN). */
+    has_security_pin: boolean;
 };
 
 type Props = {
@@ -199,6 +201,10 @@ export default function ManageUsers({
                                     <LastLogin iso={user.last_login_at} />
                                 </span>
                             </div>
+                            <div className="mt-2 flex items-center gap-3 text-sm text-copy">
+                                <span>Security PIN:</span>
+                                <PinCell user={user} viewerId={viewerId} />
+                            </div>
                             {user.id !== viewerId && (
                                 <ResetButton
                                     user={user}
@@ -212,7 +218,7 @@ export default function ManageUsers({
                 </ul>
 
                 <div className="mt-6 hidden overflow-x-auto md:block">
-                    <table className="w-full min-w-[820px] text-left">
+                    <table className="w-full min-w-[920px] text-left">
                         <thead>
                             <tr>
                                 {[
@@ -222,6 +228,7 @@ export default function ManageUsers({
                                     'Office',
                                     'Status',
                                     'Last Login',
+                                    'Security PIN',
                                     'Password',
                                 ].map((heading) => (
                                     <th
@@ -239,7 +246,7 @@ export default function ManageUsers({
                             {users.data.length === 0 && (
                                 <tr>
                                     <td
-                                        colSpan={7}
+                                        colSpan={8}
                                         className="px-3 py-10 text-center text-sm text-copy"
                                     >
                                         No accounts match that search.
@@ -266,6 +273,12 @@ export default function ManageUsers({
                                     </td>
                                     <td className="px-3 py-4 text-sm whitespace-nowrap text-copy">
                                         <LastLogin iso={user.last_login_at} />
+                                    </td>
+                                    <td className="px-3 py-4 text-sm whitespace-nowrap">
+                                        <PinCell
+                                            user={user}
+                                            viewerId={viewerId}
+                                        />
                                     </td>
                                     <td className="px-3 py-4">
                                         {/* Absent, not disabled, on the
@@ -333,6 +346,81 @@ export default function ManageUsers({
                 )}
             </section>
         </>
+    );
+}
+
+/**
+ * Security PIN status, and the Super Admin's reset (client request,
+ * 2026-09-25).
+ *
+ * Reset CLEARS the PIN; the person creates a new one the next time they open a
+ * document. There is no "set PIN" here on purpose -- a PIN somebody else chose
+ * is a PIN somebody else knows. Anybody who still knows their password resets
+ * their own from the PIN pop-up, so this is for the person who forgot both.
+ *
+ * Confirmed inline, not with the browser's confirm() box, and absent on the
+ * viewer's own row: their own PIN is changed under Settings > Security.
+ */
+function PinCell({ user, viewerId }: { user: UserRow; viewerId: number }) {
+    const [confirming, setConfirming] = useState(false);
+    const [processing, setProcessing] = useState(false);
+
+    if (!user.has_security_pin) {
+        return <span className="text-copy">Not set</span>;
+    }
+
+    if (user.id === viewerId) {
+        return <span className="font-bold text-[#1E7A46]">Set</span>;
+    }
+
+    if (!confirming) {
+        return (
+            <span className="flex items-center gap-3">
+                <span className="font-bold text-[#1E7A46]">Set</span>
+                <button
+                    type="button"
+                    onClick={() => setConfirming(true)}
+                    className="text-sm font-bold text-link hover:underline"
+                >
+                    Reset
+                    <span className="sr-only">
+                        {' '}
+                        Security PIN for {user.name}
+                    </span>
+                </button>
+            </span>
+        );
+    }
+
+    return (
+        <span className="flex items-center gap-2">
+            <span className="text-copy">Reset?</span>
+            <button
+                type="button"
+                disabled={processing}
+                onClick={() =>
+                    router.delete(superAdmin.users.securityPin.url(user.id), {
+                        preserveScroll: true,
+                        onStart: () => setProcessing(true),
+                        onFinish: () => {
+                            setProcessing(false);
+                            setConfirming(false);
+                        },
+                    })
+                }
+                className="rounded-md bg-[#D93025] px-2.5 py-1 text-xs font-bold text-white disabled:opacity-50"
+            >
+                Yes, reset
+                <span className="sr-only"> {user.name}'s Security PIN</span>
+            </button>
+            <button
+                type="button"
+                onClick={() => setConfirming(false)}
+                className="text-xs font-bold text-copy hover:underline"
+            >
+                Cancel
+            </button>
+        </span>
     );
 }
 

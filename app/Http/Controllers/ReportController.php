@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\Role;
 use App\Models\Document;
 use App\Services\ReportExporter;
+use App\Support\Reporting\ActivityReport;
 use App\Support\Reporting\DocumentStats;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -38,9 +39,11 @@ class ReportController extends Controller
             'monthlyByStatus' => $this->stats->monthlyByStatus($user, $months),
             'statusDistribution' => $this->stats->statusDistribution($user),
             'processingTrend' => $this->stats->processingTrend($user, $months),
-            'userActivity' => $user->atLeast(Role::Admin)
-                ? $this->stats->userActivity($user)
-                : [],
+            // The "User activity" card loads its own lists -- by document and
+            // by person -- from ReportActivityController when it is opened,
+            // so nothing for it rides on this page. It only needs to know
+            // whether to render at all.
+            'showActivity' => $user->atLeast(Role::Admin),
             'officePerformance' => $user->atLeast(Role::Admin)
                 ? $this->stats->officePerformance($user)
                 : [],
@@ -160,8 +163,6 @@ class ReportController extends Controller
 
     private function months(Request $request): int
     {
-        $months = (int) $request->query('months', (string) config('cicto.reports.default_months', 12));
-
-        return max(1, min(36, $months));
+        return ActivityReport::months($request);
     }
 }

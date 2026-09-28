@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\Notification;
 use App\Models\User;
 use App\Support\DocumentUpload;
+use App\Support\SecurityPin;
 use Closure;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -93,6 +94,11 @@ class HandleInertiaRequests extends Middleware
                     'name' => $user->office->name,
                 ],
                 'can' => $user?->role->capabilities() ?? [],
+
+                // Whether this person has a Security PIN and whether this
+                // session is unlocked -- never the PIN itself. The page uses
+                // it to lock itself after the idle timeout.
+                'securityPin' => SecurityPin::forClient($request),
             ],
 
             // Unread badge in the header. One indexed COUNT, evaluated lazily so

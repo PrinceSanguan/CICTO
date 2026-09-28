@@ -20,6 +20,8 @@ enum NotificationType: string
     case Resubmitted = 'document_resubmitted';
     case Pending = 'document_pending';
     case Overdue = 'document_overdue';
+    // "Broadcast to ALL offices" (client, 2026-09-25).
+    case Broadcast = 'document_broadcast';
 
     public function label(): string
     {
@@ -31,6 +33,7 @@ enum NotificationType: string
             self::Resubmitted => 'Corrected document resubmitted',
             self::Pending => 'Document due soon',
             self::Overdue => 'Document overdue',
+            self::Broadcast => 'Sent to all offices',
         };
     }
 
@@ -44,6 +47,7 @@ enum NotificationType: string
             self::Resubmitted => 'refresh-cw',
             self::Pending => 'clock',
             self::Overdue => 'triangle-alert',
+            self::Broadcast => 'megaphone',
         };
     }
 

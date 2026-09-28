@@ -40,6 +40,49 @@ final class RoutePlan
     }
 
     /**
+     * The same ceiling for the Submit form, where an office may come round
+     * twice.
+     *
+     * Since the route templates (client request, 2026-09-25) a registered route
+     * can visit an office again -- a Disbursement Voucher is at Treasury at step
+     * 4 and again at step 9, a Business Permit leaves BPLO and comes back to it
+     * for release. No template visits an office more than twice, so every
+     * active office twice is past any honest route, and still a ceiling.
+     *
+     * "Send to Another Office" keeps maxOffices(): a mid-way re-route still
+     * names each office once.
+     */
+    public static function maxStops(): int
+    {
+        return 2 * self::maxOffices();
+    }
+
+    /**
+     * An office listed twice IN A ROW is one stop, not two.
+     *
+     * A folder cannot be sent to the desk it is already on. When BPLO files a
+     * Business Permit, the template's "BPLO -- receives the application" is
+     * where the folder already is; when a clerk picks their own office as the
+     * concerned office, the same. Only neighbours merge: Treasury at step 4 and
+     * again at step 9 are two visits, and both stay.
+     *
+     * @param  list<int>  $officeIds
+     * @return list<int>
+     */
+    public static function collapse(array $officeIds): array
+    {
+        $route = [];
+
+        foreach ($officeIds as $id) {
+            if ($route === [] || $route[array_key_last($route)] !== $id) {
+                $route[] = $id;
+            }
+        }
+
+        return $route;
+    }
+
+    /**
      * The message for the cap, written for a records clerk rather than for
      * the validator.
      *

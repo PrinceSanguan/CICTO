@@ -15,6 +15,12 @@ enum SecurityEventType: string
     case LoginFailed = 'auth.failed';
     case LoggedOut = 'auth.logout';
     case Lockout = 'auth.lockout';
+
+    /*
+     * Five wrong sign-in codes (2026-09-25). Somebody got past the password
+     * and not the email -- the password should be treated as known.
+     */
+    case LoginOtpLockout = 'auth.otp_lockout';
     case PasswordReset = 'auth.password_reset';
     case TwoFactorEnabled = 'auth.two_factor_enabled';
     case TwoFactorDisabled = 'auth.two_factor_disabled';
@@ -34,8 +40,27 @@ enum SecurityEventType: string
     case PasswordResetByAdmin = 'user.password_reset';
 
     case RoleChanged = 'user.role_changed';
+
+    /*
+     * An administrator moving an account to a new address from the console
+     * (2026-09-25). Since the emailed sign-in code, the address IS a way in:
+     * whoever controls it can finish a sign-in, so a change must be findable.
+     */
+    case EmailChangedByAdmin = 'user.email_changed';
     case UserDeactivated = 'user.deactivated';
     case UserReactivated = 'user.reactivated';
+
+    /*
+     * The Security PIN (2026-09-25). Created and changed are the owner's own
+     * acts; reset is an administrator clearing somebody else's, kept apart for
+     * the same reason PasswordResetByAdmin is. The lockout -- five wrong PINs,
+     * session signed out -- is the one worth a Super Admin's attention: it is
+     * what somebody trying PINs at an unattended desk looks like.
+     */
+    case SecurityPinCreated = 'pin.created';
+    case SecurityPinChanged = 'pin.changed';
+    case SecurityPinReset = 'pin.reset';
+    case SecurityPinLockout = 'pin.lockout';
 
     case SettingChanged = 'settings.changed';
 
@@ -75,14 +100,20 @@ enum SecurityEventType: string
             self::LoginFailed => 'Failed sign-in',
             self::LoggedOut => 'Signed out',
             self::Lockout => 'Locked out',
+            self::LoginOtpLockout => 'Too many wrong sign-in codes',
             self::PasswordReset => 'Password reset',
             self::TwoFactorEnabled => 'Two-factor enabled',
             self::TwoFactorDisabled => 'Two-factor disabled',
             self::UserCreated => 'Account created',
             self::PasswordResetByAdmin => 'Password set by an administrator',
             self::RoleChanged => 'Role changed',
+            self::EmailChangedByAdmin => 'Email address changed by an administrator',
             self::UserDeactivated => 'Account deactivated',
             self::UserReactivated => 'Account reactivated',
+            self::SecurityPinCreated => 'Security PIN created',
+            self::SecurityPinChanged => 'Security PIN changed',
+            self::SecurityPinReset => 'Security PIN reset by an administrator',
+            self::SecurityPinLockout => 'Signed out after wrong PINs',
             self::SettingChanged => 'Setting changed',
             self::FileDownloaded => 'File downloaded',
             self::FilePreviewed => 'File previewed',
@@ -100,6 +131,8 @@ enum SecurityEventType: string
     {
         return in_array($this, [
             self::Lockout,
+            self::LoginOtpLockout,
+            self::SecurityPinLockout,
             self::SignatureTampered,
             self::BackupFailed,
         ], true);

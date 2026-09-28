@@ -1,6 +1,7 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { Plus, Search } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AccessTag } from '@/components/documents/broadcast-panel';
 import { DocumentCards } from '@/components/documents/document-cards';
 import { DocumentQrButton } from '@/components/documents/document-qr-button';
 import { StatusPill } from '@/components/documents/status-pill';
@@ -219,8 +220,11 @@ export default function DocumentsIndex({
                                             {document.control_number}
                                         </Link>
                                     </td>
-                                    <td className="max-w-64 truncate px-5 py-4 text-center text-[15px] font-bold text-navy">
-                                        {document.title}
+                                    <td className="max-w-64 px-5 py-4 text-center text-[15px] font-bold text-navy">
+                                        <span className="block truncate">
+                                            {document.title}
+                                        </span>
+                                        <AccessTag document={document} />
                                     </td>
                                     <td className="px-5 py-4 text-center text-[15px] font-bold text-navy">
                                         {document.resting_office ?? '—'}

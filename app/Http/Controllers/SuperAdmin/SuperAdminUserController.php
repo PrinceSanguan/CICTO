@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\SuperAdmin;
 
 use App\Actions\Users\CreateUserAccount;
+use App\Actions\Users\ManageSecurityPin;
 use App\Actions\Users\ResetAccountPassword;
 use App\Enums\Role;
 use App\Http\Controllers\Controller;
@@ -103,6 +104,7 @@ class SuperAdminUserController extends Controller
                         'is_active' => $user->is_active,
                         'last_login_at' => $user->last_login_at?->toIso8601String(),
                         'has_two_factor' => $user->two_factor_confirmed_at !== null,
+                        'has_security_pin' => $user->hasSecurityPin(),
                         'passkeys' => (int) $user->getAttribute('passkeys_count'),
                     ])
                     ->all(),
@@ -216,6 +218,31 @@ class SuperAdminUserController extends Controller
             // call gets made.
             'type' => $outcome->accountIsDeactivated ? 'warning' : 'success',
             'message' => implode(' ', $message),
+        ]);
+    }
+
+    /**
+     * Clear somebody's Security PIN (client request, 2026-09-25), for a person
+     * who has forgotten it AND their password -- anybody who still knows their
+     * password resets their own PIN from the prompt, no administrator needed.
+     */
+    public function resetSecurityPin(Request $request, User $user, ManageSecurityPin $pins): RedirectResponse
+    {
+        /** @var User $actor */
+        $actor = $request->user();
+
+        if (! $user->hasSecurityPin()) {
+            return back()->with('toast', [
+                'type' => 'info',
+                'message' => "{$user->name} has no Security PIN to reset.",
+            ]);
+        }
+
+        $pins->reset($actor, $user);
+
+        return back()->with('toast', [
+            'type' => 'success',
+            'message' => "Security PIN reset for {$user->name}. They will be asked to create a new one the next time they open a document.",
         ]);
     }
 }

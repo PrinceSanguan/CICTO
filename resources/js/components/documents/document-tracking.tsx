@@ -7,6 +7,8 @@ import {
     Undo2,
     X,
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { StatusPill } from '@/components/documents/status-pill';
 import type { DocumentDetail, TimelineEntry } from '@/types';
 
@@ -157,6 +159,45 @@ export function OfficeMark({ className }: { className?: string }) {
                 <rect x="20.5" y="19" width="2.5" height="2.5" rx="0.5" />
             </g>
         </svg>
+    );
+}
+
+/**
+ * The printed sheet's heading, and nothing on screen.
+ *
+ * On screen the nav says whose system this is; on paper there is no nav, so
+ * the sheet names the system itself and says when it was printed.
+ *
+ * The time is taken on `beforeprint`, not at render: a tab left open all
+ * morning would otherwise stamp the morning onto an afternoon printout. The
+ * event also fires for Ctrl+P, which never touches the Print button.
+ * `flushSync` because the browser lays the page out for print as soon as the
+ * handler returns -- a normal batched update would land after the snapshot.
+ */
+export function PrintMasthead() {
+    const [printedAt, setPrintedAt] = useState(() => new Date().toISOString());
+
+    useEffect(() => {
+        const stamp = () =>
+            flushSync(() => setPrintedAt(new Date().toISOString()));
+
+        window.addEventListener('beforeprint', stamp);
+
+        return () => window.removeEventListener('beforeprint', stamp);
+    }, []);
+
+    return (
+        <div className="mb-6 hidden items-end justify-between gap-4 border-b border-[#E4EAF2] pb-3 print:flex">
+            <div>
+                <p className="text-sm font-bold text-navy">
+                    CICTO Document Tracking System
+                </p>
+                <p className="text-xs text-copy">Baliwag City</p>
+            </div>
+            <p className="text-xs text-copy">
+                Printed {formatDateTime(printedAt)}
+            </p>
+        </div>
     );
 }
 
@@ -417,17 +458,36 @@ export function TrackingMetrics({
 
     return (
         <div className="divide-y divide-[#E4EAF2] rounded-lg border border-[#E4EAF2]">
-            <div className="grid divide-y divide-[#E4EAF2] sm:grid-cols-2 sm:divide-x sm:divide-y-0 sm:divide-[#E4EAF2]">
-                <Metric
-                    icon={Clock}
-                    title="Pending Time"
-                    value={tracking.time_at_current_office ?? '—'}
-                    caption={
-                        tracking.arrived_at
-                            ? `Since ${formatDateTime(tracking.arrived_at)}`
-                            : undefined
-                    }
-                />
+            <div className="grid divide-y divide-[#E4EAF2] sm:grid-cols-2 sm:divide-x sm:divide-y-0 sm:divide-[#E4EAF2] print:grid-cols-2 print:divide-x print:divide-y-0">
+                {/*
+                    Turnaround Time takes this tile once the document is
+                    completed (asked for 2026-09-24). A completed document has no
+                    open leg, so Pending Time could only ever read "—" here; the
+                    tile answers "how long did it take" instead.
+                */}
+                {tracking.turnaround !== null ? (
+                    <Metric
+                        icon={Clock}
+                        title="Turnaround Time"
+                        value={tracking.turnaround}
+                        caption={
+                            document.completed_at
+                                ? `Completed ${formatDateTime(document.completed_at)}`
+                                : undefined
+                        }
+                    />
+                ) : (
+                    <Metric
+                        icon={Clock}
+                        title="Pending Time"
+                        value={tracking.time_at_current_office ?? '—'}
+                        caption={
+                            tracking.arrived_at
+                                ? `Since ${formatDateTime(tracking.arrived_at)}`
+                                : undefined
+                        }
+                    />
+                )}
                 <Metric
                     mark={OfficeMark}
                     /*
@@ -537,9 +597,14 @@ export function ProgressTimeline({
          * was only ~480px. The timeline got squeezed to ~160px and the fixed
          * 320px aside printed straight over it. @container measures the space
          * this component actually has.
+         *
+         * On paper the summary goes UNDER the timeline instead (QA,
+         * 2026-09-24). A printed page is wide enough to trip @2xl, and the
+         * side column left each step ~150px, wrapping "Duration :" onto two
+         * lines and splitting the summary box across a page break.
          */
         <div className="@container">
-            <div className="grid gap-6 @2xl:grid-cols-[minmax(0,1fr)_300px]">
+            <div className="grid gap-6 @2xl:grid-cols-[minmax(0,1fr)_300px] print:grid-cols-1">
                 <ol className="relative">
                     {timeline.map((entry, index) => {
                         const last =
@@ -547,7 +612,10 @@ export function ProgressTimeline({
                             upcoming.length === 0;
 
                         return (
-                            <li key={entry.id} className="flex gap-4">
+                            <li
+                                key={entry.id}
+                                className="flex gap-4 print:break-inside-avoid"
+                            >
                                 <div className="flex flex-col items-center">
                                     <span
                                         aria-hidden="true"
@@ -595,6 +663,34 @@ export function ProgressTimeline({
                                                 ? ` · ${entry.to_office}`
                                                 : ''}
                                         </p>
+                                        {/*
+                                            WHO pressed the button, not only
+                                            where the folder was -- asked for
+                                            on 2026-09-24, so the record names
+                                            the person who acted.
+
+                                            On a leg that moved the folder
+                                            (forward, return, resubmit) the
+                                            office above is the DESTINATION,
+                                            and the person who sent it sits at
+                                            the office it came from. Their
+                                            office is named beside them, or a
+                                            sender would read as a member of
+                                            the office they sent it to. The
+                                            server decides which office, if
+                                            any (none for a Super Admin).
+                                        */}
+                                        {entry.actor && (
+                                            <p className="text-xs text-copy">
+                                                by{' '}
+                                                <span className="font-bold text-navy">
+                                                    {entry.actor}
+                                                </span>
+                                                {entry.actor_office
+                                                    ? ` (${entry.actor_office})`
+                                                    : ''}
+                                            </p>
+                                        )}
                                     </div>
 
                                     <p className="flex items-center gap-2 text-sm text-copy">
@@ -654,7 +750,7 @@ export function ProgressTimeline({
                     )}
                 </ol>
 
-                <aside className="self-end rounded-lg bg-[#DCE9FB] p-5">
+                <aside className="self-end rounded-lg bg-[#DCE9FB] p-5 print:break-inside-avoid">
                     <p className="flex items-center gap-2 text-[15px] font-bold text-link">
                         <Clock aria-hidden="true" className="size-5" />
                         Processing Summary

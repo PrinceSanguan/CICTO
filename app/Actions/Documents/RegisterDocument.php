@@ -13,8 +13,10 @@ use App\Models\DocumentRouteStop;
 use App\Models\DocumentType;
 use App\Models\Office;
 use App\Models\User;
+use App\Support\Confidential;
 use App\Support\Deadlines;
 use App\Support\QrToken;
+use App\Support\RoutePlan;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -30,6 +32,7 @@ final class RegisterDocument
     public function __construct(
         private readonly AllocateControlNumber $allocateControlNumber,
         private readonly StoreDocumentFile $storeDocumentFile,
+        private readonly TransitionDocument $transition,
     ) {}
 
     /**
@@ -52,7 +55,16 @@ final class RegisterDocument
         array $routeOfficeIds = [],
         ?Request $request = null,
     ): Document {
-        $routeOfficeIds = array_values(array_unique(array_map('intval', $routeOfficeIds)));
+        /*
+         * Repeats are kept, except straight after themselves. A route may come
+         * back to an office -- the route templates of 2026-09-25 send a
+         * Disbursement Voucher to Treasury twice -- but a stop at the desk the
+         * folder is already on, the originating one included, is not a stop.
+         */
+        $routeOfficeIds = array_slice(RoutePlan::collapse([
+            $originatingOffice->id,
+            ...array_map('intval', $routeOfficeIds),
+        ]), 1);
 
         return DB::transaction(function () use (
             $title, $documentTypeId, $priority, $originatingOffice, $creator,
@@ -73,6 +85,10 @@ final class RegisterDocument
                 'created_by_id' => $creator->id,
                 'status' => DocumentStatus::Initiated->value,
                 'priority' => $priority->value,
+
+                // Stamped from the type once, like due_at: who may see a
+                // document must not change because a type was edited later.
+                'is_confidential' => $type->is_confidential,
 
                 // Stamped once, at registration, and immutable thereafter: the
                 // completion window quoted to a citizen must never silently
@@ -112,9 +128,14 @@ final class RegisterDocument
              * stop insert costs a control number rather than leaving a document
              * queued for departments nobody chose.
              */
+            if ($type->is_confidential) {
+                $this->checkConfidentialRoute($originatingOffice, $routeOfficeIds);
+            }
+
             $position = 1;
 
-            foreach ($routeOfficeIds as $officeId) {
+            // A Confidential document has no route: it is sent on below.
+            foreach ($type->is_confidential ? [] : $routeOfficeIds as $officeId) {
                 DocumentRouteStop::create([
                     'document_id' => $document->id,
                     'position' => $position++,
@@ -133,8 +154,43 @@ final class RegisterDocument
             // than growing a second notification path.
             DocumentTransitioned::dispatch($document, $movement, MovementAction::Registered, $creator);
 
+            /*
+             * CONFIDENTIAL "bypasses normal multi-office routing" (client,
+             * 2026-09-25). It goes straight on to the City Mayor or HRMO as
+             * part of being filed, sent by the person filing it -- so nobody
+             * else at the office it was filed from ever has it on their desk,
+             * or in their list, or has to receive it to let it go.
+             */
+            if ($type->is_confidential && $routeOfficeIds !== []) {
+                $this->transition->handle(
+                    document: $document,
+                    action: MovementAction::Forwarded,
+                    actor: $creator,
+                    toOfficeId: $routeOfficeIds[0],
+                    expectedMovementId: $movement->id,
+                    request: $request,
+                );
+            }
+
             return $document->refresh();
         });
+    }
+
+    /**
+     * Where a Confidential document may go: to ONE of the City Mayor and HRMO,
+     * or nowhere when it is filed at one of them. StoreDocumentRequest says so
+     * in words; this is for every other caller, so the rule does not depend on
+     * which door a document came in by.
+     *
+     * @param  list<int>  $routeOfficeIds
+     */
+    private function checkConfidentialRoute(Office $origin, array $routeOfficeIds): void
+    {
+        $ends = $routeOfficeIds === [] ? $origin->id : $routeOfficeIds[0];
+
+        if (count($routeOfficeIds) > 1 || ! Confidential::trusts($ends)) {
+            throw new \InvalidArgumentException('A Confidential document goes to '.Confidential::officeNames().' only, and to one of them.');
+        }
     }
 
     /**

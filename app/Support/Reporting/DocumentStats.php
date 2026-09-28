@@ -7,7 +7,6 @@ use App\Models\Document;
 use App\Models\DocumentMovement;
 use App\Models\User;
 use App\Support\Deadlines;
-use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -290,42 +289,6 @@ class DocumentStats
         }
 
         return $out;
-    }
-
-    /**
-     * §19 artifact 4: user activity.
-     *
-     * The one everybody forgets -- it belongs to no other feature, so it only
-     * surfaces during acceptance of a PHP 900 line item. Derived from
-     * document_movements.actor_id; no extra table.
-     *
-     * @return array<int, array{user: string, office: string|null, actions: int, approvals: int}>
-     */
-    public function userActivity(User $user, ?CarbonInterface $from = null, ?CarbonInterface $to = null): array
-    {
-        $visible = Document::query()->visibleTo($user)->select('documents.id');
-
-        return DocumentMovement::query()
-            ->toBase()
-            ->from('document_movements')
-            ->join('users', 'users.id', '=', 'document_movements.actor_id')
-            ->leftJoin('offices', 'offices.id', '=', 'users.office_id')
-            ->whereIn('document_movements.document_id', $visible)
-            ->when($from, fn ($q) => $q->where('document_movements.created_at', '>=', $from))
-            ->when($to, fn ($q) => $q->where('document_movements.created_at', '<=', $to))
-            ->groupBy('users.id', 'users.name', 'offices.name')
-            ->selectRaw('users.name as user_name, offices.name as office_name, count(*) as actions')
-            ->selectRaw('sum(case when document_movements.action = ? then 1 else 0 end) as approvals', ['approved'])
-            ->orderByDesc('actions')
-            ->limit(100)
-            ->get()
-            ->map(fn ($r) => [
-                'user' => (string) $r->user_name,
-                'office' => $r->office_name === null ? null : (string) $r->office_name,
-                'actions' => (int) $r->actions,
-                'approvals' => (int) $r->approvals,
-            ])
-            ->all();
     }
 
     /**

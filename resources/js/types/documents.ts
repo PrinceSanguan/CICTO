@@ -18,6 +18,10 @@ export type DocumentListItem = {
     due_state_label: string;
     due_state_tone: Tone;
     is_archived: boolean;
+    /** Seen only by its filer and the City Mayor's or HRMO's people. */
+    is_confidential: boolean;
+    /** Sent to every office, which may all read it. */
+    is_broadcast: boolean;
     created_at: string | null;
 };
 
@@ -34,6 +38,9 @@ export type DocumentTracking = {
     time_at_current_office: string | null;
     leg_due_at: string | null;
     expected_completion_at: string | null;
+    /** Filed to completed. Null until the document is completed. */
+    turnaround_minutes: number | null;
+    turnaround: string | null;
 };
 
 export type DocumentAction = {
@@ -71,8 +78,19 @@ export type ReturnNotice = {
     returned_by: string | null;
     /** The office that returned it, and where Resubmit sends it back to. */
     returned_by_office: string | null;
+    /** Where it was returned TO -- the returning office's choice since 2026-09-25. */
+    returned_to_office: string | null;
     returned_at: string | null;
     remarks: string | null;
+};
+
+/** Mirrors DocumentPresenter::returnOptions: an office Return may send it to. */
+export type ReturnOption = {
+    id: number;
+    name: string;
+    is_originating: boolean;
+    /** Whether anybody at that office could resubmit it. */
+    has_staff: boolean;
 };
 
 /** One of the other documents produced by a single simultaneous submit. */
@@ -105,10 +123,15 @@ export type DocumentDetail = DocumentListItem & {
      */
     route_origin: RouteOrigin | null;
     /**
-     * Why a returned document is back at its originating office. Null unless
+     * Why a returned document was sent back, and to which office. Null unless
      * the document is `returned`. Resubmit sends it to `returned_by_office`.
      */
     return_notice: ReturnNotice | null;
+    /**
+     * The offices Return may send it to: the ones it has already been at,
+     * originating office first (2026-09-25). Empty when Return is impossible.
+     */
+    return_options: ReturnOption[];
     /**
      * The other documents the same submit produced, when it was sent to several
      * departments at the same time. Empty for every other document.
@@ -128,6 +151,12 @@ export type DocumentDetail = DocumentListItem & {
      * when nobody holds it any more.
      */
     release_signature: ReleaseSignature | null;
+    /** When it was sent to every office, and by whom; null until then. */
+    broadcast: { at: string; by: string | null; office: string | null } | null;
+    /** Whether this document's type is one that is sent to every office. */
+    allows_broadcast: boolean;
+    /** Open to this viewer only because it was broadcast: read, nothing else. */
+    read_only_broadcast: boolean;
     can: {
         update: boolean;
         uploadVersion: boolean;
@@ -136,6 +165,7 @@ export type DocumentDetail = DocumentListItem & {
         signRelease: boolean;
         archive: boolean;
         restore: boolean;
+        broadcast: boolean;
     };
 };
 
@@ -156,6 +186,8 @@ export type TimelineEntry = {
     action_label: string;
     verb: string;
     actor: string | null;
+    /** Office bracketed beside the actor; null when none applies. */
+    actor_office: string | null;
     from_office: string | null;
     to_office: string | null;
     remarks: string | null;
@@ -212,6 +244,48 @@ export type IdNameOption = {
      * is unstaffed.
      */
     can_receive?: boolean;
+};
+
+/**
+ * One step of a document type's suggested route -- App\Support\RouteTemplates.
+ *
+ *  - `office`: a fixed office. `office_id` is null when this installation has
+ *    no such active office, and `missing_office` then names it.
+ *  - `choose`: the sender picks. `suggested` is an office id, `'origin'` for
+ *    the office filing it, or null; `only` limits the choice (null: any).
+ *  - `same`: whatever step `step` (0-based) ended up as.
+ *  - `note`: something the system does not do, said where it happens.
+ *
+ * `purpose` is what happens at that step; empty when the client's list names
+ * only the office.
+ */
+export type RouteTemplateStep =
+    | {
+          kind: 'office';
+          office_id: number | null;
+          missing_office: string | null;
+          purpose: string;
+          optional: boolean;
+          /** An optional step that starts ticked (the BAC's members). */
+          checked: boolean;
+      }
+    | {
+          kind: 'choose';
+          purpose: string;
+          optional: boolean;
+          suggested: number | 'origin' | null;
+          only: number[] | null;
+      }
+    | { kind: 'same'; step: number; purpose: string }
+    | { kind: 'note'; purpose: string };
+
+export type RouteTemplate = {
+    note: string | null;
+    /** City Mayor / HRMO only: the route cannot be edited by hand. */
+    confidential: boolean;
+    /** The type is sent to every office from the document page. */
+    broadcast: boolean;
+    steps: RouteTemplateStep[];
 };
 
 export type Paginated<T> = {

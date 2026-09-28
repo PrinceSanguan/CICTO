@@ -25,6 +25,8 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property string $email
  * @property Carbon|null $email_verified_at
  * @property string $password
+ * @property string|null $security_pin Hash of the 4-digit Security PIN; null until they choose one.
+ * @property Carbon|null $security_pin_set_at
  * @property Role $role
  * @property int|null $office_id
  * @property-read Office|null $office Nullable: office_id is, and a
@@ -43,7 +45,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property Carbon|null $updated_at
  */
 #[Fillable(['name', 'email', 'password'])]
-#[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
+#[Hidden(['password', 'security_pin', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 /*
  * MustVerifyEmail is declared, not merely inherited.
  *
@@ -116,7 +118,20 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
             'last_login_at' => 'datetime',
             'two_factor_confirmed_at' => 'datetime',
             'preferences' => 'array',
+            'security_pin_set_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Whether this person has chosen their Security PIN yet.
+     *
+     * Every account created before the PIN existed starts without one, and is
+     * asked to create it the first time it opens a document -- see
+     * App\Support\SecurityPin.
+     */
+    public function hasSecurityPin(): bool
+    {
+        return $this->security_pin !== null;
     }
 
     /**

@@ -63,7 +63,7 @@ class OfficeSeeder extends Seeder
      *
      * Public because OfficeAccountSeeder refuses to run while any of these are
      * still active: an installation showing them has not been re-seeded onto
-     * the client's real list yet, and minting two accounts per office there
+     * the client's real list yet, and minting three accounts per office there
      * would fill a live register with staff belonging to offices that are about
      * to be retired. One shared list, so the two seeders cannot disagree.
      *

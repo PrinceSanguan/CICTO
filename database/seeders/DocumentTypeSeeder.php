@@ -86,12 +86,14 @@ class DocumentTypeSeeder extends Seeder
             ['code' => 'CERTIFICATION', 'name' => 'Certification'],
             ['code' => 'CERT-DOCS-NEEDED', 'name' => 'Certification of Documents Needed'],
             ['code' => 'CLOSURE-ORDER', 'name' => 'Closure Order'],
-            ['code' => 'CONFIDENTIAL', 'name' => 'Confidential'],
+            // Restricted to the City Mayor and HRMO -- see App\Support\Confidential.
+            ['code' => 'CONFIDENTIAL', 'name' => 'Confidential', 'is_confidential' => true],
             ['code' => 'CONSTRUCTION-PERMIT', 'name' => 'Construction Permit'],
             ['code' => 'DEMOLITION-ORDER', 'name' => 'Demolition Order'],
             ['code' => 'DV', 'name' => 'Disbursement Voucher'],
             ['code' => 'ENDORSEMENT', 'name' => 'Endorsement'],
-            ['code' => 'EXEC-ORDER', 'name' => 'Executive Order'],
+            // "Broadcast to ALL offices" -- see App\Actions\Documents\BroadcastDocument.
+            ['code' => 'EXEC-ORDER', 'name' => 'Executive Order', 'allows_broadcast' => true],
             ['code' => 'FRANCHISE', 'name' => 'Franchise'],
             ['code' => 'FRANCHISE-TRICYCLE', 'name' => 'Franchise for Tricycle'],
             ['code' => 'GENERAL-INCOMING', 'name' => 'General (Incoming)'],
@@ -100,7 +102,7 @@ class DocumentTypeSeeder extends Seeder
             ['code' => 'MAYORS-CLEARANCE', 'name' => "Mayor's Clearance"],
             ['code' => 'MAYORS-PERMIT', 'name' => "Mayor's Permit"],
             ['code' => 'MEMO', 'name' => 'Memorandum'],
-            ['code' => 'MEMO-CIRCULAR', 'name' => 'Memorandum Circular'],
+            ['code' => 'MEMO-CIRCULAR', 'name' => 'Memorandum Circular', 'allows_broadcast' => true],
             ['code' => 'MEMO-HR', 'name' => 'Memorandum HR'],
             ['code' => 'MEMO-MA', 'name' => 'Memorandum MA'],
             ['code' => 'MEMO-ORDER-OCM', 'name' => "Memorandum Order from Mayor's Office"],
@@ -129,6 +131,10 @@ class DocumentTypeSeeder extends Seeder
                     // See the class docblock: not a guess, an absence.
                     'turnaround_days' => null,
                     'requires_approval' => true,
+                    // Set on every run, so taking a type OFF this list here
+                    // takes it off the installation too.
+                    'is_confidential' => $type['is_confidential'] ?? false,
+                    'allows_broadcast' => $type['allows_broadcast'] ?? false,
                     'is_active' => true,
                     'sort_order' => ($index + 1) * 10,
                 ],

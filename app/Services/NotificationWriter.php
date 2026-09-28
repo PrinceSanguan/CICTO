@@ -60,6 +60,19 @@ class NotificationWriter
             ->when($except !== null, fn ($query) => $query->whereKeyNot($except->id))
             ->pluck('id');
 
+        // A Confidential document is the exception to "everyone at the office":
+        // it reaches the office that filed it -- registration, a return -- and
+        // most of that office may not open it. Asked of the policy itself, so
+        // the bell cannot disagree with the lock.
+        if ($document->is_confidential) {
+            $recipients = User::query()
+                ->whereKey($recipients->all())
+                ->with('office')
+                ->get()
+                ->filter(fn (User $user): bool => $user->can('view', $document))
+                ->pluck('id');
+        }
+
         if ($recipients->isEmpty()) {
             return 0;
         }
@@ -88,6 +101,47 @@ class NotificationWriter
     }
 
     /**
+     * Everybody who belongs to an active office, for a BROADCAST (client,
+     * 2026-09-25). The same single SELECT and bulk insert as an office
+     * fan-out, chunked so a city's worth of rows is not one statement.
+     *
+     * @return int rows written
+     */
+    public function fanOutToEveryone(
+        NotificationType $type,
+        Document $document,
+        ?User $except = null,
+    ): int {
+        $now = now();
+        $dedupeKey = $this->dedupeKey($type, $document, null, null);
+        $written = 0;
+
+        User::query()
+            ->active()
+            ->whereNotNull('office_id')
+            ->whereHas('office', fn ($office) => $office->where('is_active', true))
+            ->when($except !== null, fn ($query) => $query->whereKeyNot($except->id))
+            ->select('id')
+            ->chunkById(500, function ($users) use ($type, $document, $now, $dedupeKey, &$written): void {
+                $written += DB::table('notifications')->insertOrIgnore($users->map(fn (User $user) => [
+                    'user_id' => $user->id,
+                    'document_id' => $document->id,
+                    'document_movement_id' => null,
+                    'type' => $type->value,
+                    'dedupe_key' => $dedupeKey,
+                    'title' => $type->label(),
+                    'body' => mb_substr($this->body($type, $document), 0, 255),
+                    'control_number' => $document->control_number,
+                    'read_at' => null,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ])->all());
+            });
+
+        return $written;
+    }
+
+    /**
      * @return int rows written
      */
     public function toUser(
@@ -97,6 +151,10 @@ class NotificationWriter
         ?DocumentMovement $movement = null,
         ?string $dedupeSuffix = null,
     ): int {
+        if ($document->is_confidential && ! $user->can('view', $document)) {
+            return 0;
+        }
+
         $now = now();
 
         return DB::table('notifications')->insertOrIgnore([[
@@ -148,6 +206,7 @@ class NotificationWriter
             NotificationType::Resubmitted => "{$document->control_number} was corrected and sent back to your office.",
             NotificationType::Pending => "{$document->control_number} is due soon.",
             NotificationType::Overdue => "{$document->control_number} has passed its expected completion date.",
+            NotificationType::Broadcast => "{$document->control_number} — {$document->title}",
         };
     }
 }

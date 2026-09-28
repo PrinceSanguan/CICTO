@@ -11,8 +11,11 @@ use App\Models\Document;
 use App\Models\DocumentSignature;
 use App\Models\DocumentType;
 use App\Models\Office;
+use App\Support\Confidential;
 use App\Support\DocumentUpload;
 use App\Support\Presenters\DocumentPresenter;
+use App\Support\RouteTemplates;
+use App\Support\SecurityPin;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -42,7 +45,9 @@ class DocumentController extends Controller
         $dir = $request->input('dir') === 'asc' ? 'asc' : 'desc';
 
         $documents = Document::query()
-            ->visibleTo($user)
+            // readableBy, not visibleTo: what has been broadcast to every
+            // office is listed in every office (2026-09-25).
+            ->readableBy($user)
             ->active()
             ->with(['documentType:id,name', 'openMovement.toOffice:id,name'])
             ->search($request->input('q'))
@@ -127,10 +132,19 @@ class DocumentController extends Controller
          */
         $userOfficeId = request()->user()?->office_id;
 
+        $types = DocumentType::query()->active()->ordered()
+            ->get(['id', 'code', 'name', 'turnaround_days', 'is_confidential', 'allows_broadcast']);
+
         return Inertia::render('documents/create', [
             'offices' => $offices,
-            'documentTypes' => DocumentType::query()->active()->ordered()
-                ->get(['id', 'name', 'turnaround_days']),
+            'documentTypes' => $types->map(fn (DocumentType $type): array => [
+                'id' => $type->id,
+                'name' => $type->name,
+                'turnaround_days' => $type->turnaround_days,
+            ]),
+            // The suggested route per type, which the form fills the route in
+            // from unless the submitter switches to choosing by hand.
+            'routeTemplates' => RouteTemplates::forClient($types, $offices),
             'priorities' => $this->priorityOptions(),
             'defaultOfficeId' => $offices->contains('id', $userOfficeId) ? $userOfficeId : null,
         ]);
@@ -255,13 +269,43 @@ class DocumentController extends Controller
 
         $user = request()->user();
 
+        /*
+         * The Security PIN (client request, 2026-09-25). Asked AFTER the
+         * policy, so a person who may not see this document is refused as
+         * before instead of being invited to type a PIN for it -- and the
+         * prompt page carries the control number and nothing else, so no part
+         * of the document is sent until the PIN is.
+         */
+        if (! SecurityPin::isUnlocked(request())) {
+            return Inertia::render('documents/locked', [
+                'document' => [
+                    'id' => $document->id,
+                    'control_number' => $document->control_number,
+                ],
+                'hasPin' => $user->hasSecurityPin(),
+                'attemptsLeft' => SecurityPin::attemptsLeft($user),
+                'maxAttempts' => SecurityPin::maxAttempts(),
+                'idleMinutes' => intdiv(SecurityPin::idleSeconds(), 60),
+                'lockedBecause' => session('security_pin_locked'),
+            ]);
+        }
+
+        SecurityPin::touch(request());
+
+        // An unlocked document is kept in the browser's history encrypted, so
+        // the lock's clearHistory() can make Back ask the server again rather
+        // than redraw the document from memory after the PIN has lapsed.
+        Inertia::encryptHistory();
+
         $document->load([
-            'documentType:id,name',
+            'documentType:id,name,allows_broadcast',
+            'broadcastBy:id,name,office_id',
+            'broadcastBy.office:id,name',
             'originatingOffice:id,name',
             'creator:id,name',
             'openMovement.toOffice:id,name',
             'lastMovement.toOffice:id,name',
-            'movements.actor:id,name',
+            'movements.actor:id,name,role',
             'movements.fromOffice:id,name',
             'movements.toOffice:id,name',
             'files.uploader:id,name',
@@ -313,6 +357,9 @@ class DocumentController extends Controller
              */
             'offices' => Office::query()->active()->ordered()
                 ->whereKeyNot($document->openMovement()->value('to_office_id') ?? 0)
+                // A Confidential document moves between the City Mayor and
+                // HRMO only; TransitionDocumentRequest refuses the rest.
+                ->when($document->is_confidential, fn ($offices) => $offices->whereKey(Confidential::officeIds()))
                 // See create(): the select must precede withReceiver().
                 ->select(['id', 'name'])
                 ->withReceiver()

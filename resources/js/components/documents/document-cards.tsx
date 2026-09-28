@@ -1,4 +1,5 @@
 import { Link } from '@inertiajs/react';
+import { AccessTag } from '@/components/documents/broadcast-panel';
 import { DocumentQrButton } from '@/components/documents/document-qr-button';
 import { StatusPill } from '@/components/documents/status-pill';
 import documents from '@/routes/documents';
@@ -35,6 +36,7 @@ export function DocumentCards({ items }: { items: DocumentListItem[] }) {
                     >
                         {document.title}
                     </Link>
+                    <AccessTag document={document} />
 
                     <p className="mt-0.5 font-mono text-xs text-copy">
                         {document.control_number}

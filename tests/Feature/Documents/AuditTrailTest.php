@@ -181,4 +181,125 @@ class AuditTrailTest extends TestCase
         $this->assertTrue($rollup['Treasury']['is_current']);
         $this->assertSame('1d', $rollup['Treasury']['duration']);
     }
+
+    /**
+     * Turnaround time, asked for on 2026-09-24: filed to completed, shown on
+     * the View Documents sheet once the document is completed and not before.
+     */
+    public function test_the_turnaround_time_appears_once_the_document_is_completed(): void
+    {
+        $office = $this->office();
+        $admin = $this->admin($office);
+
+        Carbon::setTestNow('2026-09-21 08:00:00');
+        $document = $this->registerDocument($office, $this->staff($office));
+
+        Carbon::setTestNow('2026-09-21 09:30:00');
+        app(TransitionDocument::class)->handle(
+            document: $document->refresh(),
+            action: MovementAction::Received,
+            actor: $admin,
+            expectedMovementId: $document->refresh()->openMovement->id,
+        );
+
+        $this->actingAs($admin)
+            ->get(route('documents.show', $document))
+            ->assertInertia(fn ($page) => $page
+                ->where('document.tracking.turnaround', null)
+                ->where('document.tracking.turnaround_minutes', null));
+
+        // Two days, four hours and a quarter after it was filed.
+        Carbon::setTestNow('2026-09-23 12:15:00');
+        app(TransitionDocument::class)->handle(
+            document: $document->refresh(),
+            action: MovementAction::Completed,
+            actor: $admin,
+            expectedMovementId: $document->refresh()->openMovement->id,
+        );
+
+        // Read later, to prove it is measured to the completion and not to now.
+        Carbon::setTestNow('2026-09-30 17:00:00');
+
+        $this->actingAs($admin)
+            ->get(route('documents.show', $document))
+            ->assertInertia(fn ($page) => $page
+                ->where('document.tracking.turnaround_minutes', (2 * 24 + 4) * 60 + 15)
+                ->where('document.tracking.turnaround', '2d 4h'));
+    }
+
+    /**
+     * The View Documents timeline names the PERSON behind each step, not only
+     * the office (asked for on 2026-09-24). On a forward that person is at the
+     * sending office, which is why from_office travels with the name.
+     */
+    public function test_the_timeline_names_who_did_each_step(): void
+    {
+        $mpdo = $this->office('MPDO', 'Planning Office');
+        $mto = $this->office('MTO', 'Treasury');
+        $clerk = $this->staff($mpdo);
+        $mpdoAdmin = $this->admin($mpdo);
+        $mtoAdmin = $this->admin($mto);
+
+        $document = $this->registerDocument($mpdo, $clerk);
+
+        app(TransitionDocument::class)->handle(
+            document: $document->refresh(),
+            action: MovementAction::Forwarded,
+            actor: $mpdoAdmin,
+            toOfficeId: $mto->id,
+            expectedMovementId: $document->refresh()->openMovement->id,
+        );
+
+        app(TransitionDocument::class)->handle(
+            document: $document->refresh(),
+            action: MovementAction::Received,
+            actor: $mtoAdmin,
+            expectedMovementId: $document->refresh()->openMovement->id,
+        );
+
+        $this->actingAs($mtoAdmin)
+            ->get(route('documents.show', $document))
+            ->assertInertia(fn ($page) => $page
+                ->where('timeline.0.action', 'registered')
+                ->where('timeline.0.actor', $clerk->name)
+                ->where('timeline.1.action', 'forwarded')
+                ->where('timeline.0.actor_office', null)
+                ->where('timeline.1.actor', $mpdoAdmin->name)
+                ->where('timeline.1.actor_office', 'Planning Office')
+                ->where('timeline.1.from_office', 'Planning Office')
+                ->where('timeline.1.to_office', 'Treasury')
+                ->where('timeline.2.action', 'received')
+                ->where('timeline.2.actor', $mtoAdmin->name)
+                ->where('timeline.2.actor_office', null));
+    }
+
+    /**
+     * A Super Admin belongs to no office. Bracketing the office the folder
+     * left beside their name would say they work there (found in QA,
+     * 2026-09-24), so their name stands alone.
+     */
+    public function test_a_super_admin_on_the_timeline_is_not_placed_in_an_office(): void
+    {
+        $mpdo = $this->office('MPDO', 'Planning Office');
+        $mto = $this->office('MTO', 'Treasury');
+        $super = $this->superAdmin();
+
+        $document = $this->registerDocument($mpdo, $this->staff($mpdo));
+
+        app(TransitionDocument::class)->handle(
+            document: $document->refresh(),
+            action: MovementAction::Forwarded,
+            actor: $super,
+            toOfficeId: $mto->id,
+            expectedMovementId: $document->refresh()->openMovement->id,
+        );
+
+        $this->actingAs($super)
+            ->get(route('documents.show', $document))
+            ->assertInertia(fn ($page) => $page
+                ->where('timeline.1.action', 'forwarded')
+                ->where('timeline.1.actor', $super->name)
+                ->where('timeline.1.from_office', 'Planning Office')
+                ->where('timeline.1.actor_office', null));
+    }
 }

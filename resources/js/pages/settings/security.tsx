@@ -8,12 +8,16 @@ import ManagePasskeys from '@/components/manage-passkeys';
 import type { Props as ManageTwoFactorProps } from '@/components/manage-two-factor';
 import ManageTwoFactor from '@/components/manage-two-factor';
 import PasswordInput from '@/components/password-input';
+import type { SecurityPinSettingsProps } from '@/components/security-pin/security-pin-settings';
+import { SecurityPinSettings } from '@/components/security-pin/security-pin-settings';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { edit } from '@/routes/security';
 
 type Props = {
     passwordRules: string;
+    /** Null when the Security PIN is switched off (CICTO_SECURITY_PIN). */
+    securityPin: SecurityPinSettingsProps | null;
 } & ManagePasskeysProps &
     ManageTwoFactorProps;
 
@@ -122,6 +126,10 @@ export default function Security(props: Props) {
                     )}
                 </Form>
             </div>
+
+            {props.securityPin && (
+                <SecurityPinSettings pin={props.securityPin} />
+            )}
 
             <ManageTwoFactor
                 canManageTwoFactor={props.canManageTwoFactor}

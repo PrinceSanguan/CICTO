@@ -6,6 +6,7 @@ use App\Enums\MovementAction;
 use App\Enums\SignatureMethod;
 use App\Exceptions\StaleWorkflowStateException;
 use App\Models\Document;
+use App\Support\Confidential;
 use App\Support\DocumentUpload;
 use App\Support\RoutePlan;
 use Illuminate\Foundation\Http\FormRequest;
@@ -166,6 +167,12 @@ class TransitionDocumentRequest extends FormRequest
             // its author never saw.
             'expected_movement_id' => ['nullable', 'integer'],
 
+            // Where a RETURN goes back to (2026-09-25): one of the offices the
+            // document has already been at, checked in withValidator(). Absent
+            // means the originating office -- what a return always did, and
+            // what a page opened before this change still posts.
+            'return_to_office_id' => ['nullable', 'integer'],
+
             'remarks' => ['nullable', 'string', 'max:2000'],
 
             /*
@@ -290,6 +297,27 @@ class TransitionDocumentRequest extends FormRequest
                 // picker never shows. This is the sentence a person can act on.
                 if (count($destinations) !== count(array_unique($destinations))) {
                     $this->addDestinationError($validator, 'Each office can only appear once in the route.');
+                }
+
+                // A Confidential document moves only between the City Mayor
+                // and HRMO, one office at a time (client, 2026-09-25).
+                if ($document instanceof Document && $document->is_confidential
+                    && (count($destinations) > 1 || ! Confidential::trusts($destinations[0] ?? null))) {
+                    $this->addDestinationError($validator, 'This document is Confidential. It can only be sent to '.Confidential::officeNames().', one office at a time.');
+                }
+            }
+
+            if ($action === MovementAction::Returned && $this->filled('return_to_office_id')) {
+                $document = $this->route('document');
+                $allowed = $document instanceof Document
+                    ? $document->returnDestinations()->pluck('id')->all()
+                    : [];
+
+                if (! in_array($this->integer('return_to_office_id'), $allowed, true)) {
+                    $validator->errors()->add(
+                        'return_to_office_id',
+                        'Choose one of the offices this document has already passed through.',
+                    );
                 }
             }
         });

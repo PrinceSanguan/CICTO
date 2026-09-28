@@ -188,7 +188,11 @@ class ScanController extends Controller
                  * What did NOT change: description and remarks stay out. A
                  * title is a name; those two are contents.
                  */
-                'title' => $document->title,
+                //
+                // EXCEPT a Confidential one's (2026-09-25). "City Mayor /
+                // HRMO only" is the client's call too, and it is the case the
+                // paragraph above was written about.
+                'title' => $document->is_confidential ? 'Confidential document' : $document->title,
 
                 'status_label' => $document->status->publicLabel(),
                 // publicTone(), to pair with publicLabel() above. tone() is
