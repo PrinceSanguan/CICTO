@@ -47,6 +47,8 @@ enum SecurityEventType: string
      * whoever controls it can finish a sign-in, so a change must be findable.
      */
     case EmailChangedByAdmin = 'user.email_changed';
+    // Settings > Profile, by the account's own owner (2026-09-28).
+    case EmailChangedByOwner = 'user.email_changed_by_owner';
     case UserDeactivated = 'user.deactivated';
     case UserReactivated = 'user.reactivated';
 
@@ -108,6 +110,7 @@ enum SecurityEventType: string
             self::PasswordResetByAdmin => 'Password set by an administrator',
             self::RoleChanged => 'Role changed',
             self::EmailChangedByAdmin => 'Email address changed by an administrator',
+            self::EmailChangedByOwner => 'Email address changed by its owner',
             self::UserDeactivated => 'Account deactivated',
             self::UserReactivated => 'Account reactivated',
             self::SecurityPinCreated => 'Security PIN created',

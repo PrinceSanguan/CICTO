@@ -126,17 +126,17 @@ class OfficeAccountSeeder extends Seeder
 
         // Before the missing accounts are worked out: a moved account is one
         // that is no longer missing.
-        $moved = DB::transaction(fn (): array => $this->moveToRealAddresses($offices));
+        $moved = DB::transaction(fn (): array => $this->moveOntoPlannedAddresses($offices));
 
         $existing = User::query()
             ->whereIn('email', array_column($planned, 'email'))
             ->get()
             ->keyBy('email');
 
-        $missing = array_values(array_filter(
+        $missing = $this->withinEachOfficesQuota($offices, array_values(array_filter(
             $planned,
             static fn (array $row): bool => ! $existing->has($row['email']),
-        ));
+        )));
 
         /*
          * All or nothing.
@@ -180,7 +180,7 @@ class OfficeAccountSeeder extends Seeder
 
         $this->report($created, count($planned) - count($created), $offices->count(), $password);
 
-        foreach ($moved as $move) {
+        foreach (array_slice($moved, 0, 5) as $move) {
             $this->command->line(sprintf(
                 '  Moved %s to its real inbox, %s -- the same account, with the same password.',
                 $move['from'],
@@ -188,38 +188,151 @@ class OfficeAccountSeeder extends Seeder
             ));
         }
 
-        foreach ($created as $row) {
-            if (! str_ends_with($row['email'], '@'.$this->domain())) {
-                $this->command->line(sprintf(
-                    '  %s has a real inbox: %s. Its sign-in codes and notifications arrive there.',
-                    $row['name'],
-                    $row['email'],
-                ));
-            }
+        if (count($moved) > 5) {
+            $this->command->line(sprintf('  ... and %d more, the same way.', count($moved) - 5));
+        }
+
+        $onInboxes = array_filter(
+            $created,
+            fn (array $row): bool => ! str_ends_with($row['email'], '@'.$this->domain()),
+        );
+
+        foreach (array_slice($onInboxes, 0, 5) as $row) {
+            $this->command->line(sprintf(
+                '  %s has a real inbox: %s. Its sign-in codes and notifications arrive there.',
+                $row['name'],
+                $row['email'],
+            ));
+        }
+
+        if (count($onInboxes) > 5) {
+            $this->command->line(sprintf('  ... and %d more on real inboxes.', count($onInboxes) - 5));
         }
     }
 
     /**
-     * Put each REAL_ADDRESSES slot that already exists under its placeholder
-     * onto its real address.
+     * Where a slot's account belongs: its REAL_ADDRESSES entry, else -- when
+     * CICTO_OFFICE_ACCOUNT_INBOX is set -- a "+" alias of that inbox, else the
+     * {code}.{slot}@{domain} login name.
      *
-     * Only when the real address is free and the placeholder account exists:
-     * a fresh install has neither, and plan() creates the account on the real
-     * address straight away. Marked verified, as `cicto:user --email` does --
-     * the address was given by the office itself.
+     * The alias is the 2026-09-28 answer to "everything use real email": one
+     * inbox the LGU really reads (the CICTO office's Gmail), every account an
+     * address of its own inside it -- cictobaliwagcity+ocm.admin@gmail.com --
+     * so every sign-in code arrives somewhere, and each person can still move
+     * their own account to their own address under Settings > Profile.
+     */
+    private function plannedAddress(Office $office, string $suffix): string
+    {
+        $real = self::REAL_ADDRESSES[$office->code][$suffix] ?? null;
+
+        if ($real !== null) {
+            return $real;
+        }
+
+        $inbox = $this->inbox();
+
+        if ($inbox === null) {
+            return $this->placeholderAddress($office, $suffix);
+        }
+
+        [$local, $domain] = explode('@', $inbox, 2);
+
+        return "{$local}+{$this->slug($office)}.{$suffix}@{$domain}";
+    }
+
+    /** The shared inbox, lower-cased, or null when none is configured. */
+    private function inbox(): ?string
+    {
+        $inbox = mb_strtolower(trim((string) config('cicto.office_accounts.inbox')));
+
+        if ($inbox === '') {
+            return null;
+        }
+
+        if (! filter_var($inbox, FILTER_VALIDATE_EMAIL) || str_contains(strstr($inbox, '@', true) ?: '', '+')) {
+            throw new RuntimeException(
+                "Nothing was created. CICTO_OFFICE_ACCOUNT_INBOX must be one plain address, like cictobaliwagcity@gmail.com. Got: {$inbox}",
+            );
+        }
+
+        return $inbox;
+    }
+
+    /**
+     * Never more accounts in an office than it has slots, WHOEVER holds them.
+     *
+     * Missing is decided by address, and an address can change: a person
+     * moves their account to their own inbox under Settings > Profile, an
+     * administrator runs `cicto:user --email`. Deciding by address alone, a
+     * later run would see the slot's address free and mint a second "OCM
+     * Admin" beside the one that moved. So each office keeps at most two
+     * Admins and one User from this seeder, counting every account already
+     * there -- deactivated ones too, or retiring a shared account would only
+     * make the next run bring it back.
+     *
+     * @param  Collection<int, Office>  $offices
+     * @param  list<array{code: string, office: string, office_id: int, email: string, name: string, role: Role, position: string}>  $missing
+     * @return list<array{code: string, office: string, office_id: int, email: string, name: string, role: Role, position: string}>
+     */
+    private function withinEachOfficesQuota(Collection $offices, array $missing): array
+    {
+        $held = [];
+
+        foreach (User::query()
+            ->whereIn('office_id', $offices->pluck('id'))
+            ->get(['id', 'office_id', 'role']) as $user) {
+            $key = $user->office_id.':'.$user->role->value;
+            $held[$key] = ($held[$key] ?? 0) + 1;
+        }
+
+        $quota = [];
+
+        foreach (self::SLOTS as $slot) {
+            $quota[$slot['role']->value] = ($quota[$slot['role']->value] ?? 0) + 1;
+        }
+
+        $kept = [];
+
+        foreach ($missing as $row) {
+            $key = $row['office_id'].':'.$row['role']->value;
+
+            // A role with no slot has no quota: nothing is created for it.
+            if (($held[$key] ?? 0) >= ($quota[$row['role']->value] ?? 0)) {
+                continue;
+            }
+
+            $held[$key] = ($held[$key] ?? 0) + 1;
+            $kept[] = $row;
+        }
+
+        return $kept;
+    }
+
+    /**
+     * Put each slot that still sits on its placeholder onto the address it
+     * is planned for -- its REAL_ADDRESSES entry, or its alias of
+     * CICTO_OFFICE_ACCOUNT_INBOX.
+     *
+     * Only when that address is free and the placeholder account exists: a
+     * fresh install has neither, and plan() creates the account on the real
+     * address straight away. An account somebody has already moved elsewhere
+     * is not on its placeholder, so it is left where they put it. Marked
+     * verified, as `cicto:user --email` does -- the address was given by the
+     * office itself.
      *
      * @param  Collection<int, Office>  $offices
      * @return list<array{from: string, to: string}>
      */
-    private function moveToRealAddresses(Collection $offices): array
+    private function moveOntoPlannedAddresses(Collection $offices): array
     {
         $moved = [];
 
         foreach ($offices as $office) {
-            foreach (self::REAL_ADDRESSES[$office->code] ?? [] as $suffix => $address) {
+            foreach (array_keys(self::SLOTS) as $suffix) {
                 $placeholder = $this->placeholderAddress($office, $suffix);
+                $address = $this->plannedAddress($office, $suffix);
 
-                if (User::query()->where('email', $address)->exists()) {
+                if ($address === $placeholder || User::query()->where('email', $address)->exists()) {
                     continue;
                 }
 
@@ -241,12 +354,16 @@ class OfficeAccountSeeder extends Seeder
         return $moved;
     }
 
-    /** "{office code}.{slot}@{domain}", lower-cased: the address plan() builds. */
+    /** "{office code}.{slot}@{domain}", lower-cased: the login-name address. */
     private function placeholderAddress(Office $office, string $suffix): string
     {
-        $slug = mb_strtolower((string) preg_replace('/[^A-Za-z0-9\-]/', '', $office->code));
+        return "{$this->slug($office)}.{$suffix}@{$this->domain()}";
+    }
 
-        return "{$slug}.{$suffix}@{$this->domain()}";
+    /** The office code as it appears in an address: "OCM-TF" is "ocm-tf". */
+    private function slug(Office $office): string
+    {
+        return mb_strtolower((string) preg_replace('/[^A-Za-z0-9\-]/', '', $office->code));
     }
 
     /**
@@ -297,13 +414,10 @@ class OfficeAccountSeeder extends Seeder
      */
     private function plan(Collection $offices): array
     {
-        $domain = $this->domain();
         $rows = [];
 
         foreach ($offices as $office) {
-            $slug = mb_strtolower((string) preg_replace('/[^A-Za-z0-9\-]/', '', $office->code));
-
-            if ($slug === '') {
+            if ($this->slug($office) === '') {
                 throw new RuntimeException(
                     "Nothing was created. Office {$office->name} has a code that contains no "
                     .'letters or digits, so no address can be built from it.',
@@ -315,7 +429,7 @@ class OfficeAccountSeeder extends Seeder
                     'code' => $office->code,
                     'office' => $office->name,
                     'office_id' => $office->id,
-                    'email' => self::REAL_ADDRESSES[$office->code][$suffix] ?? "{$slug}.{$suffix}@{$domain}",
+                    'email' => $this->plannedAddress($office, $suffix),
                     'name' => "{$office->code} {$slot['title']}",
                     'role' => $slot['role'],
                     'position' => $slot['position'],
@@ -447,11 +561,21 @@ class OfficeAccountSeeder extends Seeder
                 $offices,
                 $kept,
             ));
-            $this->command->line(sprintf(
-                '  Addresses are {office code}.admin@%1$s, {office code}.admin2@%1$s and '
-                .'{office code}.clerk@%1$s, lower-cased.',
-                $this->domain(),
-            ));
+            $inbox = $this->inbox();
+
+            $this->command->line($inbox === null
+                ? sprintf(
+                    '  Addresses are {office code}.admin@%1$s, {office code}.admin2@%1$s and '
+                    .'{office code}.clerk@%1$s, lower-cased.',
+                    $this->domain(),
+                )
+                : sprintf(
+                    '  Addresses are %1$s+{office code}.admin@%2$s, .admin2 and .clerk, lower-cased -- '
+                    .'all of them arrive in %3$s.',
+                    strstr($inbox, '@', true),
+                    substr((string) strstr($inbox, '@'), 1),
+                    $inbox,
+                ));
             $this->command->line('  Every one of them signs in with the password: '.$password);
             $this->command->line('  Distribution sheet: '.$path);
 

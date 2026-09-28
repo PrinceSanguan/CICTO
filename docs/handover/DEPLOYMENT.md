@@ -860,6 +860,29 @@ php artisan db:seed --class=DocumentTypeSeeder --force
 |---|---|---|
 | `CICTO_CONFIDENTIAL_OFFICES` | `OCM,HRMO` | Office codes that may receive and read a Confidential document. |
 
+#### Every office account on a real inbox (2026-09-28)
+
+With the sign-in code on, an account whose address has no mailbox cannot sign
+in. Until each person gives their own address, point every office account at
+the CICTO office's Gmail:
+
+```dotenv
+CICTO_OFFICE_ACCOUNT_INBOX=cictobaliwagcity@gmail.com
+```
+
+Redeploy, then `php artisan db:seed --class="Database\Seeders\OfficeAccountSeeder" --force`.
+Each account still on `{code}.{slot}@baliwag.gov.ph` is moved to
+`cictobaliwagcity+{code}.{slot}@gmail.com` — same account, same password — and
+every code arrives in that one inbox. Running it again changes nothing, and it
+never re-creates an account somebody has since moved to their own address: an
+office never gets more than its two Admins and one Clerk from the seeder,
+whoever holds them.
+
+**Each person can then move to their own address** under Settings › Profile:
+new address, current password, Save, then the link that arrives there. The old
+address — for these accounts, the CICTO inbox — is told, and the Security Log
+records *Email address changed by its owner*.
+
 #### Starting the live database again (2026-09-28)
 
 `php artisan migrate:fresh --seed --force` **deletes every document, account,
@@ -873,9 +896,14 @@ are not deleted; they are left with no record pointing at them.
    CICTO_ALLOW_DATABASE_WIPE=true
    CICTO_SUPER_ADMIN_NAME="Super Admin"
    CICTO_SUPER_ADMIN_EMAIL=<a real inbox>
-   CICTO_SUPER_ADMIN_PASSWORD=<12+ chars, upper, lower, number, symbol>
-   CICTO_OFFICE_ACCOUNT_PASSWORD=<not "password">
+   CICTO_SUPER_ADMIN_PASSWORD="<12+ chars, upper, lower, number, symbol>"
+   CICTO_OFFICE_ACCOUNT_PASSWORD="<not password>"
    ```
+   **Quote both, and avoid `#`.** An unquoted `#` starts a comment: on
+   2026-09-28 `Baliwag#Cicto2026` arrived as `Baliwag`, the Super Admin was
+   refused for being 7 characters, and the office accounts got `Baliwag`.
+   `php artisan tinker --execute="echo strlen(config('cicto.super_admin.password'));"`
+   shows the length the app actually read, without printing the password.
 3. Run `php artisan migrate:fresh --seed --force`. An empty database is seeded
    ready to use: offices, document types, every office's three accounts (the
    CICTO Admin on `cictobaliwagcity@gmail.com`) and that one Super Admin. The

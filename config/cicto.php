@@ -471,6 +471,16 @@ return [
         'domain' => env('CICTO_OFFICE_ACCOUNT_DOMAIN', 'baliwag.gov.ph'),
 
         /*
+         * ONE REAL INBOX FOR EVERY OFFICE ACCOUNT (2026-09-28). Set it, and
+         * OfficeAccountSeeder puts each account on a "+" alias of it --
+         * cictobaliwagcity+ocm.admin@gmail.com -- moving any still on its
+         * {code}.{slot}@domain login name. With the emailed sign-in code on,
+         * that is what lets every office sign in before each person has given
+         * their own address; they can move to it themselves under Settings.
+         */
+        'inbox' => env('CICTO_OFFICE_ACCOUNT_INBOX'),
+
+        /*
          * ONE PASSWORD, SHARED BY ALL 156 ACCOUNTS. Say plainly what that
          * means: anybody who can reach the login page can sign in as any
          * office Admin, and an office Admin can read, forward, approve and

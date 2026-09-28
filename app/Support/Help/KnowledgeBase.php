@@ -212,7 +212,7 @@ final class KnowledgeBase
                     ],
                     [
                         'title' => 'Changing your email address',
-                        'body' => 'You will be asked to verify the new address before the change takes effect, so use one you can open.',
+                        'body' => 'Type the new address under **Settings › Profile**, enter your **current password** in the box that appears, and press **Save**. A link is sent to the new address — open it to confirm, and until you do, the system asks for it. Your 6-digit sign-in codes go to the new address from then on, and the old address gets a message saying it was changed. Office accounts that share the CICTO inbox (addresses like cictobaliwagcity+ocm.admin@gmail.com) can be moved to a person\'s own email the same way.',
                     ],
                 ],
                 'closing' => [

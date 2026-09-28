@@ -2,16 +2,21 @@
 
 namespace App\Http\Controllers\Settings;
 
+use App\Enums\SecurityEventType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\ProfileDeleteRequest;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
+use App\Mail\EmailChangedMail;
 use App\Models\DocumentMovement;
 use App\Models\DocumentSignature;
+use App\Models\SecurityEvent;
+use App\Models\User;
 use App\Support\OutgoingMail;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -33,7 +38,13 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
+        $user = $request->user();
+        $oldEmail = $user->email;
+
+        // An address that differs only in letter case is the same inbox, and
+        // was not asked for a password: it is left exactly as it was.
+        $user->fill($request->safe()->only($request->changesEmail() ? ['name', 'email'] : ['name']));
+        $emailChanged = $user->isDirty('email');
 
         /*
          * Only re-verify on a host that can actually re-verify.
@@ -65,9 +76,46 @@ class ProfileController extends Controller
 
         $request->user()->save();
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('Profile updated.')]);
+        if ($emailChanged) {
+            $this->recordEmailChange($request, $user, $oldEmail);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => match (true) {
+            ! $emailChanged => __('Profile updated.'),
+            OutgoingMail::isConfigured() => 'Email address changed. Open the link we sent to '.$user->email.' to confirm it — your sign-in codes go there from now on.',
+            default => 'Email address changed.',
+        }]);
 
         return to_route('profile.edit');
+    }
+
+    /**
+     * Log a person moving their own account to a new address, and tell the
+     * old one (client request, 2026-09-28). The notice never blocks the
+     * change: a mail failure is reported, not shown.
+     */
+    private function recordEmailChange(Request $request, User $user, string $oldEmail): void
+    {
+        SecurityEvent::log(
+            type: SecurityEventType::EmailChangedByOwner,
+            summary: "{$user->name} changed their sign-in address from {$oldEmail} to {$user->email}",
+            actor: $user,
+            subjectLabel: $user->email,
+        );
+
+        if (! OutgoingMail::isConfigured()) {
+            return;
+        }
+
+        try {
+            Mail::to($oldEmail)->send(new EmailChangedMail(
+                recipientName: $user->name,
+                newAddress: $user->email,
+                ipAddress: $request->ip(),
+            ));
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     /**

@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Laravel\Fortify\Features;
 use Tests\TestCase;
@@ -102,6 +103,7 @@ class VerifiedMiddlewareTest extends TestCase
     public function test_changing_your_email_on_a_host_with_no_mail_does_not_lock_you_out(): void
     {
         config()->set('mail.default', 'log');
+        Mail::fake();
 
         $user = User::factory()->create(['email_verified_at' => now()]);
 
@@ -109,6 +111,7 @@ class VerifiedMiddlewareTest extends TestCase
             ->patch(route('profile.update'), [
                 'name' => $user->name,
                 'email' => 'corrected.address@baliwag.test',
+                'current_password' => 'password',
             ])
             ->assertSessionHasNoErrors();
 
@@ -127,12 +130,15 @@ class VerifiedMiddlewareTest extends TestCase
     {
         config()->set('mail.default', 'smtp');
         Notification::fake();
+        // The notice to the old address is a real send under `smtp`.
+        Mail::fake();
 
         $user = User::factory()->create(['email_verified_at' => now()]);
 
         $this->actingAs($user)->patch(route('profile.update'), [
             'name' => $user->name,
             'email' => 'moved.desk@baliwag.test',
+            'current_password' => 'password',
         ]);
 
         $fresh = $user->fresh();

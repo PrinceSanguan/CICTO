@@ -541,6 +541,90 @@ class OfficeAccountSeederTest extends TestCase
         $this->assertSame($hash, $moved->refresh()->password);
     }
 
+    /**
+     * "Everything use real email" (2026-09-28): with CICTO_OFFICE_ACCOUNT_INBOX
+     * set, every office account is an alias of that one inbox, so every
+     * sign-in code arrives somewhere real.
+     */
+    public function test_with_an_inbox_every_account_is_created_on_an_alias_of_it(): void
+    {
+        config()->set('cicto.office_accounts.inbox', 'CictoBaliwagCity@gmail.com');
+
+        $this->seed(OfficeAccountSeeder::class);
+
+        $emails = User::query()->pluck('email');
+
+        $this->assertSame(Office::query()->active()->count() * 3, $emails->count());
+        $this->assertFalse($emails->contains(fn (string $email) => str_ends_with($email, '@baliwag.gov.ph')));
+        $this->assertTrue($emails->every(fn (string $email) => (bool) preg_match(
+            '/^cictobaliwagcity(\+[a-z0-9-]+\.(admin|admin2|clerk))?@gmail\.com$/',
+            $email,
+        )), 'Every address is the inbox or a "+" alias of it.');
+
+        $this->assertSame('OCM Admin', User::query()->where('email', 'cictobaliwagcity+ocm.admin@gmail.com')->value('name'));
+        $this->assertSame('OCM-TF Clerk', User::query()->where('email', 'cictobaliwagcity+ocm-tf.clerk@gmail.com')->value('name'));
+        $this->assertSame('CICTO Admin', User::query()->where('email', 'cictobaliwagcity@gmail.com')->value('name'));
+    }
+
+    public function test_an_inbox_set_later_moves_every_account_still_on_its_login_name(): void
+    {
+        $this->seed(OfficeAccountSeeder::class);
+
+        $ocm = $this->seeded('ocm.admin');
+        $before = User::query()->count();
+
+        config()->set('cicto.office_accounts.inbox', 'cictobaliwagcity@gmail.com');
+        $this->seed(OfficeAccountSeeder::class);
+
+        $moved = User::query()->findOrFail($ocm->id);
+
+        $this->assertSame('cictobaliwagcity+ocm.admin@gmail.com', $moved->email, 'The same account, moved.');
+        $this->assertSame($ocm->password, $moved->password, 'Its password is left alone.');
+        $this->assertTrue($moved->hasVerifiedEmail());
+        $this->assertSame($before, User::query()->count());
+        $this->assertSame(0, User::query()->where('email', 'like', '%@baliwag.gov.ph')->count());
+        $this->assertSame(
+            $before - 1, // the CICTO Admin was on the real inbox from the start
+            SecurityEvent::query()->where('type', SecurityEventType::EmailChangedByAdmin->value)->count(),
+        );
+    }
+
+    /**
+     * A person who has moved their account to their own inbox is not given a
+     * twin by the next run, although "their" address is free again.
+     */
+    public function test_an_account_moved_by_its_owner_is_not_recreated(): void
+    {
+        config()->set('cicto.office_accounts.inbox', 'cictobaliwagcity@gmail.com');
+        $this->seed(OfficeAccountSeeder::class);
+        $before = User::query()->count();
+
+        User::query()->where('email', 'cictobaliwagcity+ocm.admin@gmail.com')->update(['email' => 'juan.delacruz@gmail.com']);
+        User::query()->where('email', 'cictobaliwagcity+trea.clerk@gmail.com')->update(['email' => 'maria@gmail.com', 'is_active' => false]);
+
+        $this->seed(OfficeAccountSeeder::class);
+
+        $this->assertSame($before, User::query()->count());
+        $this->assertFalse(User::query()->where('email', 'cictobaliwagcity+ocm.admin@gmail.com')->exists());
+        $this->assertFalse(User::query()->where('email', 'cictobaliwagcity+trea.clerk@gmail.com')->exists(), 'Nor one that was retired.');
+    }
+
+    public function test_an_inbox_must_be_one_plain_address(): void
+    {
+        foreach (['not-an-address', 'cictobaliwagcity+x@gmail.com'] as $inbox) {
+            config()->set('cicto.office_accounts.inbox', $inbox);
+
+            try {
+                $this->seed(OfficeAccountSeeder::class);
+                $this->fail("{$inbox} was accepted.");
+            } catch (RuntimeException $e) {
+                $this->assertStringContainsString('CICTO_OFFICE_ACCOUNT_INBOX', $e->getMessage());
+            }
+        }
+
+        $this->assertSame(0, User::query()->count());
+    }
+
     private function sheet(): string
     {
         $files = Storage::disk('local')->files();
