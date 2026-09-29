@@ -27,16 +27,30 @@ class ReportExporter
     /**
      * Streaming XLSX.
      *
+     * `$preamble` is a few lines above the table saying what the sheet is --
+     * whose trail, which period -- for a sheet whose rows alone do not say.
+     * A blank row separates it from the headings.
+     *
      * @param  array<int, string>  $headings
      * @param  iterable<int, array<int, scalar|null>>  $rows  values are re-indexed to a list for openspout
+     * @param  array<int, string>  $preamble
      */
-    public function xlsx(string $filename, array $headings, iterable $rows): StreamedResponse
+    public function xlsx(string $filename, array $headings, iterable $rows, array $preamble = []): StreamedResponse
     {
-        return response()->streamDownload(function () use ($headings, $rows): void {
+        return response()->streamDownload(function () use ($headings, $rows, $preamble): void {
             $writer = new XlsxWriter;
             $writer->openToFile('php://output');
 
             $bold = (new Style)->setFontBold();
+
+            foreach (array_values($preamble) as $i => $line) {
+                $writer->addRow(Row::fromValues([$line], $i === 0 ? $bold : null));
+            }
+
+            if ($preamble !== []) {
+                $writer->addRow(Row::fromValues([]));
+            }
+
             $writer->addRow(Row::fromValues(array_values($headings), $bold));
 
             foreach ($rows as $row) {

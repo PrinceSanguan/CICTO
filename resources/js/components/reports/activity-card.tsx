@@ -3,11 +3,21 @@ import {
     ChevronDown,
     ChevronLeft,
     ChevronRight,
+    Download,
+    FileSpreadsheet,
     FileText,
+    Printer,
     Search,
     UserRound,
 } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import documentRoutes from '@/routes/documents';
 import activity from '@/routes/reports/activity';
@@ -57,6 +67,11 @@ type UserStep = {
         type: string | null;
     };
 };
+
+/** What the export routes take: a print page, or a file to download. */
+type ExportFormat = 'print' | 'pdf' | 'xlsx' | 'csv';
+
+type ExportUrl = (format: ExportFormat) => string;
 
 /** Actions that MOVE the folder: the office on the step is where it went. */
 const MOVES = new Set(['forwarded', 'returned', 'resubmitted']);
@@ -195,35 +210,63 @@ export function ActivityCard({ months }: { months: number }) {
                     </span>
                 </h3>
 
-                <div
-                    role="tablist"
-                    aria-label="Show activity"
-                    className="inline-flex rounded-lg bg-[#EEF3FA] p-1 print:hidden"
-                >
-                    {(
-                        [
-                            ['documents', 'By document', FileText],
-                            ['users', 'By user', UserRound],
-                        ] as const
-                    ).map(([value, label, Icon]) => (
-                        <button
-                            key={value}
-                            type="button"
-                            role="tab"
-                            id={`${tabsId}-${value}`}
-                            aria-selected={tab === value}
-                            aria-controls={`${tabsId}-panel`}
-                            onClick={() => switchTo(value)}
-                            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition ${
-                                tab === value
-                                    ? 'bg-white text-navy shadow-sm'
-                                    : 'text-copy hover:text-navy'
-                            }`}
-                        >
-                            <Icon aria-hidden="true" className="size-3.5" />
-                            {label}
-                        </button>
-                    ))}
+                <div className="flex flex-wrap items-center gap-2 print:hidden">
+                    {/*
+                        The whole list -- every page of it, for the period and
+                        search on screen -- on paper or as a file (client
+                        request, 2026-09-29). Each open row has its own.
+                    */}
+                    <ListExport
+                        what={
+                            tab === 'documents'
+                                ? 'Every document in this list'
+                                : 'Everyone in this list'
+                        }
+                        href={(format) => {
+                            const options = {
+                                query: {
+                                    format,
+                                    months,
+                                    q: search || undefined,
+                                },
+                            };
+
+                            return tab === 'documents'
+                                ? activity.export.documents.url(options)
+                                : activity.export.users.url(options);
+                        }}
+                    />
+
+                    <div
+                        role="tablist"
+                        aria-label="Show activity"
+                        className="inline-flex rounded-lg bg-[#EEF3FA] p-1"
+                    >
+                        {(
+                            [
+                                ['documents', 'By document', FileText],
+                                ['users', 'By user', UserRound],
+                            ] as const
+                        ).map(([value, label, Icon]) => (
+                            <button
+                                key={value}
+                                type="button"
+                                role="tab"
+                                id={`${tabsId}-${value}`}
+                                aria-selected={tab === value}
+                                aria-controls={`${tabsId}-panel`}
+                                onClick={() => switchTo(value)}
+                                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition ${
+                                    tab === value
+                                        ? 'bg-white text-navy shadow-sm'
+                                        : 'text-copy hover:text-navy'
+                                }`}
+                            >
+                                <Icon aria-hidden="true" className="size-3.5" />
+                                {label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
 
@@ -356,6 +399,111 @@ function PageButton({
         >
             {children}
         </button>
+    );
+}
+
+const listButton =
+    'inline-flex h-9 items-center gap-1.5 rounded-md border border-[#D8E3F2] bg-white px-3 text-xs font-bold text-navy transition hover:bg-[#F2F6FC]';
+
+/**
+ * Print and export for the whole list: Print one click away, the three files
+ * behind one button, so the header keeps room for the tabs on a phone.
+ *
+ * Print opens the sheet in a new tab, where the print dialog comes up by
+ * itself; the files download in place.
+ */
+function ListExport({ href, what }: { href: ExportUrl; what: string }) {
+    return (
+        <>
+            <a
+                href={href('print')}
+                target="_blank"
+                rel="noopener"
+                className={listButton}
+            >
+                <Printer aria-hidden="true" className="size-3.5" />
+                Print<span className="sr-only"> this list</span>
+            </a>
+
+            <DropdownMenu>
+                <DropdownMenuTrigger className={listButton}>
+                    <Download aria-hidden="true" className="size-3.5" />
+                    Export<span className="sr-only"> this list</span>
+                    <ChevronDown
+                        aria-hidden="true"
+                        className="size-3.5 text-copy"
+                    />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    <DropdownMenuLabel className="text-xs font-normal text-copy">
+                        {what}
+                    </DropdownMenuLabel>
+                    <DropdownMenuItem asChild>
+                        <a href={href('pdf')}>
+                            <FileText
+                                aria-hidden="true"
+                                className="text-[#D7373F]"
+                            />
+                            PDF
+                        </a>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                        <a href={href('xlsx')}>
+                            <FileSpreadsheet
+                                aria-hidden="true"
+                                className="text-[#1F7244]"
+                            />
+                            Excel
+                        </a>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                        <a href={href('csv')}>
+                            <Download
+                                aria-hidden="true"
+                                className="text-[#3B72C4]"
+                            />
+                            CSV
+                        </a>
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+        </>
+    );
+}
+
+/**
+ * Print and export for one open row's trail: the same four, as a line of
+ * small links under the steps -- the whole trail, not just what is on screen.
+ */
+function TrailExport({ href, what }: { href: ExportUrl; what: string }) {
+    const link =
+        'inline-flex items-center gap-1 text-xs font-bold text-link hover:underline';
+    const context = <span className="sr-only"> {what}</span>;
+
+    return (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 print:hidden">
+            <a
+                href={href('print')}
+                target="_blank"
+                rel="noopener"
+                className={link}
+            >
+                <Printer aria-hidden="true" className="size-3.5" />
+                Print{context}
+            </a>
+            <a href={href('pdf')} className={link}>
+                <FileText aria-hidden="true" className="size-3.5" />
+                PDF{context}
+            </a>
+            <a href={href('xlsx')} className={link}>
+                <FileSpreadsheet aria-hidden="true" className="size-3.5" />
+                Excel{context}
+            </a>
+            <a href={href('csv')} className={link}>
+                <Download aria-hidden="true" className="size-3.5" />
+                CSV{context}
+            </a>
+        </div>
     );
 }
 
@@ -546,13 +694,27 @@ function DocumentItem({ row }: { row: DocumentRow }) {
                         ))}
                     </ol>
 
-                    <Link
-                        href={documentRoutes.show(row.id)}
-                        className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-link hover:underline print:hidden"
-                    >
-                        Open document
-                        <ChevronRight aria-hidden="true" className="size-4" />
-                    </Link>
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 print:hidden">
+                        <Link
+                            href={documentRoutes.show(row.id)}
+                            className="inline-flex items-center gap-1 text-sm font-bold text-link hover:underline"
+                        >
+                            Open document
+                            <ChevronRight
+                                aria-hidden="true"
+                                className="size-4"
+                            />
+                        </Link>
+
+                        <TrailExport
+                            what={`the trail of ${row.control_number}`}
+                            href={(format) =>
+                                activity.export.document.url(row.id, {
+                                    query: { format },
+                                })
+                            }
+                        />
+                    </div>
                 </TrailShell>
             )}
         </li>
@@ -624,9 +786,21 @@ function UserItem({ row, months }: { row: UserRow; months: number }) {
                     {steps?.truncated && (
                         <p className="mt-2 text-xs text-copy">
                             Showing this person's latest {steps.steps.length}{' '}
-                            actions in the period.
+                            actions in the period. Print or export for all of
+                            them.
                         </p>
                     )}
+
+                    <div className="mt-3">
+                        <TrailExport
+                            what={`the activity of ${row.name}`}
+                            href={(format) =>
+                                activity.export.user.url(row.id, {
+                                    query: { format, months },
+                                })
+                            }
+                        />
+                    </div>
                 </TrailShell>
             )}
         </li>

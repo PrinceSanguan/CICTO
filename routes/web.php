@@ -128,6 +128,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('reports/activity/users/{user}', [ReportActivityController::class, 'user'])
         ->name('reports.activity.user');
 
+    // ...and printed or exported: the whole list, or one document's or one
+    // person's trail (client request, 2026-09-29).
+    Route::get('reports/activity/export/documents', [ReportActivityController::class, 'exportDocuments'])
+        ->name('reports.activity.export.documents');
+    Route::get('reports/activity/export/documents/{document}', [ReportActivityController::class, 'exportDocument'])
+        ->name('reports.activity.export.document');
+    Route::get('reports/activity/export/users', [ReportActivityController::class, 'exportUsers'])
+        ->name('reports.activity.export.users');
+    Route::get('reports/activity/export/users/{user}', [ReportActivityController::class, 'exportUser'])
+        ->name('reports.activity.export.user');
+
     // The one Help route that has to know who you are.
     Route::get('help/ticket', [HelpController::class, 'ticket'])->name('help.ticket');
     Route::post('help/ticket', [HelpController::class, 'submitTicket'])

@@ -21,13 +21,11 @@ export default function ReportCharts({
     monthlyByStatus,
     statusDistribution,
     processingTrend,
-    exportButtons,
 }: {
     monthlyProcessed: MonthPoint[];
     monthlyByStatus: MonthByStatus[];
     statusDistribution: StatusSlice[];
     processingTrend: TrendPoint[];
-    exportButtons?: React.ReactNode;
 }) {
     return (
         // On paper: the two charts side by side and the trend beneath, as a
@@ -45,12 +43,6 @@ export default function ReportCharts({
                     Status Distribution
                 </h2>
                 <StatusPieChart data={statusDistribution} />
-
-                {exportButtons && (
-                    <div className="mt-4 flex flex-wrap justify-end gap-3 print:hidden">
-                        {exportButtons}
-                    </div>
-                )}
             </section>
 
             <section className="rounded-xl bg-white p-5 shadow-xl lg:col-span-2 print:col-span-2 print:break-inside-avoid print:rounded-lg print:border print:border-[#D8E3F2] print:p-3 print:shadow-none">

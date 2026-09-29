@@ -7,6 +7,7 @@ use App\Actions\Documents\TransitionDocument;
 use App\Enums\DocumentPriority;
 use App\Enums\MovementAction;
 use App\Models\Document;
+use App\Models\DocumentMovement;
 use App\Models\DocumentType;
 use App\Models\Office;
 use App\Models\User;
@@ -276,5 +277,233 @@ class ReportActivityTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->where('showActivity', true)
                 ->missing('userActivity'));
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Print and export (client request, 2026-09-29)
+    |--------------------------------------------------------------------------
+    */
+
+    public function test_the_whole_by_document_list_exports_past_the_first_page(): void
+    {
+        $documents = [];
+
+        foreach (range(1, 12) as $n) {
+            Carbon::setTestNow(Carbon::parse('2026-09-01 08:00:00')->addHours($n));
+            $documents[] = $this->file("Document {$n}", 'Business Permit');
+        }
+
+        $this->actingAs($this->mpdoAdmin);
+
+        // Every page, not the ten on screen.
+        $csv = $this->get(route('reports.activity.export.documents', ['format' => 'csv']))
+            ->assertOk()
+            ->streamedContent();
+
+        $this->assertStringContainsString('"Last activity",Type,"Control number",Title,Status,Actions', $csv);
+        $this->assertCount(13, array_filter(explode("\n", trim($csv))));
+
+        foreach ($documents as $document) {
+            $this->assertStringContainsString($document->control_number, $csv);
+        }
+
+        // Newest first, as the list is, with the card's mm/dd/yyyy.
+        $this->assertStringContainsString('"09/01/2026 8:00 PM","Business Permit",'.$documents[11]->control_number, $csv);
+        $this->assertLessThan(
+            strpos($csv, $documents[0]->control_number),
+            strpos($csv, $documents[11]->control_number),
+        );
+
+        $this->assertStringStartsWith(
+            'PK',
+            $this->get(route('reports.activity.export.documents', ['format' => 'xlsx']))->streamedContent(),
+        );
+        $this->assertStringStartsWith(
+            '%PDF',
+            (string) $this->get(route('reports.activity.export.documents', ['format' => 'pdf']))->getContent(),
+        );
+    }
+
+    public function test_the_list_export_follows_the_search_and_period_on_screen(): void
+    {
+        Carbon::setTestNow('2025-01-10 09:00:00');
+        $old = $this->file('Old affidavit', 'Affidavit of Non-Filing');
+
+        Carbon::setTestNow('2026-09-25 09:00:00');
+        $affidavit = $this->file('Non-filing for J. Cruz', 'Affidavit of Non-Filing');
+        $permit = $this->file('Bakery permit', 'Business Permit');
+
+        $csv = $this->actingAs($this->mpdoAdmin)
+            ->get(route('reports.activity.export.documents', ['format' => 'csv', 'q' => 'affidavit', 'months' => 3]))
+            ->streamedContent();
+
+        $this->assertStringContainsString($affidavit->control_number, $csv);
+        $this->assertStringNotContainsString($permit->control_number, $csv);
+        $this->assertStringNotContainsString($old->control_number, $csv);
+    }
+
+    public function test_the_print_page_says_what_it_covers_and_opens_the_print_dialog(): void
+    {
+        Carbon::setTestNow('2026-09-25 09:00:00');
+        $document = $this->file('Non-filing for J. Cruz', 'Affidavit of Non-Filing');
+
+        $this->actingAs($this->mpdoAdmin)
+            ->get(route('reports.activity.export.documents', ['format' => 'print', 'months' => 6, 'q' => 'cruz']))
+            ->assertOk()
+            ->assertHeader('content-type', 'text/html; charset=UTF-8')
+            ->assertSee('User activity by document')
+            ->assertSee('Covering: Planning Office')
+            ->assertSee('Last 6 months, from 04/01/2026')
+            ->assertSee('Matching “cruz”', false)
+            ->assertSee($document->control_number)
+            ->assertSee('window.print()', false)
+            // Nonced, or an enforced CSP blocks the dialog.
+            ->assertSee('<script nonce="', false);
+    }
+
+    public function test_one_documents_trail_exports_with_where_it_went(): void
+    {
+        $document = $this->file('Non-filing for J. Cruz', 'Affidavit of Non-Filing');
+        $this->act($document, MovementAction::Received, $this->mpdoAdmin);
+        $this->act($document, MovementAction::Forwarded, $this->mpdoAdmin, $this->mto, 'Forward remark');
+        $this->act($document, MovementAction::Received, $this->mtoAdmin);
+
+        $this->actingAs($this->mpdoAdmin);
+
+        $csv = $this->get(route('reports.activity.export.document', [$document, 'format' => 'csv']))
+            ->assertOk()
+            ->streamedContent();
+
+        $lines = array_values(array_filter(explode("\n", trim($csv))));
+
+        $this->assertCount(5, $lines);
+        $this->assertStringContainsString('"Date & time",Action,By,"From office","To / at office"', $lines[0]);
+        $this->assertStringContainsString(',Registered,"'.$this->clerk->name.'",,"Planning Office"', $lines[1]);
+        $this->assertStringContainsString(',Forwarded,"'.$this->mpdoAdmin->name.'","Planning Office",Treasury', $lines[3]);
+        $this->assertStringContainsString(',Received,"'.$this->mtoAdmin->name.'",,Treasury', $lines[4]);
+
+        // The tracking record only: remarks stay behind the Security PIN.
+        $this->assertStringNotContainsString('remark', strtolower($csv));
+
+        $this->get(route('reports.activity.export.document', [$document, 'format' => 'print']))
+            ->assertOk()
+            ->assertSee('Affidavit of Non-Filing · '.$document->control_number)
+            ->assertSee('Non-filing for J. Cruz')
+            ->assertDontSee('Forward remark');
+
+        $this->assertStringStartsWith(
+            '%PDF',
+            (string) $this->get(route('reports.activity.export.document', [$document, 'format' => 'pdf']))->getContent(),
+        );
+    }
+
+    public function test_the_by_user_list_and_one_persons_whole_trail_export(): void
+    {
+        $affidavit = $this->file('Non-filing for J. Cruz', 'Affidavit of Non-Filing');
+        $this->act($affidavit, MovementAction::Received, $this->mpdoAdmin);
+        $this->act($affidavit, MovementAction::Forwarded, $this->mpdoAdmin, $this->mto);
+
+        $this->actingAs($this->mpdoAdmin);
+
+        $people = $this->get(route('reports.activity.export.users', ['format' => 'csv']))
+            ->assertOk()
+            ->streamedContent();
+
+        $this->assertStringContainsString('"Last activity",Name,Office,Actions', $people);
+        $this->assertStringContainsString('"'.$this->mpdoAdmin->name.'","Planning Office",2', $people);
+        $this->assertStringContainsString('"'.$this->clerk->name.'","Planning Office",1', $people);
+
+        // Past the hundred a click loads: the export is the whole record.
+        $start = Carbon::now()->subDay();
+
+        foreach (range(1, 105) as $n) {
+            DocumentMovement::factory()->create([
+                'document_id' => $affidavit->id,
+                'sequence' => 100 + $n,
+                'from_office_id' => $this->mpdo->id,
+                'to_office_id' => $this->mpdo->id,
+                'actor_id' => $this->mpdoAdmin->id,
+                'action' => MovementAction::Received,
+                'arrived_at' => $start->copy()->addMinutes($n),
+                'departed_at' => $start->copy()->addMinutes($n + 1),
+            ]);
+        }
+
+        $this->getJson(route('reports.activity.user', $this->mpdoAdmin))->assertJsonPath('truncated', true);
+
+        $trail = $this->get(route('reports.activity.export.user', [$this->mpdoAdmin, 'format' => 'csv']))
+            ->assertOk()
+            ->streamedContent();
+
+        $this->assertCount(108, array_filter(explode("\n", trim($trail))));
+        $this->assertStringContainsString('"Date & time",Action,Type,"Control number",Title,"To / at office"', $trail);
+        $this->assertStringContainsString(',Forwarded,"Affidavit of Non-Filing",'.$affidavit->control_number.',"Non-filing for J. Cruz",Treasury', $trail);
+
+        $this->get(route('reports.activity.export.user', [$this->mpdoAdmin, 'format' => 'print']))
+            ->assertOk()
+            ->assertSee($this->mpdoAdmin->name)
+            ->assertSee('Office: Planning Office');
+
+        $this->assertStringStartsWith(
+            'PK',
+            $this->get(route('reports.activity.export.user', [$this->mpdoAdmin, 'format' => 'xlsx']))->streamedContent(),
+        );
+    }
+
+    public function test_exports_are_scoped_like_the_card(): void
+    {
+        $ours = $this->file('Ours');
+        $theirs = $this->file('Theirs', null, $this->mto);
+        $this->act($theirs, MovementAction::Received, $this->mtoAdmin);
+
+        // A plain user gets none of it.
+        $this->actingAs($this->clerk);
+
+        foreach ([
+            route('reports.activity.export.documents', ['format' => 'csv']),
+            route('reports.activity.export.document', [$ours, 'format' => 'csv']),
+            route('reports.activity.export.users', ['format' => 'csv']),
+            route('reports.activity.export.user', [$this->mpdoAdmin, 'format' => 'csv']),
+        ] as $url) {
+            $this->get($url)->assertForbidden();
+        }
+
+        $this->actingAs($this->mpdoAdmin);
+
+        $list = $this->get(route('reports.activity.export.documents', ['format' => 'csv']))->streamedContent();
+        $this->assertStringContainsString($ours->control_number, $list);
+        $this->assertStringNotContainsString($theirs->control_number, $list);
+
+        // Another office's document: 404, as the JSON trail answers.
+        $this->get(route('reports.activity.export.document', [$theirs, 'format' => 'print']))->assertNotFound();
+
+        // Someone with no activity the viewer may see: 404 too, or the sheet's
+        // heading would give away any user's name and office by id.
+        $this->get(route('reports.activity.export.user', [$this->mtoAdmin, 'format' => 'print']))->assertNotFound();
+
+        // A Super Admin's sheets cover every office.
+        $this->actingAs($this->superAdmin())
+            ->get(route('reports.activity.export.documents', ['format' => 'print']))
+            ->assertSee('Covering: All offices')
+            ->assertSee($theirs->control_number);
+    }
+
+    public function test_an_export_over_the_row_cap_is_refused_before_generating(): void
+    {
+        config(['cicto.reports.max_pdf_rows' => 1, 'cicto.reports.max_xlsx_rows' => 1]);
+
+        $this->file('One');
+        $this->file('Two');
+
+        $this->actingAs($this->mpdoAdmin);
+
+        foreach (['print', 'pdf', 'xlsx'] as $format) {
+            $this->get(route('reports.activity.export.documents', ['format' => $format]))->assertStatus(422);
+            $this->get(route('reports.activity.export.user', [$this->clerk, 'format' => $format]))->assertStatus(422);
+        }
+
+        // CSV streams and has no cap: it is the way out the error points to.
+        $this->get(route('reports.activity.export.documents', ['format' => 'csv']))->assertOk();
     }
 }
