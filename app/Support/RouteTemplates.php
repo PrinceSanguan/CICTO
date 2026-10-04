@@ -2,9 +2,13 @@
 
 namespace App\Support;
 
+use App\Enums\RouteStepKind;
 use App\Models\DocumentType;
+use App\Models\DocumentTypeRouteStep;
 use App\Models\Office;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The suggested route for each document type (client request, 2026-09-25):
@@ -13,11 +17,21 @@ use Illuminate\Support\Collection;
  * office". The Submit form fills the route in from here by default; choosing
  * offices by hand is still there, as the other mode.
  *
- * THE SOURCE IS THE CLIENT'S DTS_Office_Routing_Paths.pdf, "Suggested Office
- * Routing Paths by Document Type -- Baliwag City LGU", mapped onto the office
- * codes in OfficeSeeder and the type codes in DocumentTypeSeeder. The PDF asks
- * for every path to be confirmed with the client before it is final; changing
- * one is an edit to this file and a deploy, the same as the type list itself.
+ * THE DATABASE IS THE SOURCE OF TRUTH (2026-10-04). Every type's route is
+ * rows in document_type_route_steps, and a Super Admin edits them on the
+ * Document Types page -- the 43 built-in types as well as their own.
+ * forClient() reads those rows and nothing else.
+ *
+ * WHAT IS LEFT IN THIS FILE IS THE ORIGINALS: the route each built-in type
+ * starts with, from the client's DTS_Office_Routing_Paths.pdf ("Suggested
+ * Office Routing Paths by Document Type -- Baliwag City LGU"), mapped onto
+ * the office codes in OfficeSeeder and the type codes in DocumentTypeSeeder.
+ * installOriginal() copies one into the database. DocumentTypeSeeder does
+ * that on every deploy for each type whose route a Super Admin has not
+ * changed (`route_customized_at` is null), so an edit to a definition below
+ * still reaches those types with the next deploy -- and never overwrites one
+ * somebody changed on purpose. "Restore original route" on the page puts a
+ * changed one back.
  *
  * WHAT A TEMPLATE IS NOT. It is a suggestion the form starts from, never a rule
  * the server enforces: StoreDocumentRequest still validates the offices that
@@ -25,7 +39,7 @@ use Illuminate\Support\Collection;
  * suggestion before submitting it. A route that went wrong is fixed by the
  * person holding the folder, as it always was.
  *
- * Every step is one of:
+ * Every step is one of (App\Enums\RouteStepKind):
  *  - an office, by code -- skipped with a warning when that office is not
  *    active on this installation;
  *  - ORIGIN, the office filing it ("BPLO -- release" when BPLO filed it);
@@ -57,6 +71,9 @@ use Illuminate\Support\Collection;
  *    (decision D13) and each member has to have it in hand.
  *  - Confidential. Its route is here -- straight to the City Mayor or HRMO --
  *    and who may SEE it is App\Support\Confidential.
+ *
+ * A Super Admin's own types never had a definition here: their routes have
+ * only ever been rows, and only `office` ones.
  */
 final class RouteTemplates
 {
@@ -70,44 +87,41 @@ final class RouteTemplates
     private static ?array $definitions = null;
 
     /**
-     * The templates for the types the form offers, with office codes resolved
-     * to the offices the form offers -- keyed by document type id, which is
-     * what the type dropdown posts.
+     * The templates for the types the form offers, read from their saved
+     * routes and resolved to the offices the form offers -- keyed by document
+     * type id, which is what the type dropdown posts. A type with no saved
+     * route is left out, and the form falls back to choosing by hand.
      *
-     * @param  Collection<int, DocumentType>  $types
-     * @param  Collection<int, Office>  $offices  the active offices, with `code`
-     * @return array<int, array{note: string|null, steps: list<array<string, mixed>>}>
+     * @param  Collection<int, DocumentType>  $types  with `route_note`, `is_confidential` and `allows_broadcast`
+     * @param  Collection<int, Office>  $offices  the active offices
+     * @return array<int, array{note: string|null, confidential: bool, broadcast: bool, steps: list<array<string, mixed>>}>
      */
     public static function forClient(Collection $types, Collection $offices): array
     {
-        $ids = $offices->pluck('id', 'code');
+        // id => true, for the offices the form can send to.
+        $active = $offices->pluck('id')->map(static fn ($id): int => (int) $id)->flip();
 
-        // Names for offices a template names but this installation has
-        // deactivated, so the warning can say which office is missing.
-        $names = Office::query()
-            ->whereIn('code', self::codes())
-            ->pluck('name', 'code');
+        // One query for every type's steps, with the office name for a step
+        // whose office has since been deactivated.
+        (new EloquentCollection($types->all()))->load('routeSteps.office:id,name');
 
         $templates = [];
 
         foreach ($types as $type) {
-            $definition = self::definitions()[$type->code] ?? null;
-
-            if ($definition === null) {
+            if ($type->routeSteps->isEmpty()) {
                 continue;
             }
 
             $templates[$type->id] = [
-                'note' => $definition['note'] ?? null,
+                'note' => $type->route_note,
                 // The form keeps a Confidential route to the choice below --
                 // StoreDocumentRequest refuses any other -- and says where a
                 // broadcast type's Broadcast button is.
                 'confidential' => $type->is_confidential,
                 'broadcast' => $type->allows_broadcast,
-                'steps' => array_map(
-                    static fn (array $step): array => self::resolve($step, $ids, $names),
-                    $definition['steps'],
-                ),
+                'steps' => array_values($type->routeSteps
+                    ->map(static fn (DocumentTypeRouteStep $step): array => self::forForm($step, $active))
+                    ->all()),
             ];
         }
 
@@ -115,8 +129,71 @@ final class RouteTemplates
     }
 
     /**
-     * The type codes that have a template. The tests compare it with the
-     * seeder's list, so a type added there without a route cannot go
+     * Put a built-in type's original route back, from the definitions below.
+     *
+     * Writes only what differs, so the seeder can call it on every deploy
+     * without touching a row that is already right. Clears
+     * `route_customized_at`: the route is the system's again, and later
+     * deploys keep it current.
+     *
+     * An office code this installation does not have at all is left out (a
+     * step must point at a real office); one it has deactivated is kept, and
+     * the Submit form names it as missing.
+     *
+     * @return bool whether anything changed
+     */
+    public static function installOriginal(DocumentType $type): bool
+    {
+        $definition = $type->is_custom ? null : (self::definitions()[$type->code] ?? null);
+
+        if ($definition === null) {
+            return false;
+        }
+
+        $rows = self::rows($definition['steps'], Office::query()->pluck('id', 'code')->map(static fn ($id): int => (int) $id));
+        $note = $definition['note'] ?? null;
+
+        $current = $type->routeSteps()->get()
+            ->map(static fn (DocumentTypeRouteStep $step): array => $step->definition())
+            ->all();
+
+        $type->forceFill(['route_note' => $note, 'route_customized_at' => null]);
+
+        if ($current === $rows && ! $type->isDirty()) {
+            return false;
+        }
+
+        DB::transaction(static function () use ($type, $current, $rows): void {
+            if ($current !== $rows) {
+                $type->routeSteps()->delete();
+                $type->routeSteps()->createMany(self::positioned($rows));
+            }
+
+            $type->save();
+        });
+
+        return true;
+    }
+
+    /**
+     * Rows numbered 1, 2, 3... in order: positions ARE the order, and a
+     * `same` step's target is one.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<array<string, mixed>>
+     */
+    public static function positioned(array $rows): array
+    {
+        return array_map(
+            static fn (array $row, int $index): array => $row + ['position' => $index + 1],
+            $rows,
+            array_keys($rows),
+        );
+    }
+
+    /**
+     * The type codes that have an original route. The tests compare it with
+     * the seeder's list, so a type added there without a route cannot go
      * unnoticed.
      *
      * @return list<string>
@@ -127,7 +204,7 @@ final class RouteTemplates
     }
 
     /**
-     * Every office code a template names.
+     * Every office code an original route names.
      *
      * @return list<string>
      */
@@ -149,45 +226,119 @@ final class RouteTemplates
     }
 
     /**
-     * @param  array<string, mixed>  $step
-     * @param  Collection<string, int>  $ids
-     * @param  Collection<string, string>  $names
+     * One saved step, as the Submit form's RouteTemplateStep.
+     *
+     * @param  Collection<int, int>  $active  active office id => anything
      * @return array<string, mixed>
      */
-    private static function resolve(array $step, Collection $ids, Collection $names): array
+    private static function forForm(DocumentTypeRouteStep $step, Collection $active): array
     {
-        return match ($step['kind']) {
-            'office' => [
+        $purpose = $step->purpose ?? '';
+
+        return match ($step->kind) {
+            RouteStepKind::Office => [
                 'kind' => 'office',
-                'office_id' => $ids->get($step['code']),
+                'office_id' => $active->has($step->office_id) ? $step->office_id : null,
                 // Only read when office_id is null: the form names a live
                 // office from its own list.
-                'missing_office' => $ids->has($step['code']) ? null : ($names->get($step['code']) ?? $step['code']),
-                'purpose' => $step['purpose'],
-                'optional' => $step['optional'],
-                'checked' => $step['checked'] ?? false,
+                'missing_office' => $active->has($step->office_id) ? null : $step->office?->name,
+                'purpose' => $purpose,
+                'optional' => $step->is_optional,
+                'checked' => $step->is_checked,
             ],
-            'choose' => [
+            RouteStepKind::Choose => [
                 'kind' => 'choose',
-                'purpose' => $step['purpose'],
-                'optional' => $step['optional'],
-                'suggested' => match ($step['suggested']) {
-                    null => null,
-                    self::ORIGIN => 'origin',
-                    default => $ids->get($step['suggested']),
+                'purpose' => $purpose,
+                'optional' => $step->is_optional,
+                'suggested' => match (true) {
+                    $step->suggests_origin => 'origin',
+                    $step->suggested_office_id !== null && $active->has($step->suggested_office_id) => $step->suggested_office_id,
+                    default => null,
                 },
                 // Null: any office. A list the installation has none of left
                 // is still a list, so the step reads as unanswerable rather
                 // than silently widening to every office.
-                'only' => $step['only'] === null
+                'only' => $step->only_office_ids === null
                     ? null
-                    : array_values(array_filter(array_map(
-                        static fn (string $code): ?int => $ids->get($code),
-                        $step['only'],
-                    ))),
+                    : array_values(array_filter(
+                        array_map('intval', $step->only_office_ids),
+                        static fn (int $id): bool => $active->has($id),
+                    )),
             ],
-            default => $step,
+            // 0-based, as the form counts.
+            RouteStepKind::Same => ['kind' => 'same', 'step' => (int) $step->same_as_position - 1, 'purpose' => $purpose],
+            RouteStepKind::Note => ['kind' => 'note', 'purpose' => $purpose],
         };
+    }
+
+    /**
+     * An original route as rows, in DocumentTypeRouteStep::definition()'s
+     * shape.
+     *
+     * @param  list<array<string, mixed>>  $steps
+     * @param  Collection<string, int>  $ids  every office, active or not, by code
+     * @return list<array{kind: string, office_id: int|null, is_optional: bool, is_checked: bool, suggested_office_id: int|null, suggests_origin: bool, only_office_ids: list<int>|null, same_as_position: int|null, purpose: string|null}>
+     */
+    private static function rows(array $steps, Collection $ids): array
+    {
+        $rows = [];
+
+        // Original index => saved position, for SAME steps: a step left out
+        // above one moves it up.
+        $positions = [];
+
+        foreach ($steps as $index => $step) {
+            $row = [
+                'kind' => $step['kind'],
+                'office_id' => null,
+                'is_optional' => (bool) ($step['optional'] ?? false),
+                'is_checked' => (bool) ($step['checked'] ?? false),
+                'suggested_office_id' => null,
+                'suggests_origin' => false,
+                'only_office_ids' => null,
+                'same_as_position' => null,
+                'purpose' => ($step['purpose'] ?? '') === '' ? null : $step['purpose'],
+            ];
+
+            switch ($step['kind']) {
+                case 'office':
+                    $row['office_id'] = $ids->get($step['code']);
+
+                    if ($row['office_id'] === null) {
+                        continue 2;
+                    }
+
+                    break;
+
+                case 'choose':
+                    $row['suggests_origin'] = $step['suggested'] === self::ORIGIN;
+                    $row['suggested_office_id'] = $step['suggested'] === null || $row['suggests_origin']
+                        ? null
+                        : $ids->get($step['suggested']);
+                    $row['only_office_ids'] = $step['only'] === null
+                        ? null
+                        : array_values(array_filter(array_map(
+                            static fn (string $code): ?int => $ids->get($code),
+                            $step['only'],
+                        )));
+
+                    break;
+
+                case 'same':
+                    $row['same_as_position'] = $positions[$step['step']] ?? null;
+
+                    if ($row['same_as_position'] === null) {
+                        continue 2;
+                    }
+
+                    break;
+            }
+
+            $rows[] = $row;
+            $positions[$index] = count($rows);
+        }
+
+        return $rows;
     }
 
     /**

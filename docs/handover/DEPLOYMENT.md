@@ -446,9 +446,9 @@ any more except one column.
 Office is a different office, it is the one that can answer, and it had not been
 asked yet (client question **A4**). Until those numbers arrive
 `App\Support\Deadlines` falls back to `CICTO_DEFAULT_TURNAROUND_DAYS`, so all 43
-types share the same provisional three-day SLA. There is no admin screen for
-document types: the real figures will be a seeder edit and a deploy, not a
-setting somebody clicks.
+types share the same provisional three-day SLA. When ARO answers, a Super Admin
+can enter each figure on **Super Admin Panel → Document Types**, and a later
+deploy will not reset it — see "Document types and their routes" below.
 
 > **Re-seeding an existing database deactivates; it does not delete.** The ten
 > retired placeholder office codes (MO, SB, MTO, MACC, MBO, MPDO, MEO, MASSO,
@@ -845,8 +845,9 @@ php artisan db:seed --class=DocumentTypeSeeder --force
 ```
 
 - **Submit Document fills the route in by type** (Automatic, the default);
-  Manual is the old picker. The routes live in `app/Support/RouteTemplates.php`
-  — changing one is an edit there and a deploy.
+  Manual is the old picker. Since 2026-10-04 the routes are in the database
+  and a Super Admin edits them on the Document Types page; see "Document types
+  and their routes" below.
 - **Confidential** goes straight to the City Mayor or HRMO when filed, and only
   the person who filed it and the people of those offices can see it — **not a
   Super Admin**, and not the rest of the filing office. Its title is hidden on
@@ -912,6 +913,66 @@ are not deleted; they are left with no record pointing at them.
 4. Set `CICTO_ALLOW_DATABASE_WIPE=false` and redeploy. You may also remove
    `CICTO_SUPER_ADMIN_PASSWORD`; the seed never touches a database that already
    has accounts, so every later deploy's `db:seed` adds nobody.
+
+#### Document types and their routes (2026-10-03, 2026-10-04)
+
+Two client requests. 2026-10-02, approved as a paid extra: a Super Admin adds
+document types and the offices each passes through. 2026-10-04: the 43
+built-in types become editable the same way. Both are on **Super Admin Panel →
+Document Types**. When a clerk picks a type on Submit Document, the Automatic
+route fills in from what is saved there.
+
+**It needs the migration and the seeder run, in that order.** The migration
+adds four columns to `document_types` and a new `document_type_route_steps`
+table, and copies each built-in type's route into it. The seeder does the same
+copy on every deploy:
+
+```bash
+php artisan migrate --force
+php artisan db:seed --class=DocumentTypeSeeder --force
+```
+
+What to know before the client asks:
+
+- **Every route is in the database now.** `app/Support/RouteTemplates.php`
+  keeps only the *original* route of each built-in type — the one from the
+  client's routing PDF.
+- **A Super Admin can change a built-in type's:**
+  - name, description and turnaround (1–365 days);
+  - route — add, remove and reorder offices, make one optional or required,
+    and set what happens there;
+  - whether it is offered on Submit Document.
+- **What nobody can change on the page:**
+  - the code;
+  - whether a type is Confidential or Broadcast;
+  - the Confidential type's route, which `CICTO_CONFIDENTIAL_OFFICES` decides;
+  - the four retired sample types, which are listed as *Retired*.
+- **Steps that are not a fixed office** — "chosen when filing", "the same
+  office as step N", and the notes — came with the built-in types. They can be
+  moved, reworded or removed, but not added.
+- **A Super Admin's own types are offices only,** as before.
+- **Deploys keep what a Super Admin changed.** A built-in type somebody saved
+  is marked *Changed*. From then on `DocumentTypeSeeder` leaves that part alone:
+  the name, turnaround and on/off once one of them is saved, the route once the
+  route is.
+- **Changing an original keeps reaching untouched types.** The seeder still
+  keeps every *untouched* type in line with the code. So an edit to
+  `RouteTemplates.php` or the seeder's list reaches those types on the next
+  deploy, as it always did.
+- **Restore original route** (in the edit form) puts a changed built-in route
+  back to the original and hands it back to the seeder.
+- **Codes are permanent.** A code cannot be changed after the type is created,
+  cannot reuse one any type has ever had, and cannot be a built-in code.
+- **No delete.** Documents point at their type, so a type is deactivated
+  instead. It leaves the Submit form; documents already filed, the type filter
+  and the reports keep its name.
+- **Documents already filed keep their route.** Editing or deactivating a type
+  changes only what the next Submit form offers.
+- **Wiping the database deletes the edits.** `migrate:fresh` (above) deletes the
+  Super Admin's own types and every change to a built-in one, with everything
+  else.
+- **Every add, edit, activation, deactivation and restore** is written to the
+  Security Log as *Setting changed*.
 
 ---
 

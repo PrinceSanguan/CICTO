@@ -133,7 +133,7 @@ class DocumentController extends Controller
         $userOfficeId = request()->user()?->office_id;
 
         $types = DocumentType::query()->active()->ordered()
-            ->get(['id', 'code', 'name', 'turnaround_days', 'is_confidential', 'allows_broadcast']);
+            ->get(['id', 'code', 'name', 'turnaround_days', 'is_confidential', 'allows_broadcast', 'route_note']);
 
         return Inertia::render('documents/create', [
             'offices' => $offices,

@@ -7,6 +7,7 @@ import {
     Files,
     FolderOpen,
     LifeBuoy,
+    ListTree,
     ScanLine,
     Settings,
     ShieldCheck,
@@ -162,6 +163,12 @@ export const NAV_BY_ROLE: Record<Role, RoleNav> = {
                         href: reports.index(),
                         icon: TrendingUp,
                     },
+                    // Paid extra, approved 2026-10-03 -- see PANEL_NAV.
+                    {
+                        title: 'Document Types',
+                        href: superAdmin.documentTypes.index(),
+                        icon: ListTree,
+                    },
                     {
                         title: 'System Settings',
                         href: superAdmin.settings.edit(),
@@ -219,6 +226,18 @@ const PANEL_NAV: Record<Role, NavItem[]> = {
             title: 'Reports & Analytics',
             href: reports.index(),
             icon: TrendingUp,
+        },
+        /*
+            Not one of §4's four. The client asked on 2026-10-02 to add
+            document types and the offices each passes through, and approved
+            it as a paid extra on 2026-10-03; the built-in types became
+            editable there on 2026-10-04. Super Admin only: EnsureRole
+            refuses everyone else.
+        */
+        {
+            title: 'Document Types',
+            href: superAdmin.documentTypes.index(),
+            icon: ListTree,
         },
         {
             title: 'System Settings',

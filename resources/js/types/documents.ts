@@ -247,7 +247,8 @@ export type IdNameOption = {
 };
 
 /**
- * One step of a document type's suggested route -- App\Support\RouteTemplates.
+ * One step of a document type's suggested route, as saved on the Document
+ * Types page -- App\Support\RouteTemplates::forClient().
  *
  *  - `office`: a fixed office. `office_id` is null when this installation has
  *    no such active office, and `missing_office` then names it.

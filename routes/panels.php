@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\AdminReportController;
 use App\Http\Controllers\Admin\AdminSettingsController;
 use App\Http\Controllers\Admin\AdminUserController;
+use App\Http\Controllers\SuperAdmin\DocumentTypeController;
 use App\Http\Controllers\SuperAdmin\SuperAdminDashboardController;
 use App\Http\Controllers\SuperAdmin\SuperAdminReportController;
 use App\Http\Controllers\SuperAdmin\SuperAdminUserController;
@@ -74,4 +75,16 @@ Route::middleware(['auth', 'verified', EnsureRole::using(Role::SuperAdmin)])
         Route::post('settings/backups/{run}/restored', [SystemController::class, 'recordRestore'])->name('settings.backup.restored');
         Route::post('settings/verify-signatures', [SystemController::class, 'verifySignatures'])->name('settings.verify-signatures');
         Route::post('settings/workflow', [SystemController::class, 'updateWorkflow'])->name('settings.workflow');
+
+        /*
+        | Document types and their routes (client requests 2026-10-02 and, for
+        | the 43 built-in types, 2026-10-04). A built-in type's route can be
+        | put back to the original. No delete: documents point at their type,
+        | so one is deactivated instead.
+        */
+        Route::get('document-types', [DocumentTypeController::class, 'index'])->name('document-types.index');
+        Route::post('document-types', [DocumentTypeController::class, 'store'])->name('document-types.store');
+        Route::patch('document-types/{documentType}', [DocumentTypeController::class, 'update'])->name('document-types.update');
+        Route::patch('document-types/{documentType}/status', [DocumentTypeController::class, 'updateStatus'])->name('document-types.status');
+        Route::post('document-types/{documentType}/restore-route', [DocumentTypeController::class, 'restoreRoute'])->name('document-types.restore-route');
     });

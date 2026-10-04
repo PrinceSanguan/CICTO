@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\DocumentType;
+use App\Support\RouteTemplates;
 use Illuminate\Database\Seeder;
 
 /**
@@ -22,9 +23,26 @@ use Illuminate\Database\Seeder;
  * cicto.deadlines.default_turnaround_days for every type, so every document
  * gets the same provisional SLA (3 calendar days) rather than a per-type one.
  * That number is env-tunable via CICTO_DEFAULT_TURNAROUND_DAYS so the LGU can
- * move it without a deployment while ARO's answer is outstanding. There is no
- * admin screen for document types, so the real per-type numbers will be a code
- * change and a deploy -- see client-questions.md A4.
+ * move it without a deployment while ARO's answer is outstanding. Since
+ * 2026-10-04 a Super Admin can also set a type's own figure on the Document
+ * Types page -- see client-questions.md A4.
+ *
+ * WHAT THIS SEEDER STILL OWNS (2026-10-04). Every deploy re-runs it, and a
+ * Super Admin can now edit the built-in types, so it writes a part of a row
+ * only while nobody has:
+ *  - name, turnaround and active: until a Super Admin saves the type or
+ *    switches it off or on (`customized_at`);
+ *  - the route, copied from App\Support\RouteTemplates: until a Super Admin
+ *    changes it (`route_customized_at`), or again once they restore it;
+ *  - Confidential, Broadcast, approval and order: always. The page cannot
+ *    change those.
+ * A type it has never made is created whole, route and all.
+ *
+ * CUSTOM TYPES ARE NOT THIS SEEDER'S (2026-10-03). A Super Admin can add types
+ * of their own on the Document Types page; those rows carry `is_custom` and
+ * this seeder never updates, retires or reactivates one. Their codes cannot
+ * collide with BUILT_IN_TYPES (the page refuses them), and run() skips any
+ * that somehow does rather than take it over.
  *
  * The `code` column is not used in control numbers (only the office code is)
  * and nothing in the application looks a type up by code, so these codes are
@@ -73,76 +91,120 @@ class DocumentTypeSeeder extends Seeder
         'LETTER', 'PR', 'ORD', 'CLR',
     ];
 
+    /**
+     * The client's types, in the client's order.
+     *
+     * Public because the Document Types page reserves these codes: a Super
+     * Admin's type named DV would be overwritten by the next deploy.
+     *
+     * @var list<array{code: string, name: string, is_confidential?: bool, allows_broadcast?: bool}>
+     */
+    public const BUILT_IN_TYPES = [
+        ['code' => 'ADMIN-ORDER', 'name' => 'Administrative Order'],
+        ['code' => 'AFFIDAVIT-ITR', 'name' => 'Affidavit of Non-Filing of Income Tax Return'],
+        ['code' => 'AFFIDAVIT-NF', 'name' => 'Affidavit of Non-Filing'],
+        ['code' => 'BUSINESS-PERMIT', 'name' => 'Business Permit'],
+        ['code' => 'CERT-CLOSURE', 'name' => 'Certificate of Closure of Business'],
+        ['code' => 'CERT-NO-BUSINESS', 'name' => 'Certificate of No Business'],
+        ['code' => 'CERT-UNEMPLOYED', 'name' => 'Certificate of Unemployment'],
+        ['code' => 'CERTIFICATION', 'name' => 'Certification'],
+        ['code' => 'CERT-DOCS-NEEDED', 'name' => 'Certification of Documents Needed'],
+        ['code' => 'CLOSURE-ORDER', 'name' => 'Closure Order'],
+        // Restricted to the City Mayor and HRMO -- see App\Support\Confidential.
+        ['code' => 'CONFIDENTIAL', 'name' => 'Confidential', 'is_confidential' => true],
+        ['code' => 'CONSTRUCTION-PERMIT', 'name' => 'Construction Permit'],
+        ['code' => 'DEMOLITION-ORDER', 'name' => 'Demolition Order'],
+        ['code' => 'DV', 'name' => 'Disbursement Voucher'],
+        ['code' => 'ENDORSEMENT', 'name' => 'Endorsement'],
+        // "Broadcast to ALL offices" -- see App\Actions\Documents\BroadcastDocument.
+        ['code' => 'EXEC-ORDER', 'name' => 'Executive Order', 'allows_broadcast' => true],
+        ['code' => 'FRANCHISE', 'name' => 'Franchise'],
+        ['code' => 'FRANCHISE-TRICYCLE', 'name' => 'Franchise for Tricycle'],
+        ['code' => 'GENERAL-INCOMING', 'name' => 'General (Incoming)'],
+        ['code' => 'LETTER-EXTERNAL', 'name' => 'Letter (External)'],
+        ['code' => 'LETTER-INTERNAL', 'name' => 'Letter (Internal)'],
+        ['code' => 'MAYORS-CLEARANCE', 'name' => "Mayor's Clearance"],
+        ['code' => 'MAYORS-PERMIT', 'name' => "Mayor's Permit"],
+        ['code' => 'MEMO', 'name' => 'Memorandum'],
+        ['code' => 'MEMO-CIRCULAR', 'name' => 'Memorandum Circular', 'allows_broadcast' => true],
+        ['code' => 'MEMO-HR', 'name' => 'Memorandum HR'],
+        ['code' => 'MEMO-MA', 'name' => 'Memorandum MA'],
+        ['code' => 'MEMO-ORDER-OCM', 'name' => "Memorandum Order from Mayor's Office"],
+        ['code' => 'MEMO-PSB', 'name' => 'Memorandum PSB'],
+        ['code' => 'MEMO-TMO', 'name' => 'Memorandum TMO'],
+        ['code' => 'MINUTES', 'name' => 'Minutes of Meeting'],
+        ['code' => 'NOTICE', 'name' => 'Notice'],
+        ['code' => 'NOTICE-MEETING', 'name' => 'Notice of Meeting'],
+        ['code' => 'NOTICE-VACANCY', 'name' => 'Notice of Vacancy'],
+        ['code' => 'OATH-OF-OFFICE', 'name' => 'Oath of Office'],
+        ['code' => 'PAYROLL', 'name' => 'Payroll'],
+        ['code' => 'PERMIT', 'name' => 'Permit'],
+        ['code' => 'PROPOSAL', 'name' => 'Proposal'],
+        ['code' => 'PO', 'name' => 'Purchase Order'],
+        ['code' => 'REFERRAL', 'name' => 'Referral'],
+        ['code' => 'REQUEST', 'name' => 'Request'],
+        ['code' => 'RESOLUTION', 'name' => 'Resolution'],
+        ['code' => 'TO', 'name' => 'Travel Order'],
+    ];
+
+    /**
+     * The codes of BUILT_IN_TYPES.
+     *
+     * @return list<string>
+     */
+    public static function builtInCodes(): array
+    {
+        return array_column(self::BUILT_IN_TYPES, 'code');
+    }
+
     public function run(): void
     {
-        $types = [
-            ['code' => 'ADMIN-ORDER', 'name' => 'Administrative Order'],
-            ['code' => 'AFFIDAVIT-ITR', 'name' => 'Affidavit of Non-Filing of Income Tax Return'],
-            ['code' => 'AFFIDAVIT-NF', 'name' => 'Affidavit of Non-Filing'],
-            ['code' => 'BUSINESS-PERMIT', 'name' => 'Business Permit'],
-            ['code' => 'CERT-CLOSURE', 'name' => 'Certificate of Closure of Business'],
-            ['code' => 'CERT-NO-BUSINESS', 'name' => 'Certificate of No Business'],
-            ['code' => 'CERT-UNEMPLOYED', 'name' => 'Certificate of Unemployment'],
-            ['code' => 'CERTIFICATION', 'name' => 'Certification'],
-            ['code' => 'CERT-DOCS-NEEDED', 'name' => 'Certification of Documents Needed'],
-            ['code' => 'CLOSURE-ORDER', 'name' => 'Closure Order'],
-            // Restricted to the City Mayor and HRMO -- see App\Support\Confidential.
-            ['code' => 'CONFIDENTIAL', 'name' => 'Confidential', 'is_confidential' => true],
-            ['code' => 'CONSTRUCTION-PERMIT', 'name' => 'Construction Permit'],
-            ['code' => 'DEMOLITION-ORDER', 'name' => 'Demolition Order'],
-            ['code' => 'DV', 'name' => 'Disbursement Voucher'],
-            ['code' => 'ENDORSEMENT', 'name' => 'Endorsement'],
-            // "Broadcast to ALL offices" -- see App\Actions\Documents\BroadcastDocument.
-            ['code' => 'EXEC-ORDER', 'name' => 'Executive Order', 'allows_broadcast' => true],
-            ['code' => 'FRANCHISE', 'name' => 'Franchise'],
-            ['code' => 'FRANCHISE-TRICYCLE', 'name' => 'Franchise for Tricycle'],
-            ['code' => 'GENERAL-INCOMING', 'name' => 'General (Incoming)'],
-            ['code' => 'LETTER-EXTERNAL', 'name' => 'Letter (External)'],
-            ['code' => 'LETTER-INTERNAL', 'name' => 'Letter (Internal)'],
-            ['code' => 'MAYORS-CLEARANCE', 'name' => "Mayor's Clearance"],
-            ['code' => 'MAYORS-PERMIT', 'name' => "Mayor's Permit"],
-            ['code' => 'MEMO', 'name' => 'Memorandum'],
-            ['code' => 'MEMO-CIRCULAR', 'name' => 'Memorandum Circular', 'allows_broadcast' => true],
-            ['code' => 'MEMO-HR', 'name' => 'Memorandum HR'],
-            ['code' => 'MEMO-MA', 'name' => 'Memorandum MA'],
-            ['code' => 'MEMO-ORDER-OCM', 'name' => "Memorandum Order from Mayor's Office"],
-            ['code' => 'MEMO-PSB', 'name' => 'Memorandum PSB'],
-            ['code' => 'MEMO-TMO', 'name' => 'Memorandum TMO'],
-            ['code' => 'MINUTES', 'name' => 'Minutes of Meeting'],
-            ['code' => 'NOTICE', 'name' => 'Notice'],
-            ['code' => 'NOTICE-MEETING', 'name' => 'Notice of Meeting'],
-            ['code' => 'NOTICE-VACANCY', 'name' => 'Notice of Vacancy'],
-            ['code' => 'OATH-OF-OFFICE', 'name' => 'Oath of Office'],
-            ['code' => 'PAYROLL', 'name' => 'Payroll'],
-            ['code' => 'PERMIT', 'name' => 'Permit'],
-            ['code' => 'PROPOSAL', 'name' => 'Proposal'],
-            ['code' => 'PO', 'name' => 'Purchase Order'],
-            ['code' => 'REFERRAL', 'name' => 'Referral'],
-            ['code' => 'REQUEST', 'name' => 'Request'],
-            ['code' => 'RESOLUTION', 'name' => 'Resolution'],
-            ['code' => 'TO', 'name' => 'Travel Order'],
-        ];
+        // Never taken over: see the class docblock.
+        $custom = DocumentType::withTrashed()
+            ->where('is_custom', true)
+            ->whereIn('code', self::builtInCodes())
+            ->pluck('code')
+            ->all();
 
-        foreach ($types as $index => $type) {
-            DocumentType::query()->updateOrCreate(
-                ['code' => $type['code']],
-                [
+        foreach ($custom as $code) {
+            $this->command->warn("Skipped {$code}: a Super Admin's own document type already uses that code.");
+        }
+
+        foreach (self::BUILT_IN_TYPES as $index => $type) {
+            if (in_array($type['code'], $custom, true)) {
+                continue;
+            }
+
+            $row = DocumentType::query()->firstOrNew(['code' => $type['code']]);
+
+            // The Super Admin's once they have saved it: see the class
+            // docblock.
+            if ($row->customized_at === null) {
+                $row->fill([
                     'name' => $type['name'],
                     // See the class docblock: not a guess, an absence.
                     'turnaround_days' => null,
-                    'requires_approval' => true,
-                    // Set on every run, so taking a type OFF this list here
-                    // takes it off the installation too.
-                    'is_confidential' => $type['is_confidential'] ?? false,
-                    'allows_broadcast' => $type['allows_broadcast'] ?? false,
                     'is_active' => true,
-                    'sort_order' => ($index + 1) * 10,
-                ],
-            );
+                ]);
+            }
+
+            $row->fill([
+                'requires_approval' => true,
+                // Set on every run, so taking a type OFF this list here
+                // takes it off the installation too.
+                'is_confidential' => $type['is_confidential'] ?? false,
+                'allows_broadcast' => $type['allows_broadcast'] ?? false,
+                'sort_order' => ($index + 1) * 10,
+            ])->save();
+
+            if ($row->route_customized_at === null) {
+                RouteTemplates::installOriginal($row);
+            }
         }
 
         DocumentType::query()
             ->whereIn('code', self::RETIRED_PLACEHOLDER_CODES)
+            ->where('is_custom', false)
             ->update(['is_active' => false]);
     }
 }
